@@ -16,6 +16,7 @@ This is sub-project 1 of 5 — the foundation scaffold. See `docs/superpowers/sp
 ## Setup
 
 1. **Install dependencies**
+
    ```bash
    npm install
    ```
