@@ -56,32 +56,57 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
   }
 
   const now = new Date();
+
+  // Snapshot the profile state once. The two fields that matter are:
+  //   plan_expires_at — is there a currently-valid Pro subscription right now?
+  //   trial_ends_at   — did this account ever have a trial that has now ended?
+  // Note: `plan` alone is NOT reliable as the source of truth. Kalyo's backend
+  // does not always flip `plan` back to 'free' when a trial expires, so a row
+  // can have plan='professional' with plan_expires_at in the past. Use the
+  // timestamps, not the enum, for gating decisions.
+  const planExpiresAt = profile.plan_expires_at
+    ? new Date(profile.plan_expires_at as string)
+    : null;
+  const trialEndsAt = profile.trial_ends_at
+    ? new Date(profile.trial_ends_at as string)
+    : null;
+
+  const hasActivePlan =
+    profile.plan === 'professional' &&
+    planExpiresAt !== null &&
+    planExpiresAt.getTime() > now.getTime();
+
+  const hasUsedTrial =
+    trialEndsAt !== null && trialEndsAt.getTime() < now.getTime();
+
+  console.log('[kalyo] activateProTrial state', {
+    email,
+    plan: profile.plan,
+    plan_expires_at: profile.plan_expires_at,
+    trial_ends_at: profile.trial_ends_at,
+    hasActivePlan,
+    hasUsedTrial,
+  });
+
+  // Currently has an active Pro subscription (paid or trial in progress).
+  // Don't extend or re-activate — tell them it's already active.
+  if (hasActivePlan) {
+    return {
+      status: 'already_active',
+      expires_at: profile.plan_expires_at as string,
+    };
+  }
+
+  // Already consumed their one-time trial. trial_ends_at is the source of
+  // truth — this fires whether or not Kalyo has flipped the plan column back.
+  if (hasUsedTrial) {
+    return {
+      status: 'already_used',
+      trial_ended_at: profile.trial_ends_at as string,
+    };
+  }
+
   const expiresAt = new Date(now.getTime() + TRIAL_MS);
-
-  // Protect paying customers: never shorten a real sub that already runs
-  // past the new 15-day window.
-  if (profile.plan === 'professional' && profile.plan_expires_at) {
-    const currentExpiry = new Date(profile.plan_expires_at);
-    if (currentExpiry.getTime() > expiresAt.getTime()) {
-      return {
-        status: 'already_active',
-        expires_at: profile.plan_expires_at as string,
-      };
-    }
-  }
-
-  // One-trial-per-account: if they had a trial in the past and are no longer
-  // professional, they've already used their freebie.
-  if (profile.trial_ends_at && profile.plan !== 'professional') {
-    const trialEnd = new Date(profile.trial_ends_at as string);
-    if (trialEnd.getTime() < now.getTime()) {
-      return {
-        status: 'already_used',
-        trial_ended_at: profile.trial_ends_at as string,
-      };
-    }
-  }
-
   const expiresAtIso = expiresAt.toISOString();
 
   const { error: updateError } = await supabase
