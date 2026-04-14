@@ -83,6 +83,26 @@ Required env vars: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, plus Twilio
 - Encrypt `bots.twilio_auth_token` (already in the sub-project 1 TODO list).
 - Replace the admin bypass with real auth.
 
+## Meta webhook — `/api/webhook/meta/[botId]`
+
+Receives inbound Messenger and Instagram DMs for a bot and replies via the Meta Graph API. The same `bots` table row supplies the system prompt, and messages are persisted into the same `conversations`/`messages` tables used by the Twilio webhook — `customer_phone` is namespaced as `messenger:<psid>` or `instagram:<psid>` so the two channels cannot collide.
+
+**Env vars:**
+
+- `META_VERIFY_TOKEN` — a random string you pick. Meta echoes it during the webhook subscribe handshake.
+- `META_PAGE_ACCESS_TOKEN` — the Page access token used to send outbound messages via the Graph API (needs `pages_messaging` and, for Instagram, `instagram_basic` + `pages_show_list` scopes).
+
+**Endpoints:**
+
+- `GET /api/webhook/meta/<bot-id>` — verification handshake. Meta hits this once when you subscribe the webhook. Validates `hub.verify_token` against `META_VERIFY_TOKEN` and echoes `hub.challenge` back as plain text. Returns `403` on mismatch, `500` if the token is unset.
+- `POST /api/webhook/meta/<bot-id>` — receives messages. Parses the JSON payload, skips echoes (`message.is_echo`), delivery/read receipts, and any event without text. For each surviving event: upserts the conversation, persists the user message, calls `claude-haiku-4-5-20251001` with the bot's system prompt and the last 20 messages, persists the assistant reply, then sends it via `POST https://graph.facebook.com/v19.0/me/messages`. Always responds `200 { received: true }` to prevent Meta retry storms; internal errors are logged but do not fail the request.
+
+**Limitations / TODOs:**
+
+- **No `X-Hub-Signature-256` validation** yet — the POST route trusts any caller with valid JSON. Add HMAC verification against the Meta app secret before production.
+- **No tool use on Meta channel.** The Kalyo `activate_pro_trial` and `notify_sales_team` tools are currently wired only inside the Twilio route. Messenger users hitting the Kalyo bot get conversational replies but cannot self-activate trials. Extract `buildClaudeOptions` to a shared module when tool parity across channels is needed.
+- **Single-page mode.** `META_PAGE_ACCESS_TOKEN` is a single global env var; multi-tenant Meta setups would need to move the token onto the `bots` table with its own migration.
+
 ## Kalyo Pro-trial integration
 
 One specific bot (identified by `KALYO_BOT_ID`) has an extra tool exposed to Claude: `activate_pro_trial`. When a user writes to that bot asking to start their free Pro trial and provides their email, Claude calls the tool, which looks up the email in the Kalyo Supabase project and upgrades the matching `psychologists` row to Pro for 15 days (`plan = 'professional'`, `trial_ends_at` and `plan_expires_at` set to now + 15d).
