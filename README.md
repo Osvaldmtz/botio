@@ -47,6 +47,42 @@ This is sub-project 1 of 5 — the foundation scaffold. See `docs/superpowers/sp
    ```
    Open http://localhost:3000. You should see the branded placeholder page.
 
+## Temporary admin bypass
+
+Real auth is coming in a later sub-project. Until then, `/admin` is protected by a single password stored in `ADMIN_PASSWORD`.
+
+1. Set `ADMIN_PASSWORD` in `.env.local` to any value you choose.
+2. Visit `http://localhost:3000/admin` and enter the password.
+3. From there you can list businesses, list bots, and create a new bot (which also creates its business in one step).
+
+The login sets an httpOnly cookie valid for 7 days. Use the "Log out" button to clear it.
+
+## Webhook — `/api/webhook/[botId]`
+
+Each bot has its own Twilio WhatsApp webhook URL:
+
+```
+https://<your-host>/api/webhook/<bot-id>
+```
+
+Point the Twilio WhatsApp sandbox (or your production WhatsApp sender) at that URL. The route:
+
+1. Receives the incoming message from Twilio (form-encoded POST).
+2. Loads the bot's `system_prompt` and Twilio credentials from Supabase.
+3. Calls `claude-haiku-4-5-20251001` with the system prompt (prompt-cached) and the last 20 messages of history.
+4. Persists both the incoming user message and the assistant reply to the `messages` table.
+5. Sends the reply back via the Twilio REST API using the per-bot credentials.
+6. Responds with empty TwiML.
+
+Required env vars: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, plus Twilio creds on the bot row.
+
+**Security TODOs before production:**
+
+- Validate `X-Twilio-Signature` on incoming requests.
+- Rate-limit the admin login.
+- Encrypt `bots.twilio_auth_token` (already in the sub-project 1 TODO list).
+- Replace the admin bypass with real auth.
+
 ## Project layout
 
 ```
