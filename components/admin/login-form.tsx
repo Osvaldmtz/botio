@@ -1,35 +1,31 @@
 import { loginAction } from '@/app/admin/actions';
 
-const loginFormAction = loginAction as unknown as (
-  formData: FormData,
-) => void | Promise<void>;
+const loginFormAction = loginAction as unknown as (formData: FormData) => void | Promise<void>;
 
 export function LoginForm() {
   return (
-    <main className="bg-gradient-glow flex min-h-screen items-center justify-center px-6">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-glow px-6">
       <form
         action={loginFormAction}
-        className="bg-bg-elevated border-bg-border w-full max-w-sm space-y-4 rounded-xl border p-8"
+        className="w-full max-w-sm space-y-4 rounded-xl border border-bg-border bg-bg-elevated p-8"
       >
-        <h1 className="text-fg text-2xl font-semibold">Admin</h1>
-        <p className="text-fg-muted text-sm">
+        <h1 className="text-2xl font-semibold text-fg">Admin</h1>
+        <p className="text-sm text-fg-muted">
           Temporary password-protected area. Real auth coming soon.
         </p>
         <label className="block space-y-1">
-          <span className="text-fg-muted text-xs uppercase tracking-wide">
-            Password
-          </span>
+          <span className="text-xs uppercase tracking-wide text-fg-muted">Password</span>
           <input
             type="password"
             name="password"
             required
             autoFocus
-            className="bg-bg border-bg-border text-fg focus:border-accent w-full rounded-md border px-3 py-2 outline-none"
+            className="w-full rounded-md border border-bg-border bg-bg px-3 py-2 text-fg outline-none focus:border-accent"
           />
         </label>
         <button
           type="submit"
-          className="bg-accent text-bg hover:bg-accent-hover w-full rounded-md px-3 py-2 font-semibold transition-colors"
+          className="w-full rounded-md bg-accent px-3 py-2 font-semibold text-bg transition-colors hover:bg-accent-hover"
         >
           Sign in
         </button>

@@ -131,9 +131,7 @@ export function createAdminClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
-    throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
-    );
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
   }
 
   return createSupabaseClient(url, serviceRoleKey, {
@@ -265,9 +263,7 @@ export async function createBotAction(formData: FormData) {
   const systemPrompt = String(formData.get('system_prompt') ?? '').trim();
   const twilioAccountSid = String(formData.get('twilio_account_sid') ?? '').trim();
   const twilioAuthToken = String(formData.get('twilio_auth_token') ?? '').trim();
-  const twilioWhatsappNumber = String(
-    formData.get('twilio_whatsapp_number') ?? '',
-  ).trim();
+  const twilioWhatsappNumber = String(formData.get('twilio_whatsapp_number') ?? '').trim();
 
   if (!businessName || !botName) {
     return { error: 'Business name and bot name are required' };
@@ -333,30 +329,28 @@ import { loginAction } from '@/app/admin/actions';
 
 export function LoginForm() {
   return (
-    <main className="bg-gradient-glow flex min-h-screen items-center justify-center px-6">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-glow px-6">
       <form
         action={loginAction}
-        className="bg-bg-elevated border-bg-border w-full max-w-sm space-y-4 rounded-xl border p-8"
+        className="w-full max-w-sm space-y-4 rounded-xl border border-bg-border bg-bg-elevated p-8"
       >
-        <h1 className="text-fg text-2xl font-semibold">Admin</h1>
-        <p className="text-fg-muted text-sm">
+        <h1 className="text-2xl font-semibold text-fg">Admin</h1>
+        <p className="text-sm text-fg-muted">
           Temporary password-protected area. Real auth coming soon.
         </p>
         <label className="block space-y-1">
-          <span className="text-fg-muted text-xs uppercase tracking-wide">
-            Password
-          </span>
+          <span className="text-xs uppercase tracking-wide text-fg-muted">Password</span>
           <input
             type="password"
             name="password"
             required
             autoFocus
-            className="bg-bg border-bg-border text-fg focus:border-accent w-full rounded-md border px-3 py-2 outline-none"
+            className="w-full rounded-md border border-bg-border bg-bg px-3 py-2 text-fg outline-none focus:border-accent"
           />
         </label>
         <button
           type="submit"
-          className="bg-accent text-bg hover:bg-accent-hover w-full rounded-md px-3 py-2 font-semibold transition-colors"
+          className="w-full rounded-md bg-accent px-3 py-2 font-semibold text-bg transition-colors hover:bg-accent-hover"
         >
           Sign in
         </button>
@@ -398,13 +392,13 @@ export function Dashboard({ businesses, bots }: DashboardProps) {
     <main className="mx-auto min-h-screen max-w-5xl px-6 py-10">
       <header className="mb-10 flex items-center justify-between">
         <div>
-          <h1 className="text-fg text-3xl font-bold">Admin dashboard</h1>
-          <p className="text-fg-muted text-sm">Temporary bypass mode.</p>
+          <h1 className="text-3xl font-bold text-fg">Admin dashboard</h1>
+          <p className="text-sm text-fg-muted">Temporary bypass mode.</p>
         </div>
         <form action={logoutAction}>
           <button
             type="submit"
-            className="border-bg-border text-fg-muted hover:text-fg rounded-md border px-3 py-2 text-sm"
+            className="rounded-md border border-bg-border px-3 py-2 text-sm text-fg-muted hover:text-fg"
           >
             Log out
           </button>
@@ -412,17 +406,15 @@ export function Dashboard({ businesses, bots }: DashboardProps) {
       </header>
 
       <section className="mb-10">
-        <h2 className="text-fg mb-4 text-xl font-semibold">
-          Businesses ({businesses.length})
-        </h2>
+        <h2 className="mb-4 text-xl font-semibold text-fg">Businesses ({businesses.length})</h2>
         {businesses.length === 0 ? (
-          <p className="text-fg-muted text-sm">No businesses yet.</p>
+          <p className="text-sm text-fg-muted">No businesses yet.</p>
         ) : (
-          <ul className="border-bg-border divide-bg-border bg-bg-elevated divide-y rounded-lg border">
+          <ul className="divide-y divide-bg-border rounded-lg border border-bg-border bg-bg-elevated">
             {businesses.map((b) => (
               <li key={b.id} className="flex items-center justify-between px-4 py-3">
                 <span className="text-fg">{b.name}</span>
-                <code className="text-fg-muted text-xs">{b.id}</code>
+                <code className="text-xs text-fg-muted">{b.id}</code>
               </li>
             ))}
           </ul>
@@ -430,28 +422,26 @@ export function Dashboard({ businesses, bots }: DashboardProps) {
       </section>
 
       <section className="mb-10">
-        <h2 className="text-fg mb-4 text-xl font-semibold">Bots ({bots.length})</h2>
+        <h2 className="mb-4 text-xl font-semibold text-fg">Bots ({bots.length})</h2>
         {bots.length === 0 ? (
-          <p className="text-fg-muted text-sm">No bots yet.</p>
+          <p className="text-sm text-fg-muted">No bots yet.</p>
         ) : (
-          <ul className="border-bg-border divide-bg-border bg-bg-elevated divide-y rounded-lg border">
+          <ul className="divide-y divide-bg-border rounded-lg border border-bg-border bg-bg-elevated">
             {bots.map((bot) => {
               const business = businessById.get(bot.business_id);
               return (
                 <li key={bot.id} className="flex flex-col gap-1 px-4 py-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-fg font-medium">{bot.name}</span>
+                    <span className="font-medium text-fg">{bot.name}</span>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs ${
-                        bot.is_active
-                          ? 'bg-accent/20 text-accent'
-                          : 'bg-bg-border text-fg-muted'
+                        bot.is_active ? 'bg-accent/20 text-accent' : 'bg-bg-border text-fg-muted'
                       }`}
                     >
                       {bot.is_active ? 'active' : 'inactive'}
                     </span>
                   </div>
-                  <div className="text-fg-muted flex flex-wrap gap-x-4 text-xs">
+                  <div className="flex flex-wrap gap-x-4 text-xs text-fg-muted">
                     <span>Business: {business?.name ?? '—'}</span>
                     <span>WhatsApp: {bot.twilio_whatsapp_number ?? '—'}</span>
                     <code>webhook: /api/webhook/{bot.id}</code>
@@ -464,10 +454,10 @@ export function Dashboard({ businesses, bots }: DashboardProps) {
       </section>
 
       <section>
-        <h2 className="text-fg mb-4 text-xl font-semibold">Create a new bot</h2>
+        <h2 className="mb-4 text-xl font-semibold text-fg">Create a new bot</h2>
         <form
           action={createBotAction}
-          className="bg-bg-elevated border-bg-border grid gap-4 rounded-lg border p-6"
+          className="grid gap-4 rounded-lg border border-bg-border bg-bg-elevated p-6"
         >
           <Field label="Business name" name="business_name" required />
           <Field label="Bot name" name="bot_name" required />
@@ -478,11 +468,7 @@ export function Dashboard({ businesses, bots }: DashboardProps) {
             placeholder="You are a helpful assistant for..."
           />
           <Field label="Twilio Account SID" name="twilio_account_sid" />
-          <Field
-            label="Twilio Auth Token"
-            name="twilio_auth_token"
-            type="password"
-          />
+          <Field label="Twilio Auth Token" name="twilio_auth_token" type="password" />
           <Field
             label="Twilio WhatsApp number"
             name="twilio_whatsapp_number"
@@ -490,7 +476,7 @@ export function Dashboard({ businesses, bots }: DashboardProps) {
           />
           <button
             type="submit"
-            className="bg-accent text-bg hover:bg-accent-hover justify-self-start rounded-md px-4 py-2 font-semibold"
+            className="justify-self-start rounded-md bg-accent px-4 py-2 font-semibold text-bg hover:bg-accent-hover"
           >
             Create bot
           </button>
@@ -509,21 +495,12 @@ type FieldProps = {
   textarea?: boolean;
 };
 
-function Field({
-  label,
-  name,
-  type = 'text',
-  required,
-  placeholder,
-  textarea,
-}: FieldProps) {
+function Field({ label, name, type = 'text', required, placeholder, textarea }: FieldProps) {
   const classes =
     'bg-bg border-bg-border text-fg focus:border-accent w-full rounded-md border px-3 py-2 outline-none';
   return (
     <label className="block space-y-1">
-      <span className="text-fg-muted text-xs uppercase tracking-wide">
-        {label}
-      </span>
+      <span className="text-xs uppercase tracking-wide text-fg-muted">{label}</span>
       {textarea ? (
         <textarea
           name={name}
@@ -598,21 +575,15 @@ export default async function AdminPage() {
   if (businessesResult.error || botsResult.error) {
     return (
       <main className="mx-auto max-w-2xl px-6 py-10">
-        <h1 className="text-fg text-2xl font-bold">Admin dashboard</h1>
+        <h1 className="text-2xl font-bold text-fg">Admin dashboard</h1>
         <p className="mt-4 text-red-400">
-          Failed to load data:{' '}
-          {businessesResult.error?.message ?? botsResult.error?.message}
+          Failed to load data: {businessesResult.error?.message ?? botsResult.error?.message}
         </p>
       </main>
     );
   }
 
-  return (
-    <Dashboard
-      businesses={businessesResult.data ?? []}
-      bots={botsResult.data ?? []}
-    />
-  );
+  return <Dashboard businesses={businessesResult.data ?? []} bots={botsResult.data ?? []} />;
 }
 ```
 
@@ -665,10 +636,7 @@ function getClient(): Anthropic {
   return client;
 }
 
-export async function generateReply(
-  systemPrompt: string,
-  history: ChatMessage[],
-): Promise<string> {
+export async function generateReply(systemPrompt: string, history: ChatMessage[]): Promise<string> {
   const response = await getClient().messages.create({
     model: MODEL,
     max_tokens: MAX_TOKENS,
@@ -837,10 +805,7 @@ export async function POST(request: Request, { params }: Params) {
   // Upsert conversation on (bot_id, customer_phone) unique constraint.
   const { data: conversation, error: convError } = await supabase
     .from('conversations')
-    .upsert(
-      { bot_id: bot.id, customer_phone: from },
-      { onConflict: 'bot_id,customer_phone' },
-    )
+    .upsert({ bot_id: bot.id, customer_phone: from }, { onConflict: 'bot_id,customer_phone' })
     .select('id')
     .single();
 
@@ -901,11 +866,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   // Send the reply via Twilio REST using the bot's stored credentials.
-  if (
-    bot.twilio_account_sid &&
-    bot.twilio_auth_token &&
-    bot.twilio_whatsapp_number
-  ) {
+  if (bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number) {
     try {
       await sendWhatsApp({
         accountSid: bot.twilio_account_sid,
@@ -966,9 +927,10 @@ The login sets an httpOnly cookie valid for 7 days. Use the "Log out" button to 
 ## Webhook — `/api/webhook/[botId]`
 
 Each bot has its own Twilio WhatsApp webhook URL:
-
 ```
+
 https://<your-host>/api/webhook/<bot-id>
+
 ```
 
 Point the Twilio WhatsApp sandbox (or your production WhatsApp sender) at that URL. The route:
@@ -1057,23 +1019,23 @@ Report final `git log --oneline | head -20`, total commit count, build/lint/tsc 
 
 **Coverage check:**
 
-| Requirement | Task |
-|---|---|
-| Admin password env var `ADMIN_PASSWORD` | 1 |
-| Admin cookie + bypass | 4, 5, 7 |
-| `/admin` login form | 6, 7 |
-| `/admin` dashboard with business + bot lists | 6, 7 |
-| Create-bot form (business_name, bot_name, system_prompt, twilio_*) | 5, 6 |
-| Schema change for admin-created businesses | 2 |
-| Service-role Supabase client | 3 |
-| `/api/webhook/[botId]` receives Twilio POST | 10 |
-| Loads bot system_prompt from Supabase | 10 |
-| Calls `claude-haiku-4-5-20251001` with system + history | 8, 10 |
-| Prompt caching on system prompt | 8 |
-| Saves user + assistant messages | 10 |
-| Sends reply via Twilio REST with per-bot creds | 9, 10 |
-| `ANTHROPIC_API_KEY` env var | 1 |
-| README docs | 11 |
+| Requirement                                                         | Task    |
+| ------------------------------------------------------------------- | ------- |
+| Admin password env var `ADMIN_PASSWORD`                             | 1       |
+| Admin cookie + bypass                                               | 4, 5, 7 |
+| `/admin` login form                                                 | 6, 7    |
+| `/admin` dashboard with business + bot lists                        | 6, 7    |
+| Create-bot form (business*name, bot_name, system_prompt, twilio*\*) | 5, 6    |
+| Schema change for admin-created businesses                          | 2       |
+| Service-role Supabase client                                        | 3       |
+| `/api/webhook/[botId]` receives Twilio POST                         | 10      |
+| Loads bot system_prompt from Supabase                               | 10      |
+| Calls `claude-haiku-4-5-20251001` with system + history             | 8, 10   |
+| Prompt caching on system prompt                                     | 8       |
+| Saves user + assistant messages                                     | 10      |
+| Sends reply via Twilio REST with per-bot creds                      | 9, 10   |
+| `ANTHROPIC_API_KEY` env var                                         | 1       |
+| README docs                                                         | 11      |
 
 **Placeholder scan:** every step has concrete code, commands, and expected output. No TODOs inside code beyond the explicit "Security TODOs before production" section in the README, which is intentional documentation.
 

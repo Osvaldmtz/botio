@@ -21,10 +21,7 @@ function getClient(): Anthropic {
   return client;
 }
 
-export async function generateReply(
-  systemPrompt: string,
-  history: ChatMessage[],
-): Promise<string> {
+export async function generateReply(systemPrompt: string, history: ChatMessage[]): Promise<string> {
   const response = await getClient().messages.create({
     model: MODEL,
     max_tokens: MAX_TOKENS,

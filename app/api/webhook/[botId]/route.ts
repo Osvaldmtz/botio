@@ -47,10 +47,7 @@ export async function POST(request: Request, { params }: Params) {
   // Upsert conversation on (bot_id, customer_phone) unique constraint.
   const { data: conversation, error: convError } = await supabase
     .from('conversations')
-    .upsert(
-      { bot_id: bot.id, customer_phone: from },
-      { onConflict: 'bot_id,customer_phone' },
-    )
+    .upsert({ bot_id: bot.id, customer_phone: from }, { onConflict: 'bot_id,customer_phone' })
     .select('id')
     .single();
 
@@ -111,11 +108,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   // Send the reply via Twilio REST using the bot's stored credentials.
-  if (
-    bot.twilio_account_sid &&
-    bot.twilio_auth_token &&
-    bot.twilio_whatsapp_number
-  ) {
+  if (bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number) {
     try {
       await sendWhatsApp({
         accountSid: bot.twilio_account_sid,

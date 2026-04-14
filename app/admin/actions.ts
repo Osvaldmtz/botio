@@ -29,9 +29,7 @@ export async function createBotAction(formData: FormData) {
   const systemPrompt = String(formData.get('system_prompt') ?? '').trim();
   const twilioAccountSid = String(formData.get('twilio_account_sid') ?? '').trim();
   const twilioAuthToken = String(formData.get('twilio_auth_token') ?? '').trim();
-  const twilioWhatsappNumber = String(
-    formData.get('twilio_whatsapp_number') ?? '',
-  ).trim();
+  const twilioWhatsappNumber = String(formData.get('twilio_whatsapp_number') ?? '').trim();
 
   if (!businessName || !botName) {
     return { error: 'Business name and bot name are required' };
