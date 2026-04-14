@@ -85,7 +85,7 @@ Required env vars: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, plus Twilio
 
 ## Kalyo Pro-trial integration
 
-One specific bot (identified by `KALYO_BOT_ID`) has an extra tool exposed to Claude: `activate_pro_trial`. When a user writes to that bot asking to start their free Pro trial and provides their email, Claude calls the tool, which looks up the email in the Kalyo Supabase project and upgrades the matching `psychologists` row to Pro for 15 days (`plan = 'pro'`, `trial_ends_at` and `plan_expires_at` set to now + 15d).
+One specific bot (identified by `KALYO_BOT_ID`) has an extra tool exposed to Claude: `activate_pro_trial`. When a user writes to that bot asking to start their free Pro trial and provides their email, Claude calls the tool, which looks up the email in the Kalyo Supabase project and upgrades the matching `psychologists` row to Pro for 15 days (`plan = 'professional'`, `trial_ends_at` and `plan_expires_at` set to now + 15d).
 
 **Env vars (all three required to enable the tool):**
 
@@ -98,11 +98,40 @@ If any of the three is missing, the tool is simply not exposed and the Kalyo bot
 **Tool outcomes:**
 
 - `success` — row updated; Claude confirms the trial is active for 15 days.
-- `already_active` — psychologist is already on `plan = 'pro'` with an expiration date beyond the new 15-day window. The tool does NOT overwrite, so a real paid subscription cannot be accidentally shortened.
+- `already_active` — psychologist is already on `plan = 'professional'` with an expiration date beyond the new 15-day window. The tool does NOT overwrite, so a real paid subscription cannot be accidentally shortened.
+- `already_used` — psychologist had a trial in the past (`trial_ends_at` is before now) and is no longer on `professional`. One trial per account; Claude replies with a fixed Spanish message pointing to https://kalyo.io for a paid subscription.
 - `not_found` — email not in `psychologists`. Claude tells the user to register at https://kalyo.io first, then send their email again.
 - `error` — tool call failed (invalid email, DB error, missing env vars). Claude apologizes and asks the user to retry.
 
 **Security TODO:** today there is no verification that the WhatsApp sender actually owns the email they provide. Anyone who knows a psychologist's email could activate their trial. Acceptable for low-traffic beta; add an email ownership check (one-time code) before production.
+
+## Trial follow-up cron — `/api/cron/trial-followup`
+
+Daily cron that nudges Kalyo psychologists whose Pro trial is ending, so they convert to paid. Configured in `vercel.json` to fire at 14:00 UTC (~08:00 CDMX).
+
+The route:
+
+1. Validates the `Authorization: Bearer <CRON_SECRET>` header (Vercel cron sends this automatically when `CRON_SECRET` is set as an env var in the project).
+2. Loads the Kalyo bot's Twilio credentials from Botio's own `bots` table (keyed by `KALYO_BOT_ID`).
+3. Queries Kalyo's `psychologists` for rows where `plan = 'professional'`, `phone is not null`, and `trial_ends_at` falls within the target UTC day:
+   - **3 days out** → "Hola! Tu prueba Pro de Kalyo termina en 3 días…"
+   - **Today** → "Tu prueba gratuita de Kalyo Pro termina hoy…"
+4. Sends each reminder via Twilio REST using the Kalyo bot's stored credentials.
+5. Returns a JSON summary: `{ three_day: { found, sent, failed }, today: { found, sent, failed } }`.
+
+**Env var added:** `CRON_SECRET` (required — route returns 500 if unset).
+
+**Manual invocation (for testing):**
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://<your-host>/api/cron/trial-followup
+```
+
+**Known limitations:**
+
+- Day matching uses UTC. Psychologists near a UTC day boundary may get a reminder a few hours earlier or later than their local day edge.
+- Phones are lightly normalized (`+` prefix added if missing) before being prefixed with `whatsapp:`. Severely malformed numbers will fail at Twilio and be logged; the batch continues.
+- A user who subscribes to a paid plan but still has their original `trial_ends_at` set may receive one final reminder if that date matches today or 3 days from now.
 
 ## Project layout
 
