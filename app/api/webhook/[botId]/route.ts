@@ -110,7 +110,10 @@ type KalyoBotRow = {
   twilio_whatsapp_number: string | null;
 };
 
-function buildClaudeOptions(bot: KalyoBotRow): {
+function buildClaudeOptions(
+  bot: KalyoBotRow,
+  senderFrom: string,
+): {
   systemSuffix: string;
   options: GenerateReplyOptions;
 } {
@@ -159,6 +162,7 @@ function buildClaudeOptions(bot: KalyoBotRow): {
               preferred_time: str('preferred_time'),
               reason: str('reason'),
               conversation_summary: str('conversation_summary'),
+              whatsapp_number: senderFrom,
             },
             creds,
           );
@@ -248,7 +252,7 @@ export async function POST(request: Request, { params }: Params) {
     }));
 
   // Generate the assistant reply. For the Kalyo bot, expose the activate_pro_trial tool.
-  const { systemSuffix, options: claudeOptions } = buildClaudeOptions(bot);
+  const { systemSuffix, options: claudeOptions } = buildClaudeOptions(bot, from);
   const systemPrompt = (bot.system_prompt ?? '') + systemSuffix;
 
   let replyText: string;

@@ -8,6 +8,10 @@ export type NotifySalesInput = {
   preferred_time?: string;
   reason?: string;
   conversation_summary?: string;
+  // Injected server-side by the webhook from the Twilio "From" field, not set
+  // by Claude. Used to always show the sender's WhatsApp number and to fall
+  // back as the phone value when the lead did not volunteer one.
+  whatsapp_number?: string;
 };
 
 export type NotifySalesCreds = {
@@ -24,12 +28,23 @@ function clean(value: string | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function stripWhatsAppPrefix(value: string | undefined): string | undefined {
+  const trimmed = clean(value);
+  if (!trimmed) return undefined;
+  return trimmed.startsWith('whatsapp:')
+    ? trimmed.slice('whatsapp:'.length)
+    : trimmed;
+}
+
 export async function notifySalesTeam(
   input: NotifySalesInput,
   creds: NotifySalesCreds,
 ): Promise<NotifySalesResult> {
   const name = clean(input.name);
-  const phone = clean(input.phone);
+  const explicitPhone = clean(input.phone);
+  const whatsappNumber = stripWhatsAppPrefix(input.whatsapp_number);
+  // Fall back to the sender's WhatsApp number when the lead did not give one.
+  const phone = explicitPhone ?? whatsappNumber;
   const email = clean(input.email);
   const preferredTime = clean(input.preferred_time);
   const reason = clean(input.reason);
@@ -54,6 +69,7 @@ export async function notifySalesTeam(
     '🔔 *Nuevo lead Kalyo*',
     `👤 Nombre: ${name ?? '—'}`,
     `📱 Teléfono: ${phone ?? '—'}`,
+    `📲 WhatsApp: ${whatsappNumber ?? '—'}`,
     `📧 Correo: ${email ?? '—'}`,
     `🕐 Horario: ${preferredTime ?? '—'}`,
     `💬 Motivo: ${reason ?? '—'}`,
