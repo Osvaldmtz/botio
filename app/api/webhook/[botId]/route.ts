@@ -37,9 +37,10 @@ Call notify_sales_team when:
 - The user has shared contact information (name, phone, email, or preferred time to be contacted) AND is a potential customer who should be followed up with — for example, they are asking about pricing, onboarding help, custom plans, or a demo.
 
 Rules:
-- Pass whatever fields you have. All fields (name, phone, email, preferred_time, reason) are optional, but you must provide at least a name or a phone number.
+- Pass whatever fields you have. The fields name, phone, email, preferred_time, and reason are all optional, but you must provide at least a name or a phone number.
 - If you do not have a name or phone yet, first ask the user for at least one of them (in their language) before calling the tool.
 - "reason" should be a short one-sentence summary of what the lead wants or needs.
+- ALWAYS include "conversation_summary": a brief 2-3 sentence summary in Spanish of what the lead discussed in the WhatsApp conversation so far — what questions they asked, what needs or concerns they mentioned, and any context the sales team should know before replying. Write it in third person (e.g. "El usuario preguntó por…", "Mencionó que…"). Do not omit this field.
 
 After notify_sales_team returns:
 - status "success": confirm (in the user's language) that someone from the Kalyo team will contact them soon.
@@ -91,6 +92,11 @@ const NOTIFY_SALES_TEAM_TOOL: Anthropic.Messages.Tool = {
         type: 'string',
         description:
           "Short summary of why the lead wants to be contacted or what they're interested in.",
+      },
+      conversation_summary: {
+        type: 'string',
+        description:
+          'A brief 2-3 sentence summary of what the lead discussed in the WhatsApp conversation so far — questions they asked, needs they mentioned, concerns, etc. Written in Spanish.',
       },
     },
     required: [],
@@ -152,6 +158,7 @@ function buildClaudeOptions(bot: KalyoBotRow): {
               email: str('email'),
               preferred_time: str('preferred_time'),
               reason: str('reason'),
+              conversation_summary: str('conversation_summary'),
             },
             creds,
           );

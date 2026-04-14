@@ -7,6 +7,7 @@ export type NotifySalesInput = {
   email?: string;
   preferred_time?: string;
   reason?: string;
+  conversation_summary?: string;
 };
 
 export type NotifySalesCreds = {
@@ -32,6 +33,7 @@ export async function notifySalesTeam(
   const email = clean(input.email);
   const preferredTime = clean(input.preferred_time);
   const reason = clean(input.reason);
+  const summary = clean(input.conversation_summary);
 
   // Require at least one identity field so an empty/accidental tool call
   // does not spam the sales team with blank leads.
@@ -55,6 +57,8 @@ export async function notifySalesTeam(
     `📧 Correo: ${email ?? '—'}`,
     `🕐 Horario: ${preferredTime ?? '—'}`,
     `💬 Motivo: ${reason ?? '—'}`,
+    '',
+    `📋 *Resumen de conversación:* ${summary ?? '—'}`,
     '',
     'Responde directamente a este número.',
   ].join('\n');
