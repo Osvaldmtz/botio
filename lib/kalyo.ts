@@ -59,7 +59,7 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
 
   // Protect paying customers: never shorten a real sub that already runs
   // past the new 15-day window.
-  if (profile.plan === 'pro' && profile.plan_expires_at) {
+  if (profile.plan === 'professional' && profile.plan_expires_at) {
     const currentExpiry = new Date(profile.plan_expires_at);
     if (currentExpiry.getTime() > expiresAt.getTime()) {
       return {
@@ -74,7 +74,7 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
   const { error: updateError } = await supabase
     .from('psychologists')
     .update({
-      plan: 'pro',
+      plan: 'professional',
       trial_ends_at: expiresAtIso,
       plan_expires_at: expiresAtIso,
     })
