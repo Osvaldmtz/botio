@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Botio
 
-## Getting Started
+WhatsApp AI bots for businesses, powered by Claude.
 
-First, run the development server:
+This is sub-project 1 of 5 — the foundation scaffold. See `docs/superpowers/specs/2026-04-14-botio-foundation-design.md` for the full design.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Stack
+
+- Next.js 14 (App Router) + TypeScript (strict)
+- Tailwind CSS — dark theme, neon green + electric blue gradients
+- Supabase Cloud — Postgres + Auth + RLS
+- `@supabase/ssr` for browser / server / middleware clients
+- Geist Sans + Geist Mono via `next/font`
+- Node 20, npm
+
+## Setup
+
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Create a Supabase project**
+   - Go to https://supabase.com/dashboard and create a new project.
+   - From the project's API settings, copy:
+     - Project URL
+     - `anon` public key
+     - `service_role` secret key
+
+3. **Apply the database migration**
+   - Open the Supabase SQL editor.
+   - Paste the contents of `supabase/migrations/0001_init.sql` and run it.
+   - Confirm the four tables (`businesses`, `bots`, `conversations`, `messages`) appear under the `public` schema with RLS enabled.
+
+4. **Configure environment variables**
+
+   ```bash
+   cp .env.local.example .env.local
+   ```
+
+   Fill in the three values from step 2. `.env.local` is gitignored.
+
+5. **Run the dev server**
+   ```bash
+   npm run dev
+   ```
+   Open http://localhost:3000. You should see the branded placeholder page.
+
+## Project layout
+
+```
+app/                  Next.js App Router
+  layout.tsx          Root layout (fonts, dark theme)
+  page.tsx            Placeholder landing
+  globals.css         Tailwind base
+components/           Shared UI
+  logo.tsx            Inline SVG robot logo
+lib/supabase/         Supabase client boundary
+  client.ts           Browser client
+  server.ts           Server component / route handler client
+  middleware.ts       Middleware client helper
+middleware.ts         Root middleware (no-op; wired up in sub-project 2)
+supabase/migrations/  Versioned SQL migrations
+docs/superpowers/     Specs and plans
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `npm run dev` — start dev server
+- `npm run build` — production build
+- `npm run lint` — ESLint
+- `npm run format` — Prettier write
+- `npm run format:check` — Prettier check
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Roadmap
 
-## Learn More
+- **Sub-project 1 (this one):** scaffold + DB schema + branding base
+- **Sub-project 2:** real landing + Google OAuth
+- **Sub-project 3:** dashboard + onboarding wizard
+- **Sub-project 4:** `/api/webhook/[botId]` (Twilio ↔ Claude)
+- **Sub-project 5:** realtime conversations panel
 
-To learn more about Next.js, take a look at the following resources:
+## Known TODOs before production
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Encrypt `bots.twilio_auth_token` using `pgsodium` / Supabase Vault.
