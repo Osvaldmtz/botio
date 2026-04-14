@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateReply, type ChatMessage } from '@/lib/claude';
 import { sendMessengerMessage } from '@/lib/meta';
+import { buildKalyoClaudeOptions } from '@/lib/kalyo-bot-options';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -198,12 +199,18 @@ async function handleMessage({
       content: m.content,
     }));
 
-  // Generate the assistant reply. Meta channel runs without the Kalyo tool
-  // set for now — the tools are wired only to the Twilio route. Revisit if
-  // tool parity across channels is desired.
+  // Generate the assistant reply. On the Meta channel the Kalyo bot gets a
+  // text-only system prompt suffix that tells Claude to redirect free-trial
+  // requests to the WhatsApp deep link. No tools are exposed on this channel.
+  const { systemSuffix, options: claudeOptions } = buildKalyoClaudeOptions({
+    channel: 'meta',
+    bot: { id: botId },
+  });
+  const fullSystemPrompt = systemPrompt + systemSuffix;
+
   let replyText: string;
   try {
-    replyText = await generateReply(systemPrompt, history);
+    replyText = await generateReply(fullSystemPrompt, history, claudeOptions);
   } catch (error) {
     console.error('[meta-webhook] Claude call failed', error);
     replyText = FALLBACK_MESSAGE;
