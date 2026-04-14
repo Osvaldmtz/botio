@@ -1,8 +1,5 @@
-import { createBotAction, logoutAction } from '@/app/admin/actions';
-
-const createBotFormAction = createBotAction as unknown as (
-  formData: FormData,
-) => void | Promise<void>;
+import { logoutAction } from '@/app/admin/actions';
+import { CreateBotForm } from '@/components/admin/create-bot-form';
 
 type Business = {
   id: string;
@@ -94,69 +91,8 @@ export function Dashboard({ businesses, bots }: DashboardProps) {
 
       <section>
         <h2 className="mb-4 text-xl font-semibold text-fg">Create a new bot</h2>
-        <form
-          action={createBotFormAction}
-          className="grid gap-4 rounded-lg border border-bg-border bg-bg-elevated p-6"
-        >
-          <Field label="Business name" name="business_name" required />
-          <Field label="Bot name" name="bot_name" required />
-          <Field
-            label="System prompt"
-            name="system_prompt"
-            textarea
-            placeholder="You are a helpful assistant for..."
-          />
-          <Field label="Twilio Account SID" name="twilio_account_sid" />
-          <Field label="Twilio Auth Token" name="twilio_auth_token" type="password" />
-          <Field
-            label="Twilio WhatsApp number"
-            name="twilio_whatsapp_number"
-            placeholder="whatsapp:+1234567890"
-          />
-          <button
-            type="submit"
-            className="justify-self-start rounded-md bg-accent px-4 py-2 font-semibold text-bg hover:bg-accent-hover"
-          >
-            Create bot
-          </button>
-        </form>
+        <CreateBotForm />
       </section>
     </main>
-  );
-}
-
-type FieldProps = {
-  label: string;
-  name: string;
-  type?: string;
-  required?: boolean;
-  placeholder?: string;
-  textarea?: boolean;
-};
-
-function Field({ label, name, type = 'text', required, placeholder, textarea }: FieldProps) {
-  const classes =
-    'bg-bg border-bg-border text-fg focus:border-accent w-full rounded-md border px-3 py-2 outline-none';
-  return (
-    <label className="block space-y-1">
-      <span className="text-xs uppercase tracking-wide text-fg-muted">{label}</span>
-      {textarea ? (
-        <textarea
-          name={name}
-          required={required}
-          placeholder={placeholder}
-          rows={4}
-          className={classes}
-        />
-      ) : (
-        <input
-          type={type}
-          name={name}
-          required={required}
-          placeholder={placeholder}
-          className={classes}
-        />
-      )}
-    </label>
   );
 }
