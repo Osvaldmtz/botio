@@ -19,8 +19,8 @@ export async function sendWhatsApp({
   const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
 
   const form = new URLSearchParams();
-  form.set('From', from);
-  form.set('To', to);
+  form.set('From', toWhatsAppAddress(from));
+  form.set('To', toWhatsAppAddress(to));
   form.set('Body', body);
 
   const response = await fetch(url, {
@@ -36,6 +36,15 @@ export async function sendWhatsApp({
     const text = await response.text();
     throw new Error(`Twilio send failed: ${response.status} ${text}`);
   }
+}
+
+// Twilio requires both From and To to carry the "whatsapp:" channel prefix for
+// WhatsApp messages. Admin users sometimes store a bot's number as a bare
+// "+E164" value, which triggers Twilio error 21910 ("Invalid From and To pair").
+// Normalize here so callers don't have to think about it.
+function toWhatsAppAddress(address: string): string {
+  const trimmed = address.trim();
+  return trimmed.startsWith('whatsapp:') ? trimmed : `whatsapp:${trimmed}`;
 }
 
 const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response/>';
