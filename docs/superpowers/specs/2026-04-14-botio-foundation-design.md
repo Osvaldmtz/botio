@@ -11,27 +11,23 @@
 
 Botio is a SaaS that lets businesses create WhatsApp bots powered by Claude to handle leads automatically. The full product has 5 sub-projects; this spec covers only **Sub-project 1: Foundation**. It delivers a buildable, runnable Next.js project with the database schema, RLS, branding tokens, Supabase client helpers, and a minimal placeholder page at `/`. No auth, no landing, no dashboard, no webhook.
 
-Later sub-projects:
-2. Landing page + Google OAuth
-3. Dashboard + onboarding wizard
-4. `/api/webhook/[botId]` (Twilio ↔ Claude)
-5. Realtime conversations panel
+Later sub-projects: 2. Landing page + Google OAuth 3. Dashboard + onboarding wizard 4. `/api/webhook/[botId]` (Twilio ↔ Claude) 5. Realtime conversations panel
 
 ## 2. Stack decisions
 
-| Item | Decision |
-|---|---|
-| Framework | Next.js 14 App Router |
-| Language | TypeScript (strict) |
-| Styling | Tailwind CSS |
-| Runtime | Node 20 LTS |
-| Package manager | npm |
-| Database | Supabase Cloud |
-| Supabase client | `@supabase/ssr` + `@supabase/supabase-js` |
-| Fonts | Geist Sans + Geist Mono via `next/font` |
-| Lint/format | ESLint (Next default) + Prettier + `prettier-plugin-tailwindcss` |
-| Testing | None in this sub-project (added in sub-project 4) |
-| Theme | Dark fixed (no toggle) |
+| Item            | Decision                                                         |
+| --------------- | ---------------------------------------------------------------- |
+| Framework       | Next.js 14 App Router                                            |
+| Language        | TypeScript (strict)                                              |
+| Styling         | Tailwind CSS                                                     |
+| Runtime         | Node 20 LTS                                                      |
+| Package manager | npm                                                              |
+| Database        | Supabase Cloud                                                   |
+| Supabase client | `@supabase/ssr` + `@supabase/supabase-js`                        |
+| Fonts           | Geist Sans + Geist Mono via `next/font`                          |
+| Lint/format     | ESLint (Next default) + Prettier + `prettier-plugin-tailwindcss` |
+| Testing         | None in this sub-project (added in sub-project 4)                |
+| Theme           | Dark fixed (no toggle)                                           |
 
 ## 3. Repository layout
 
@@ -62,6 +58,7 @@ botio/
 ```
 
 **Principles**
+
 - `lib/supabase/` is the single boundary around Supabase. All future code imports clients from here.
 - `components/logo.tsx` takes a `className` prop and uses `currentColor` so size and color are controlled by consumers.
 - `middleware.ts` exists empty so sub-project 2 only edits, never creates.
@@ -230,6 +227,7 @@ Exports a helper that, given a `NextRequest`, creates a middleware-flavored Supa
 ## 7. Environment variables
 
 `.env.local.example` (committed):
+
 ```
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
@@ -241,6 +239,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 ## 8. README
 
 Setup steps:
+
 1. `npm install`
 2. Create a Supabase Cloud project; copy Project URL, anon key, service role key.
 3. Open Supabase SQL editor and run `supabase/migrations/0001_init.sql`.

@@ -17,6 +17,7 @@
 ## File Structure
 
 **Created in this plan:**
+
 - `package.json`, `tsconfig.json`, `next.config.mjs`, `tailwind.config.ts`, `postcss.config.mjs`, `.eslintrc.json` — scaffolded by `create-next-app`, then edited
 - `.gitignore`, `.prettierrc`, `.prettierignore`
 - `.env.local.example`
@@ -34,6 +35,7 @@
 - `docs/superpowers/plans/2026-04-14-botio-foundation.md` — this file
 
 **Not created (out of scope, reserved for later sub-projects):**
+
 - Any auth UI, OAuth handlers, dashboard pages, onboarding wizard, webhook route, realtime panel, tests.
 
 ---
@@ -41,6 +43,7 @@
 ## Task 1: Initialize Next.js project and git repository
 
 **Files:**
+
 - Create: entire Next.js scaffold in `/Users/OsvaMtz/botio`
 - Create: `.git/`
 
@@ -52,6 +55,7 @@ Expected: only `.` and `..` (plus the `docs/` folder already created during brai
 - [ ] **Step 2: Scaffold Next.js 14 with TypeScript, Tailwind, ESLint, App Router, no src/**
 
 Run from `/Users/OsvaMtz/botio`:
+
 ```bash
 npx --yes create-next-app@14.2.18 . \
   --typescript \
@@ -64,6 +68,7 @@ npx --yes create-next-app@14.2.18 . \
 ```
 
 If the CLI complains that the directory is non-empty because of `docs/`, re-run with `--skip-install` temporarily removed is **not** an option — instead, pass `--yes` and accept the "non-empty directory" prompt. If `create-next-app` refuses outright, temporarily move `docs/` out, scaffold, move it back:
+
 ```bash
 mv docs /tmp/botio-docs-stash
 npx --yes create-next-app@14.2.18 . --typescript --tailwind --eslint --app --no-src-dir --import-alias "@/*" --use-npm
@@ -75,6 +80,7 @@ Expected: `package.json`, `app/`, `tailwind.config.ts`, `tsconfig.json`, `next.c
 - [ ] **Step 3: Pin Node engine in package.json**
 
 Add to `package.json`:
+
 ```json
 "engines": {
   "node": ">=20.0.0"
@@ -101,6 +107,7 @@ Expected: one commit, working tree clean.
 ## Task 2: Add Prettier and confirm gitignore
 
 **Files:**
+
 - Create: `.prettierrc`
 - Create: `.prettierignore`
 - Modify: `package.json` (add deps + script)
@@ -109,6 +116,7 @@ Expected: one commit, working tree clean.
 - [ ] **Step 1: Install Prettier and Tailwind plugin**
 
 Run:
+
 ```bash
 npm install --save-dev prettier prettier-plugin-tailwindcss
 ```
@@ -137,6 +145,7 @@ supabase/migrations
 - [ ] **Step 4: Add format script to `package.json`**
 
 In `package.json` under `"scripts"`, add:
+
 ```json
 "format": "prettier --write .",
 "format:check": "prettier --check ."
@@ -150,10 +159,12 @@ Expected: files formatted, no errors.
 - [ ] **Step 6: Verify `.gitignore` ignores env files**
 
 Open `.gitignore`. Confirm the following line exists (create-next-app adds it by default):
+
 ```
 # local env files
 .env*.local
 ```
+
 If missing, append it.
 
 - [ ] **Step 7: Commit**
@@ -168,6 +179,7 @@ git commit -m "chore: add Prettier with Tailwind plugin"
 ## Task 3: Configure Tailwind design tokens
 
 **Files:**
+
 - Modify: `tailwind.config.ts` (full replacement)
 - Modify: `app/globals.css` (minimal replacement)
 
@@ -177,10 +189,7 @@ git commit -m "chore: add Prettier with Tailwind plugin"
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  content: [
-    './app/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-  ],
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
   darkMode: 'class',
   theme: {
     extend: {
@@ -204,10 +213,8 @@ const config: Config = {
         },
       },
       backgroundImage: {
-        'gradient-brand':
-          'linear-gradient(135deg, #00FF88 0%, #3B82F6 100%)',
-        'gradient-glow':
-          'radial-gradient(circle at 50% 0%, rgba(0,255,136,0.15), transparent 60%)',
+        'gradient-brand': 'linear-gradient(135deg, #00FF88 0%, #3B82F6 100%)',
+        'gradient-glow': 'radial-gradient(circle at 50% 0%, rgba(0,255,136,0.15), transparent 60%)',
       },
       fontFamily: {
         sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
@@ -254,6 +261,7 @@ git commit -m "feat(style): add Tailwind design tokens for dark theme and brand 
 ## Task 4: Root layout with Geist fonts and metadata
 
 **Files:**
+
 - Modify: `app/layout.tsx` (full replacement)
 
 - [ ] **Step 1: Replace `app/layout.tsx`**
@@ -266,20 +274,12 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Botio — WhatsApp AI for your business',
-  description:
-    'Build WhatsApp bots powered by Claude to handle leads automatically.',
+  description: 'Build WhatsApp bots powered by Claude to handle leads automatically.',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      className={`dark ${GeistSans.variable} ${GeistMono.variable}`}
-    >
+    <html lang="en" className={`dark ${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="bg-bg text-fg font-sans antialiased">{children}</body>
     </html>
   );
@@ -289,6 +289,7 @@ export default function RootLayout({
 - [ ] **Step 2: Install the `geist` font package**
 
 Run:
+
 ```bash
 npm install geist
 ```
@@ -312,6 +313,7 @@ git commit -m "feat(layout): wire Geist fonts, dark theme, and metadata in root 
 ## Task 5: Logo component
 
 **Files:**
+
 - Create: `components/logo.tsx`
 
 - [ ] **Step 1: Create `components/logo.tsx`**
@@ -387,6 +389,7 @@ git commit -m "feat(logo): add inline SVG robot logo component"
 ## Task 6: Placeholder home page
 
 **Files:**
+
 - Modify: `app/page.tsx` (full replacement)
 
 - [ ] **Step 1: Replace `app/page.tsx`**
@@ -401,9 +404,7 @@ export default function HomePage() {
       <h1 className="bg-gradient-brand bg-clip-text text-5xl font-bold tracking-tight text-transparent sm:text-6xl">
         Botio
       </h1>
-      <p className="text-fg-muted max-w-md text-lg">
-        WhatsApp AI for your business.
-      </p>
+      <p className="text-fg-muted max-w-md text-lg">WhatsApp AI for your business.</p>
     </main>
   );
 }
@@ -432,6 +433,7 @@ git commit -m "feat(home): add branded placeholder landing page"
 ## Task 7: Supabase client helpers
 
 **Files:**
+
 - Create: `lib/supabase/client.ts`
 - Create: `lib/supabase/server.ts`
 - Create: `lib/supabase/middleware.ts`
@@ -440,6 +442,7 @@ git commit -m "feat(home): add branded placeholder landing page"
 - [ ] **Step 1: Install Supabase packages**
 
 Run:
+
 ```bash
 npm install @supabase/ssr @supabase/supabase-js
 ```
@@ -539,9 +542,7 @@ export function middleware(_request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 };
 ```
 
@@ -564,6 +565,7 @@ git commit -m "feat(supabase): add browser, server, and middleware client helper
 ## Task 8: Environment variable template
 
 **Files:**
+
 - Create: `.env.local.example`
 
 - [ ] **Step 1: Create `.env.local.example`**
@@ -594,6 +596,7 @@ git commit -m "chore: add env var template"
 ## Task 9: Database migration — tables and RLS
 
 **Files:**
+
 - Create: `supabase/migrations/0001_init.sql`
 
 - [ ] **Step 1: Create `supabase/migrations/0001_init.sql`**
@@ -717,11 +720,12 @@ git commit -m "feat(db): add initial migration with tables and RLS policies"
 ## Task 10: README
 
 **Files:**
+
 - Modify: `README.md` (full replacement — `create-next-app` generates one)
 
 - [ ] **Step 1: Replace `README.md`**
 
-```markdown
+````markdown
 # Botio
 
 WhatsApp AI bots for businesses, powered by Claude.
@@ -743,6 +747,7 @@ This is sub-project 1 of 5 — the foundation scaffold. See `docs/superpowers/sp
    ```bash
    npm install
    ```
+````
 
 2. **Create a Supabase project**
    - Go to https://supabase.com/dashboard and create a new project.
@@ -757,9 +762,11 @@ This is sub-project 1 of 5 — the foundation scaffold. See `docs/superpowers/sp
    - Confirm the four tables (`businesses`, `bots`, `conversations`, `messages`) appear under the `public` schema with RLS enabled.
 
 4. **Configure environment variables**
+
    ```bash
    cp .env.local.example .env.local
    ```
+
    Fill in the three values from step 2. `.env.local` is gitignored.
 
 5. **Run the dev server**
@@ -805,14 +812,15 @@ docs/superpowers/     Specs and plans
 ## Known TODOs before production
 
 - Encrypt `bots.twilio_auth_token` using `pgsodium` / Supabase Vault.
-```
+
+````
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add README.md
 git commit -m "docs: add setup README"
-```
+````
 
 ---
 
@@ -823,12 +831,14 @@ git commit -m "docs: add setup README"
 - [ ] **Step 1: Clean install smoke test**
 
 Run:
+
 ```bash
 rm -rf .next
 npm run lint
 npx tsc --noEmit
 npm run build
 ```
+
 Expected: all three commands succeed with zero errors and zero warnings.
 
 - [ ] **Step 2: Dev server visual check**
@@ -836,6 +846,7 @@ Expected: all three commands succeed with zero errors and zero warnings.
 Run: `npm run dev`
 Open `http://localhost:3000`.
 Verify:
+
 - Background is near-black (`#0A0A0B`) with a subtle green glow at the top.
 - Robot logo is centered, green neon (`#00FF88`).
 - "Botio" wordmark is large, bold, green-to-blue gradient, readable.
@@ -852,6 +863,7 @@ Expected: all files formatted.
 - [ ] **Step 4: Definition-of-Done checklist (from spec §9)**
 
 Confirm each of these, checking them off in the spec itself if desired:
+
 - [ ] `npm run dev` renders the placeholder with correct theme
 - [ ] `npm run build` clean
 - [ ] `npm run lint` clean
@@ -873,6 +885,7 @@ git commit -m "chore: final formatting pass"
 - [ ] **Step 6: Report back**
 
 Report:
+
 - Commit count and short log (`git log --oneline`)
 - Any DoD items that could not be verified locally (Supabase migration application requires user action on their cloud project)
 - Confirmation that `npm run build` and `npm run lint` are green
@@ -883,23 +896,23 @@ Report:
 
 **Spec coverage check** (against `2026-04-14-botio-foundation-design.md`):
 
-| Spec section | Covered by |
-|---|---|
-| §2 Stack decisions | Tasks 1, 2, 4, 7 |
-| §3 Repository layout | Tasks 1, 5, 7, 9, 10 |
-| §4.1 Tables | Task 9 |
-| §4.2 RLS | Task 9 |
-| §4.3 Schema notes | Task 9 (inline SQL comments) |
-| §5.1 Tailwind tokens | Task 3 |
-| §5.2 Logo | Task 5 |
-| §5.3 Root layout | Task 4 |
-| §5.4 Placeholder page | Task 6 |
-| §6 Supabase helpers | Task 7 |
-| §7 Env vars | Task 8 |
-| §8 README | Task 10 |
-| §9 Definition of Done | Task 11 |
-| §10 Out of scope | respected (no tasks violate it) |
-| §11 Known TODOs | README §"Known TODOs" + schema comment |
+| Spec section          | Covered by                             |
+| --------------------- | -------------------------------------- |
+| §2 Stack decisions    | Tasks 1, 2, 4, 7                       |
+| §3 Repository layout  | Tasks 1, 5, 7, 9, 10                   |
+| §4.1 Tables           | Task 9                                 |
+| §4.2 RLS              | Task 9                                 |
+| §4.3 Schema notes     | Task 9 (inline SQL comments)           |
+| §5.1 Tailwind tokens  | Task 3                                 |
+| §5.2 Logo             | Task 5                                 |
+| §5.3 Root layout      | Task 4                                 |
+| §5.4 Placeholder page | Task 6                                 |
+| §6 Supabase helpers   | Task 7                                 |
+| §7 Env vars           | Task 8                                 |
+| §8 README             | Task 10                                |
+| §9 Definition of Done | Task 11                                |
+| §10 Out of scope      | respected (no tasks violate it)        |
+| §11 Known TODOs       | README §"Known TODOs" + schema comment |
 
 **Placeholder scan:** none found. Every step has concrete code, commands, or explicit manual verification instructions.
 
