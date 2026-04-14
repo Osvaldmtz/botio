@@ -1,13 +1,74 @@
 import 'server-only';
+import type Anthropic from '@anthropic-ai/sdk';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateReply, type ChatMessage } from '@/lib/claude';
+import { generateReply, type ChatMessage, type GenerateReplyOptions } from '@/lib/claude';
 import { sendWhatsApp, emptyTwimlResponse } from '@/lib/twilio';
+import { activateProTrial } from '@/lib/kalyo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const HISTORY_LIMIT = 20;
 const FALLBACK_MESSAGE = "Sorry, I'm having trouble right now. Please try again in a moment.";
+
+const KALYO_TRIAL_INSTRUCTIONS = `
+
+You have a tool called "activate_pro_trial" that activates a 15-day Pro trial for a Kalyo psychologist account.
+
+Rules for using this tool:
+- Call it ONLY when the user has explicitly asked to start their free Pro trial AND has provided an email address in the conversation.
+- If the user wants the trial but has not given an email yet, ask them for it in the language they are writing in.
+- Do not call the tool for casual mentions of email or unrelated questions.
+
+After the tool returns:
+- status "success": confirm their Pro trial is active and mention it expires in 15 days.
+- status "already_active": tell them their Pro plan is already active and mention the expires_at date from the tool result.
+- status "not_found": tell them they need to register first at https://kalyo.io and then send their email here again.
+- status "error": apologize and tell them to try again in a moment.
+
+Always reply in the same language the user is writing in (Spanish, English, etc.).
+`;
+
+const KALYO_TOOL: Anthropic.Messages.Tool = {
+  name: 'activate_pro_trial',
+  description:
+    'Activate a 15-day Pro trial for a Kalyo psychologist by email. Only call when the user has clearly asked to start their trial AND provided their email address.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      email: {
+        type: 'string',
+        description: 'The email address of the Kalyo account to activate.',
+      },
+    },
+    required: ['email'],
+  },
+};
+
+function buildClaudeOptions(botId: string): {
+  systemSuffix: string;
+  options: GenerateReplyOptions;
+} {
+  const kalyoBotId = process.env.KALYO_BOT_ID;
+  if (!kalyoBotId || botId !== kalyoBotId) {
+    return { systemSuffix: '', options: {} };
+  }
+  return {
+    systemSuffix: KALYO_TRIAL_INSTRUCTIONS,
+    options: {
+      tools: [KALYO_TOOL],
+      toolHandlers: {
+        activate_pro_trial: async (input: unknown) => {
+          const email =
+            typeof input === 'object' && input !== null && 'email' in input
+              ? String((input as { email: unknown }).email ?? '')
+              : '';
+          return activateProTrial(email);
+        },
+      },
+    },
+  };
+}
 
 type Params = { params: { botId: string } };
 
@@ -88,10 +149,13 @@ export async function POST(request: Request, { params }: Params) {
       content: m.content,
     }));
 
-  // Generate the assistant reply.
+  // Generate the assistant reply. For the Kalyo bot, expose the activate_pro_trial tool.
+  const { systemSuffix, options: claudeOptions } = buildClaudeOptions(bot.id);
+  const systemPrompt = (bot.system_prompt ?? '') + systemSuffix;
+
   let replyText: string;
   try {
-    replyText = await generateReply(bot.system_prompt ?? '', history);
+    replyText = await generateReply(systemPrompt, history, claudeOptions);
   } catch (error) {
     console.error('[webhook] Claude call failed', error);
     replyText = FALLBACK_MESSAGE;
