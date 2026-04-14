@@ -6,10 +6,7 @@ import { createBotAction, type CreateBotState } from '@/app/admin/actions';
 const initialState: CreateBotState = { status: 'idle' };
 
 export function CreateBotForm() {
-  const [state, formAction] = useFormState<CreateBotState, FormData>(
-    createBotAction,
-    initialState,
-  );
+  const [state, formAction] = useFormState<CreateBotState, FormData>(createBotAction, initialState);
 
   return (
     <div className="space-y-4">

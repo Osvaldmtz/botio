@@ -87,13 +87,16 @@ Required env vars: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, plus Twilio
 
 One specific bot (identified by `KALYO_BOT_ID`) has an extra tool exposed to Claude: `activate_pro_trial`. When a user writes to that bot asking to start their free Pro trial and provides their email, Claude calls the tool, which looks up the email in the Kalyo Supabase project and upgrades the matching `psychologists` row to Pro for 15 days (`plan = 'professional'`, `trial_ends_at` and `plan_expires_at` set to now + 15d).
 
-**Env vars (all three required to enable the tool):**
+**Env vars (required to enable the tools):**
 
 - `KALYO_SUPABASE_URL` — e.g. `https://<project-ref>.supabase.co`
 - `KALYO_SUPABASE_SERVICE_KEY` — Kalyo project service role key
-- `KALYO_BOT_ID` — the Botio bot UUID that should expose the tool
+- `KALYO_BOT_ID` — the Botio bot UUID that should expose the tools
+- `KALYO_SALES_PHONE` — WhatsApp destination for the `notify_sales_team` tool (e.g. `+528114112000` or `whatsapp:+528114112000`)
 
-If any of the three is missing, the tool is simply not exposed and the Kalyo bot behaves like any other bot.
+If the first three are missing, neither tool is exposed and the Kalyo bot behaves like any other bot. If `KALYO_SALES_PHONE` is missing, `notify_sales_team` returns an error status and Claude apologizes to the user.
+
+The Kalyo bot currently exposes two tools: `activate_pro_trial` (below) and `notify_sales_team`, which sends a formatted lead notification to `KALYO_SALES_PHONE` via the Kalyo bot's own Twilio credentials. Claude calls `notify_sales_team` when the user asks to speak with a human or when they share contact info that should be followed up on. At least a name OR a phone is required; other fields (email, preferred time, reason) are optional.
 
 **Tool outcomes:**
 

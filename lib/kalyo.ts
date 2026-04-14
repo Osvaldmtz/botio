@@ -67,17 +67,14 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
   const planExpiresAt = profile.plan_expires_at
     ? new Date(profile.plan_expires_at as string)
     : null;
-  const trialEndsAt = profile.trial_ends_at
-    ? new Date(profile.trial_ends_at as string)
-    : null;
+  const trialEndsAt = profile.trial_ends_at ? new Date(profile.trial_ends_at as string) : null;
 
   const hasActivePlan =
     profile.plan === 'professional' &&
     planExpiresAt !== null &&
     planExpiresAt.getTime() > now.getTime();
 
-  const hasUsedTrial =
-    trialEndsAt !== null && trialEndsAt.getTime() < now.getTime();
+  const hasUsedTrial = trialEndsAt !== null && trialEndsAt.getTime() < now.getTime();
 
   console.log('[kalyo] activateProTrial state', {
     email,
