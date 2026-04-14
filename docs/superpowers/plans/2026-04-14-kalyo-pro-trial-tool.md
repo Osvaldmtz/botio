@@ -54,7 +54,7 @@ export type ActivateProTrialResult =
   | { status: 'not_found' }
   | { status: 'error'; message: string };
 
-export async function activateProTrial(email: string): Promise<ActivateProTrialResult>
+export async function activateProTrial(email: string): Promise<ActivateProTrialResult>;
 ```
 
 Behavior:
@@ -92,7 +92,7 @@ export async function generateReply(
   systemPrompt: string,
   history: ChatMessage[],
   options: GenerateReplyOptions = {},
-): Promise<string>
+): Promise<string>;
 ```
 
 Loop algorithm (max 5 iterations to avoid runaway tool calls):
@@ -126,8 +126,7 @@ In `app/api/webhook/[botId]/route.ts`:
   const kalyoBotId = process.env.KALYO_BOT_ID;
   const isKalyoBot = Boolean(kalyoBotId) && bot.id === kalyoBotId;
 
-  const systemPrompt =
-    (bot.system_prompt ?? '') + (isKalyoBot ? KALYO_TRIAL_INSTRUCTIONS : '');
+  const systemPrompt = (bot.system_prompt ?? '') + (isKalyoBot ? KALYO_TRIAL_INSTRUCTIONS : '');
 
   const claudeOptions = isKalyoBot
     ? {
@@ -199,15 +198,15 @@ Expected: all clean; build output unchanged except `/api/webhook/[botId]` bundle
 
 **Requirement coverage:**
 
-| Requirement | File |
-| --- | --- |
-| Detect email + intent from natural conversation | Claude tool use via `KALYO_TOOL` |
-| Query Kalyo Supabase for user by email | `lib/kalyo.ts` → `psychologists.select` |
-| Upgrade `plan`, `trial_ends_at`, `plan_expires_at` to 15 days | `lib/kalyo.ts` → `psychologists.update` |
-| Not-found path tells user to register at kalyo.io first | `KALYO_TRIAL_INSTRUCTIONS` in route.ts |
-| Confirm activation via WhatsApp | Existing Twilio send path, unchanged |
-| New env vars `KALYO_SUPABASE_URL`, `KALYO_SUPABASE_SERVICE_KEY` | Task 1 |
-| Gating by `KALYO_BOT_ID` | Task 4 |
+| Requirement                                                     | File                                    |
+| --------------------------------------------------------------- | --------------------------------------- |
+| Detect email + intent from natural conversation                 | Claude tool use via `KALYO_TOOL`        |
+| Query Kalyo Supabase for user by email                          | `lib/kalyo.ts` → `psychologists.select` |
+| Upgrade `plan`, `trial_ends_at`, `plan_expires_at` to 15 days   | `lib/kalyo.ts` → `psychologists.update` |
+| Not-found path tells user to register at kalyo.io first         | `KALYO_TRIAL_INSTRUCTIONS` in route.ts  |
+| Confirm activation via WhatsApp                                 | Existing Twilio send path, unchanged    |
+| New env vars `KALYO_SUPABASE_URL`, `KALYO_SUPABASE_SERVICE_KEY` | Task 1                                  |
+| Gating by `KALYO_BOT_ID`                                        | Task 4                                  |
 
 **Security TODOs carried forward:** no email ownership verification (user accepted), plaintext Twilio token (from sub-project 1).
 

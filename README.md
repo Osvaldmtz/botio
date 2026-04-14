@@ -83,6 +83,27 @@ Required env vars: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, plus Twilio
 - Encrypt `bots.twilio_auth_token` (already in the sub-project 1 TODO list).
 - Replace the admin bypass with real auth.
 
+## Kalyo Pro-trial integration
+
+One specific bot (identified by `KALYO_BOT_ID`) has an extra tool exposed to Claude: `activate_pro_trial`. When a user writes to that bot asking to start their free Pro trial and provides their email, Claude calls the tool, which looks up the email in the Kalyo Supabase project and upgrades the matching `psychologists` row to Pro for 15 days (`plan = 'pro'`, `trial_ends_at` and `plan_expires_at` set to now + 15d).
+
+**Env vars (all three required to enable the tool):**
+
+- `KALYO_SUPABASE_URL` — e.g. `https://<project-ref>.supabase.co`
+- `KALYO_SUPABASE_SERVICE_KEY` — Kalyo project service role key
+- `KALYO_BOT_ID` — the Botio bot UUID that should expose the tool
+
+If any of the three is missing, the tool is simply not exposed and the Kalyo bot behaves like any other bot.
+
+**Tool outcomes:**
+
+- `success` — row updated; Claude confirms the trial is active for 15 days.
+- `already_active` — psychologist is already on `plan = 'pro'` with an expiration date beyond the new 15-day window. The tool does NOT overwrite, so a real paid subscription cannot be accidentally shortened.
+- `not_found` — email not in `psychologists`. Claude tells the user to register at https://kalyo.io first, then send their email again.
+- `error` — tool call failed (invalid email, DB error, missing env vars). Claude apologizes and asks the user to retry.
+
+**Security TODO:** today there is no verification that the WhatsApp sender actually owns the email they provide. Anyone who knows a psychologist's email could activate their trial. Acceptable for low-traffic beta; add an email ownership check (one-time code) before production.
+
 ## Project layout
 
 ```
