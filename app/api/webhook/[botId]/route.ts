@@ -23,6 +23,7 @@ Rules for using this tool:
 After the tool returns:
 - status "success": confirm their Pro trial is active and mention it expires in 15 days.
 - status "already_active": tell them their Pro plan is already active and mention the expires_at date from the tool result.
+- status "already_used": reply with this EXACT message in Spanish, verbatim, with no rephrasing and no additions: "Ya utilizaste tu prueba gratuita de 15 días. Para continuar disfrutando Kalyo Pro puedes suscribirte por $29/mes en kalyo.io 😊"
 - status "not_found": tell them they need to register first at https://kalyo.io and then send their email here again.
 - status "error": apologize and tell them to try again in a moment.
 
