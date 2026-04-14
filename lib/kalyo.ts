@@ -6,7 +6,7 @@ const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
 
 let cached: SupabaseClient | null = null;
 
-function getKalyoClient(): SupabaseClient {
+export function getKalyoClient(): SupabaseClient {
   if (cached) return cached;
   const url = process.env.KALYO_SUPABASE_URL;
   const key = process.env.KALYO_SUPABASE_SERVICE_KEY;
@@ -22,6 +22,7 @@ function getKalyoClient(): SupabaseClient {
 export type ActivateProTrialResult =
   | { status: 'success'; expires_at: string }
   | { status: 'already_active'; expires_at: string }
+  | { status: 'already_used'; trial_ended_at: string }
   | { status: 'not_found' }
   | { status: 'error'; message: string };
 
@@ -42,7 +43,7 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
 
   const { data: profile, error: findError } = await supabase
     .from('psychologists')
-    .select('id, email, plan, plan_expires_at')
+    .select('id, email, plan, plan_expires_at, trial_ends_at')
     .eq('email', email)
     .maybeSingle();
 
@@ -65,6 +66,18 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
       return {
         status: 'already_active',
         expires_at: profile.plan_expires_at as string,
+      };
+    }
+  }
+
+  // One-trial-per-account: if they had a trial in the past and are no longer
+  // professional, they've already used their freebie.
+  if (profile.trial_ends_at && profile.plan !== 'professional') {
+    const trialEnd = new Date(profile.trial_ends_at as string);
+    if (trialEnd.getTime() < now.getTime()) {
+      return {
+        status: 'already_used',
+        trial_ended_at: profile.trial_ends_at as string,
       };
     }
   }
