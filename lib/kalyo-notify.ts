@@ -36,6 +36,12 @@ function stripWhatsAppPrefix(value: string | undefined): string | undefined {
   return trimmed.startsWith('whatsapp:') ? trimmed.slice('whatsapp:'.length) : trimmed;
 }
 
+// Twilio adds '1' after +52 for Mexican mobile numbers: +521XXXXXXXXXX → +52XXXXXXXXXX
+function normalizeMexicanPhone(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return value.replace(/^\+521(\d{10})$/, '+52$1');
+}
+
 
 export async function notifySalesTeam(
   input: NotifySalesInput,
@@ -79,7 +85,7 @@ export async function notifySalesTeam(
 
   const contentVariables: Record<string, string> = {
     '1': email ?? '—',
-    '2': phone ?? '—',
+    '2': normalizeMexicanPhone(phone) ?? phone ?? '—',
     '3': dateStr,
     '4': expiresStr,
     '5': 'WhatsApp',
