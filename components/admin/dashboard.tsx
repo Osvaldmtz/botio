@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { logoutAction } from '@/app/admin/actions';
 import { CreateBotForm } from '@/components/admin/create-bot-form';
 
@@ -31,14 +32,22 @@ export function Dashboard({ businesses, bots }: DashboardProps) {
           <h1 className="text-3xl font-bold text-fg">Admin dashboard</h1>
           <p className="text-sm text-fg-muted">Temporary bypass mode.</p>
         </div>
-        <form action={logoutAction}>
-          <button
-            type="submit"
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/conversations"
             className="rounded-md border border-bg-border px-3 py-2 text-sm text-fg-muted hover:text-fg"
           >
-            Log out
-          </button>
-        </form>
+            Conversations
+          </Link>
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="rounded-md border border-bg-border px-3 py-2 text-sm text-fg-muted hover:text-fg"
+            >
+              Log out
+            </button>
+          </form>
+        </div>
       </header>
 
       <section className="mb-10">
