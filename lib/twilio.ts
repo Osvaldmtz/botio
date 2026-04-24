@@ -5,7 +5,9 @@ type SendWhatsAppArgs = {
   authToken: string;
   from: string; // e.g. "whatsapp:+14155238886"
   to: string; // e.g. "whatsapp:+521..."
-  body: string;
+  body?: string;
+  contentSid?: string;
+  contentVariables?: Record<string, string>;
 };
 
 export async function sendWhatsApp({
@@ -14,6 +16,8 @@ export async function sendWhatsApp({
   from,
   to,
   body,
+  contentSid,
+  contentVariables,
 }: SendWhatsAppArgs): Promise<void> {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
@@ -21,7 +25,12 @@ export async function sendWhatsApp({
   const form = new URLSearchParams();
   form.set('From', toWhatsAppAddress(from));
   form.set('To', toWhatsAppAddress(to));
-  form.set('Body', body);
+  if (contentSid) {
+    form.set('ContentSid', contentSid);
+    form.set('ContentVariables', JSON.stringify(contentVariables ?? {}));
+  } else if (body) {
+    form.set('Body', body);
+  }
 
   const response = await fetch(url, {
     method: 'POST',
