@@ -192,7 +192,22 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             typeof input === 'object' && input !== null && 'email' in input
               ? String((input as { email: unknown }).email ?? '')
               : '';
-          return activateProTrial(email);
+          const result = await activateProTrial(email);
+
+          if (result.status === 'success' && creds) {
+            notifySalesTeam(
+              {
+                title: '🎉 Trial activado por Botio',
+                email,
+                phone: senderFrom,
+                whatsapp_number: senderFrom,
+                expires_at: result.expires_at,
+              },
+              creds,
+            ).catch((err) => console.error('[kalyo] trial activation notify failed', err));
+          }
+
+          return result;
         },
         notify_sales_team: async (input: unknown) => {
           if (!creds) {

@@ -3,9 +3,13 @@ import { sendWhatsApp } from '@/lib/twilio';
 import { getKalyoClient } from '@/lib/kalyo';
 
 export type NotifySalesInput = {
+  // When provided, replaces the default "🆕/⚠️ Nuevo trial solicitado" header line.
+  title?: string;
   name?: string;
   phone?: string;
   email?: string;
+  // ISO string shown as "⏰ Vence:" line when present (e.g. after trial activation).
+  expires_at?: string;
   preferred_time?: string;
   reason?: string;
   conversation_summary?: string;
@@ -75,31 +79,53 @@ export async function notifySalesTeam(
     return { status: 'error', message: 'Sales phone not configured' };
   }
 
-  const existingAccount = email ? await lookupKalyoAccount(email) : null;
+  const title = clean(input.title);
+  const expiresAt = clean(input.expires_at);
 
-  const now = new Date();
-  const dateStr = now.toLocaleString('es-MX', {
+  // Only look up existing account for lead-capture notifications (no custom title).
+  const existingAccount = !title && email ? await lookupKalyoAccount(email) : null;
+
+  const localeOpts: Intl.DateTimeFormatOptions = {
     timeZone: 'America/Mexico_City',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  });
+  };
 
-  const headerEmoji = existingAccount ? '⚠️' : '🆕';
+  const now = new Date();
+  const dateStr = now.toLocaleString('es-MX', localeOpts);
 
-  const lines = [
-    `${headerEmoji} *Nuevo trial solicitado*`,
-    `👤 Nombre: ${name ?? 'No proporcionó'}`,
-    `📧 Email: ${email ?? 'No proporcionó'}`,
-    `📞 Teléfono: ${phone ?? 'No proporcionó'}`,
-    `📅 Fecha: ${dateStr}`,
-    `💬 Canal: WhatsApp`,
-  ];
+  let lines: string[];
 
-  if (existingAccount) {
-    lines.push(`⚠️ Ya tiene cuenta — Plan: ${existingAccount.plan}`);
+  if (title) {
+    // Trial-activation mode: custom header, expiry date, no account lookup.
+    lines = [
+      `*${title}*`,
+      `📧 Email: ${email ?? 'No proporcionó'}`,
+      `📞 Teléfono: ${phone ?? 'No proporcionó'}`,
+      `📅 Fecha: ${dateStr}`,
+    ];
+    if (expiresAt) {
+      const expiresStr = new Date(expiresAt).toLocaleString('es-MX', localeOpts);
+      lines.push(`⏰ Vence: ${expiresStr}`);
+    }
+    lines.push(`💬 Canal: WhatsApp`);
+  } else {
+    // Lead-capture mode: default header with account-exists check.
+    const headerEmoji = existingAccount ? '⚠️' : '🆕';
+    lines = [
+      `${headerEmoji} *Nuevo trial solicitado*`,
+      `👤 Nombre: ${name ?? 'No proporcionó'}`,
+      `📧 Email: ${email ?? 'No proporcionó'}`,
+      `📞 Teléfono: ${phone ?? 'No proporcionó'}`,
+      `📅 Fecha: ${dateStr}`,
+      `💬 Canal: WhatsApp`,
+    ];
+    if (existingAccount) {
+      lines.push(`⚠️ Ya tiene cuenta — Plan: ${existingAccount.plan}`);
+    }
   }
 
   const body = lines.join('\n');
