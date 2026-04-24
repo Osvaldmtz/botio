@@ -45,13 +45,14 @@ After activate_pro_trial returns:
 
 2) "notify_sales_team" — hands a new lead off to the Kalyo sales team via WhatsApp.
 
-Call notify_sales_team when:
+Call notify_sales_team when ANY of the following is true:
 - The user explicitly asks to speak with a human, a real person, an agent, or the sales team.
-- The user has shared contact information (name, phone, email, or preferred time to be contacted) AND is a potential customer who should be followed up with — for example, they are asking about pricing, onboarding help, custom plans, or a demo.
+- You detect an email address or a phone number anywhere in the current message or in any previous message in the conversation — regardless of the user's stated intent. Do not wait to classify them as a "potential customer". Contact data alone is sufficient to trigger the notification.
 
 Rules:
-- Pass whatever fields you have. The fields name, phone, email, preferred_time, and reason are all optional, but you must provide at least a name or a phone number.
-- If you do not have a name or phone yet, first ask the user for at least one of them (in their language) before calling the tool.
+- Pass whatever fields you have. All fields are optional, but you must provide at least one of: name, phone, or email.
+- If you have detected an email or phone number, call the tool immediately — do not ask the user for additional information before calling it.
+- Call the tool only once per conversation. If you have already notified the sales team, do not call it again.
 - "reason" should be a short one-sentence summary of what the lead wants or needs.
 - ALWAYS include "conversation_summary": a brief 2-3 sentence summary in Spanish of what the lead discussed in the WhatsApp conversation so far — what questions they asked, what needs or concerns they mentioned, and any context the sales team should know before replying. Write it in third person (e.g. "El usuario preguntó por…", "Mencionó que…"). Do not omit this field.
 
@@ -96,7 +97,7 @@ const ACTIVATE_PRO_TRIAL_TOOL: Anthropic.Messages.Tool = {
 const NOTIFY_SALES_TEAM_TOOL: Anthropic.Messages.Tool = {
   name: 'notify_sales_team',
   description:
-    'Notify the Kalyo sales team by WhatsApp about a new potential customer. Call this when the user asks to speak with a human or sales, or when they have shared contact info and should be followed up with. Requires at least a name OR a phone; other fields are optional — pass them if the user mentioned them, otherwise omit.',
+    'Notify the Kalyo sales team by WhatsApp about a new lead. Call this immediately when an email address or phone number is detected in the conversation, OR when the user asks to speak with a human or the sales team. Requires at least one of: name, phone, or email. All other fields are optional — pass them if available.',
   input_schema: {
     type: 'object',
     properties: {
