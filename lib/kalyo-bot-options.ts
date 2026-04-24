@@ -170,7 +170,11 @@ export type BuildKalyoOptionsResult = {
 
 function isKalyoBot(botId: string): boolean {
   const kalyoBotId = process.env.KALYO_BOT_ID;
-  return Boolean(kalyoBotId) && botId === kalyoBotId;
+  // If KALYO_BOT_ID is set, use it to match a specific bot.
+  // If not set, fall back to checking for the Kalyo Supabase env vars —
+  // their presence means this is a Kalyo deployment and all bots get the tools.
+  if (kalyoBotId) return botId === kalyoBotId;
+  return Boolean(process.env.KALYO_SUPABASE_URL && process.env.KALYO_SUPABASE_SERVICE_KEY);
 }
 
 export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyoOptionsResult {
