@@ -69,10 +69,9 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
     : null;
   const trialEndsAt = profile.trial_ends_at ? new Date(profile.trial_ends_at as string) : null;
 
-  const hasActivePlan =
-    profile.plan === 'professional' &&
-    planExpiresAt !== null &&
-    planExpiresAt.getTime() > now.getTime();
+  // Use plan_expires_at as the source of truth regardless of the plan field,
+  // because the trial sets plan='starter' and paid subscriptions set plan='professional'.
+  const hasActivePlan = planExpiresAt !== null && planExpiresAt.getTime() > now.getTime();
 
   const hasUsedTrial = trialEndsAt !== null && trialEndsAt.getTime() < now.getTime();
 
@@ -109,7 +108,7 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
   const { error: updateError } = await supabase
     .from('psychologists')
     .update({
-      plan: 'professional',
+      plan: 'starter',
       trial_ends_at: expiresAtIso,
       plan_expires_at: expiresAtIso,
     })
