@@ -30,16 +30,10 @@ function clean(value: string | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function stripWhatsAppPrefix(value: string | undefined): string | undefined {
+function normalizePhone(value: string | undefined): string | undefined {
   const trimmed = clean(value);
   if (!trimmed) return undefined;
-  return trimmed.startsWith('whatsapp:') ? trimmed.slice('whatsapp:'.length) : trimmed;
-}
-
-// Twilio adds '1' after +52 for Mexican mobile numbers: +521XXXXXXXXXX → +52XXXXXXXXXX
-function normalizeMexicanPhone(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  return value.replace(/^\+521(\d{10})$/, '+52$1');
+  return trimmed.replace('whatsapp:', '').replace('+521', '+52');
 }
 
 
@@ -49,7 +43,7 @@ export async function notifySalesTeam(
 ): Promise<NotifySalesResult> {
   const name = clean(input.name);
   const explicitPhone = clean(input.phone);
-  const whatsappNumber = stripWhatsAppPrefix(input.whatsapp_number);
+  const whatsappNumber = normalizePhone(input.whatsapp_number);
   // Fall back to the sender's WhatsApp number when the lead did not give one.
   const phone = explicitPhone ?? whatsappNumber;
   const email = clean(input.email);
@@ -85,7 +79,7 @@ export async function notifySalesTeam(
 
   const contentVariables: Record<string, string> = {
     '1': email ?? '—',
-    '2': normalizeMexicanPhone(phone) ?? phone ?? '—',
+    '2': normalizePhone(phone) ?? '—',
     '3': dateStr,
     '4': expiresStr,
     '5': 'WhatsApp',
