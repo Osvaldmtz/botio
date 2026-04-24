@@ -97,6 +97,7 @@ export async function generateReply(
 
   const hasTools = Array.isArray(tools) && tools.length > 0;
   console.log('[tools]', tools?.length ?? 0, tools?.map((t) => t.name) ?? []);
+  console.log('[system_prompt]', systemPrompt);
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     const response = await anthropic.messages.create({
@@ -106,6 +107,8 @@ export async function generateReply(
       messages,
       ...(hasTools ? { tools } : {}),
     });
+
+    console.log('[anthropic]', 'stop_reason:', response.stop_reason, '| first_block:', JSON.stringify(response.content[0]));
 
     if (response.stop_reason !== 'tool_use') {
       return extractFinalText(response.content);
