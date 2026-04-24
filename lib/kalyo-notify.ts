@@ -1,5 +1,6 @@
 import 'server-only';
 import { sendWhatsApp } from '@/lib/twilio';
+import { getKalyoClient } from '@/lib/kalyo';
 
 export type NotifySalesInput = {
   name?: string;
@@ -31,9 +32,21 @@ function clean(value: string | undefined): string | undefined {
 function stripWhatsAppPrefix(value: string | undefined): string | undefined {
   const trimmed = clean(value);
   if (!trimmed) return undefined;
-  return trimmed.startsWith('whatsapp:')
-    ? trimmed.slice('whatsapp:'.length)
-    : trimmed;
+  return trimmed.startsWith('whatsapp:') ? trimmed.slice('whatsapp:'.length) : trimmed;
+}
+
+async function lookupKalyoAccount(email: string): Promise<{ plan: string } | null> {
+  try {
+    const supabase = getKalyoClient();
+    const { data } = await supabase
+      .from('psychologists')
+      .select('plan')
+      .eq('email', email.trim().toLowerCase())
+      .maybeSingle();
+    return data ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function notifySalesTeam(
@@ -46,16 +59,13 @@ export async function notifySalesTeam(
   // Fall back to the sender's WhatsApp number when the lead did not give one.
   const phone = explicitPhone ?? whatsappNumber;
   const email = clean(input.email);
-  const preferredTime = clean(input.preferred_time);
-  const reason = clean(input.reason);
-  const summary = clean(input.conversation_summary);
 
   // Require at least one identity field so an empty/accidental tool call
   // does not spam the sales team with blank leads.
-  if (!name && !phone) {
+  if (!name && !phone && !email) {
     return {
       status: 'error',
-      message: 'Either name or phone is required to notify the sales team',
+      message: 'At least one of name, phone, or email is required',
     };
   }
 
@@ -65,19 +75,34 @@ export async function notifySalesTeam(
     return { status: 'error', message: 'Sales phone not configured' };
   }
 
-  const body = [
-    '🔔 *Nuevo lead Kalyo*',
-    `👤 Nombre: ${name ?? '—'}`,
-    `📱 Teléfono: ${phone ?? '—'}`,
-    `📲 WhatsApp: ${whatsappNumber ?? '—'}`,
-    `📧 Correo: ${email ?? '—'}`,
-    `🕐 Horario: ${preferredTime ?? '—'}`,
-    `💬 Motivo: ${reason ?? '—'}`,
-    '',
-    `📋 *Resumen de conversación:* ${summary ?? '—'}`,
-    '',
-    'Responde directamente a este número.',
-  ].join('\n');
+  const existingAccount = email ? await lookupKalyoAccount(email) : null;
+
+  const now = new Date();
+  const dateStr = now.toLocaleString('es-MX', {
+    timeZone: 'America/Mexico_City',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const headerEmoji = existingAccount ? '⚠️' : '🆕';
+
+  const lines = [
+    `${headerEmoji} *Nuevo trial solicitado*`,
+    `👤 Nombre: ${name ?? 'No proporcionó'}`,
+    `📧 Email: ${email ?? 'No proporcionó'}`,
+    `📞 Teléfono: ${phone ?? 'No proporcionó'}`,
+    `📅 Fecha: ${dateStr}`,
+    `💬 Canal: WhatsApp`,
+  ];
+
+  if (existingAccount) {
+    lines.push(`⚠️ Ya tiene cuenta — Plan: ${existingAccount.plan}`);
+  }
+
+  const body = lines.join('\n');
 
   try {
     await sendWhatsApp({
