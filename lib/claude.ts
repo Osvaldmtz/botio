@@ -96,6 +96,7 @@ export async function generateReply(
   ];
 
   const hasTools = Array.isArray(tools) && tools.length > 0;
+  console.log('[tools]', tools?.length ?? 0, tools?.map((t) => t.name) ?? []);
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     const response = await anthropic.messages.create({
