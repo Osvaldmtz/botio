@@ -11,6 +11,7 @@ type Props = {
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString('es-MX', {
+    timeZone: 'America/Bogota',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

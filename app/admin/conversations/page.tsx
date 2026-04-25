@@ -25,6 +25,7 @@ function truncate(text: string | null, len = 60) {
 function formatDate(iso: string | null) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('es-MX', {
+    timeZone: 'America/Bogota',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
