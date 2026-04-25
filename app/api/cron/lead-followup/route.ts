@@ -1,4 +1,5 @@
 import 'server-only';
+import { Receiver } from '@upstash/qstash';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendWhatsApp } from '@/lib/twilio';
 
@@ -7,6 +8,11 @@ export const dynamic = 'force-dynamic';
 
 const FOLLOWUP_MESSAGE =
   'Hola 👋 ¿Pudiste revisar la información sobre Kalyo? Si quieres, puedo activarte tu prueba gratuita de 15 días ahora mismo — sin tarjeta de crédito. ¿Te interesa?';
+
+const receiver = new Receiver({
+  currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY!,
+  nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY!,
+});
 
 type TwilioCreds = {
   accountSid: string;
@@ -46,14 +52,14 @@ function getBogotaHour(): number {
   return parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
 }
 
-export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    console.error('[lead-followup] CRON_SECRET not configured');
-    return new Response('Cron secret not configured', { status: 500 });
-  }
-  if (request.headers.get('authorization') !== `Bearer ${secret}`) {
-    return new Response('Unauthorized', { status: 401 });
+export async function POST(request: Request) {
+  const bodyText = await request.text();
+  const signature = request.headers.get('upstash-signature') ?? '';
+
+  try {
+    await receiver.verify({ signature, body: bodyText });
+  } catch {
+    return new Response('Invalid signature', { status: 401 });
   }
 
   // Only send follow-ups between 10:00 and 20:00 Bogota time.
