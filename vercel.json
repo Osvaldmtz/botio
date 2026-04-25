@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/trial-followup",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/lead-followup",
+      "schedule": "0 * * * *"
     }
   ]
 }
