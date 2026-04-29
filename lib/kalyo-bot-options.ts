@@ -104,15 +104,7 @@ Llama notify_sales_team con:
 - conversation_summary mencionando explícitamente que el usuario mostró intención de compra
 
 Paso 3 — Responde al usuario:
-"¡Perfecto! Aquí tienes el link directo para activar tu Plan Pro:
-
-👉 app.kalyo.io/pricing
-
-Inicia sesión con tu email, click en 'Confirmar suscripción Pro' y listo.
-
-Importante: sin cargo hoy, tu primer cobro será al vencer tu prueba.
-
-Cuando termines, escríbeme por aquí para confirmar que todo quedó bien. Y si tienes cualquier duda durante el proceso o prefieres que te ayude un humano del equipo, también avísame y te conecto con Osvaldo."
+"¡Perfecto! Ya le avisé al equipo de Kalyo. Alguien te va a contactar pronto para ayudarte con la suscripción. Si tienes alguna pregunta mientras tanto, escríbeme aquí."
 
 ---
 
