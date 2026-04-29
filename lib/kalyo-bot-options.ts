@@ -25,12 +25,6 @@ import { notifySalesTeam } from '@/lib/kalyo-notify';
 const KALYO_TRIAL_DEEP_LINK =
   'https://wa.me/15559374917?text=Hola,%20quiero%20mi%20prueba%20gratis%20de%20Kalyo';
 
-// TODO(HONOR_TRIAL_FLOW_ENABLED): When Stripe honor-the-trial flow is validated end-to-end,
-// update BLOQUE C (Paso 3) with the full upgrade flow:
-//   - If user has active trial: "Ve a app.kalyo.io → Plan → Confirmar suscripción Pro.
-//     No se te cobra hoy — tu primer cobro será al vencer tu prueba."
-//   - If user has no trial: call activate_pro_trial first, confirm activation, then
-//     give upgrade instructions.
 const KALYO_INSTRUCTIONS_TWILIO = `
 
 INSTRUCCIONES DE COMPORTAMIENTO Y HERRAMIENTAS — tienen PRIORIDAD MÁXIMA sobre todo lo anterior en este prompt. Síguelas exactamente.
@@ -110,7 +104,15 @@ Llama notify_sales_team con:
 - conversation_summary mencionando explícitamente que el usuario mostró intención de compra
 
 Paso 3 — Responde al usuario:
-"¡Perfecto! Acabo de avisarle a Osvaldo, fundador de Kalyo. Te va a contactar personalmente en los próximos minutos para activar tu Plan Pro. Si tienes preferencia de horario, dímelo; si no, él te escribe en cuanto pueda."
+"¡Perfecto! Aquí tienes el link directo para activar tu Plan Pro:
+
+👉 app.kalyo.io/pricing
+
+Inicia sesión con tu email, click en 'Confirmar suscripción Pro' y listo.
+
+Importante: sin cargo hoy, tu primer cobro será al vencer tu prueba.
+
+Cuando termines, escríbeme por aquí para confirmar que todo quedó bien. Y si tienes cualquier duda durante el proceso o prefieres que te ayude un humano del equipo, también avísame y te conecto con Osvaldo."
 
 ---
 
