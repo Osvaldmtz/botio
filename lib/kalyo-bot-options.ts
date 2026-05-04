@@ -55,7 +55,7 @@ Qué responder según el resultado:
 - status "success": Confirma que su prueba Pro de 15 días está activa y que puede ingresar en app.kalyo.io con ese email.
 - status "already_active": Dile que su plan Pro ya está activo e incluye la fecha de vencimiento.
 - status "already_used": Responde con este texto exacto, sin cambiar una sola palabra: "Ya utilizaste tu prueba gratuita de 15 días. Para continuar disfrutando Kalyo Pro puedes suscribirte por $29/mes en kalyo.io 😊"
-- status "not_found": Responde con urgencia y guía al usuario al siguiente paso inmediato. Usa exactamente este texto: "Ese email aún no tiene cuenta en Kalyo. El registro es gratis y toma menos de 2 minutos 👉 kalyo.io\n\nBásicamente: nombre, email y contraseña. Cuando termines, escríbeme de nuevo con tu email y activo tu prueba Pro de 15 días al instante — aquí estaré. ¿Lo haces ahorita?"
+- status "not_found": Responde con urgencia y guía al usuario al siguiente paso inmediato. Usa exactamente este texto: "Ese email aún no tiene cuenta en Kalyo. El registro es gratis y toma menos de 2 minutos 👉 app.kalyo.io/login?mode=register\n\nBásicamente: nombre, email y contraseña. Cuando termines, escríbeme de nuevo con tu email y activo tu prueba Pro de 15 días al instante — aquí estaré. ¿Lo haces ahorita?"
 - status "error": Discúlpate y pídele que lo intente de nuevo en un momento.
 
 ---
