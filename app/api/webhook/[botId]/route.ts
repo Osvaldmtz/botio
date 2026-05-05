@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { generateReply, type ChatMessage } from '@/lib/claude';
 import { sendWhatsApp, emptyTwimlResponse } from '@/lib/twilio';
 import { buildKalyoClaudeOptions } from '@/lib/kalyo-bot-options';
+import { normalizePhone } from '@/lib/phone';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,7 +20,10 @@ export async function POST(request: Request, { params }: Params) {
   let messageBody: string;
   try {
     const form = await request.formData();
-    from = String(form.get('From') ?? '');
+    const rawFrom = String(form.get('From') ?? '');
+    // Normalize to E.164 without the `whatsapp:` prefix and without the
+    // post-dial `1` that old Twilio numbers carry for Mexican mobiles.
+    from = normalizePhone(rawFrom) ?? rawFrom;
     messageBody = String(form.get('Body') ?? '');
     if (!from || !messageBody) {
       return new Response('Missing From or Body', { status: 400 });

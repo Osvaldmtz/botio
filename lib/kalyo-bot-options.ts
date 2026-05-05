@@ -84,8 +84,10 @@ No la llames en estos casos:
 - El usuario solo pregunta sobre funcionalidades o precios sin aportar datos de contacto.
 
 Reglas:
-- Pasa todos los campos disponibles. Se requiere al menos uno de: nombre, teléfono o email.
-- Llama la herramienta en cuanto tengas datos suficientes, sin pedir más información.
+- Pasa todos los campos disponibles.
+- Para reason "requested_human" y "escalation": llama la herramienta INMEDIATAMENTE aunque el usuario no haya dado nombre, teléfono ni email. El sistema registra el número de WhatsApp automáticamente — no necesitas datos de contacto explícitos.
+- Para reason "new_lead" y "purchase_intent": llama la herramienta en cuanto tengas el dato de contacto (email o teléfono).
+- Llama la herramienta en cuanto tengas suficiente contexto, sin pedir más información.
 - Incluye siempre "conversation_summary": 2-3 oraciones en español en tercera persona.
 
 Qué responder según el resultado:
@@ -257,7 +259,7 @@ const ACTIVATE_PRO_TRIAL_TOOL: Anthropic.Messages.Tool = {
 const NOTIFY_SALES_TEAM_TOOL: Anthropic.Messages.Tool = {
   name: 'notify_sales_team',
   description:
-    'Notify the Kalyo sales team by WhatsApp about a new lead. Call this immediately when an email address or phone number is detected in the conversation, OR when the user asks to speak with a human or the sales team. Requires at least one of: name, phone, or email. All other fields are optional — pass them if available.',
+    'Notify the Kalyo sales team by WhatsApp about a lead or escalation event. Call this immediately when: (1) an email or phone is detected (reason: new_lead), (2) the user shows purchase intent (reason: purchase_intent), (3) the user asks to speak with a human (reason: requested_human) — call immediately even if no contact data was provided, (4) you need to escalate (reason: escalation) — call immediately even if no contact data was provided. All fields are optional; the server automatically captures the sender\'s WhatsApp number.',
   input_schema: {
     type: 'object',
     properties: {
@@ -378,7 +380,9 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           return result;
         },
         notify_sales_team: async (input: unknown) => {
+          console.log('[notify_sales_team] tool called', JSON.stringify(input));
           if (!creds) {
+            console.error('[notify_sales_team] no creds — bot missing Twilio credentials');
             return {
               status: 'error',
               message: 'Kalyo bot is missing Twilio credentials',
@@ -388,7 +392,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
           const str = (key: string): string | undefined =>
             typeof obj[key] === 'string' ? (obj[key] as string) : undefined;
-          return notifySalesTeam(
+          const result = await notifySalesTeam(
             {
               name: str('name'),
               phone: str('phone'),
@@ -400,6 +404,8 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             },
             creds,
           );
+          console.log('[notify_sales_team] result', JSON.stringify(result));
+          return result;
         },
       },
     },

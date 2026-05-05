@@ -1,5 +1,6 @@
 import 'server-only';
 import { sendWhatsApp } from '@/lib/twilio';
+import { normalizePhone } from '@/lib/phone';
 
 export type NotifySalesInput = {
   title?: string;
@@ -30,13 +31,6 @@ function clean(value: string | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function normalizePhone(value: string | undefined): string | undefined {
-  const trimmed = clean(value);
-  if (!trimmed) return undefined;
-  return trimmed.replace('whatsapp:', '').replace('+521', '+52');
-}
-
-
 export async function notifySalesTeam(
   input: NotifySalesInput,
   creds: NotifySalesCreds,
@@ -62,6 +56,14 @@ export async function notifySalesTeam(
     console.error('[kalyo-notify] KALYO_SALES_PHONE not configured');
     return { status: 'error', message: 'Sales phone not configured' };
   }
+
+  console.log('[kalyo-notify] notifying sales team', {
+    salesPhone,
+    name: name ?? '—',
+    phone: phone ?? '—',
+    email: email ?? '—',
+    reason: clean(input.reason) ?? '—',
+  });
 
   const expiresAt = clean(input.expires_at);
 
@@ -94,6 +96,7 @@ export async function notifySalesTeam(
       contentSid: 'HX17bbd7e1e48a1f28805d284ad264e36a',
       contentVariables,
     });
+    console.log('[kalyo-notify] notification sent successfully');
     return { status: 'success' };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
