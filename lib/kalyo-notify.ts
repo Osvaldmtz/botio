@@ -1,13 +1,14 @@
 import 'server-only';
 import { sendWhatsApp } from '@/lib/twilio';
 import { normalizePhone } from '@/lib/phone';
+import { sendLeadTelegram } from '@/lib/telegram-notify';
 
 export type NotifySalesInput = {
   title?: string;
   name?: string;
   phone?: string;
   email?: string;
-  // ISO string for the trial expiry date (variable 4 in the WhatsApp template).
+  // ISO string for the trial expiry date.
   expires_at?: string;
   preferred_time?: string;
   reason?: string;
@@ -31,6 +32,38 @@ function clean(value: string | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+const WHATSAPP_HEADERS: Record<string, string> = {
+  requested_human: '🙋 Lead pidió hablar con humano',
+  purchase_intent: '💰 Intención de compra',
+  new_lead: '📬 Nuevo lead Kalyo',
+  escalation: '⚠️ Escalación de conversación',
+  activate_trial: '🎁 Trial Pro activado',
+};
+
+function buildWhatsAppBody(
+  reason: string | undefined,
+  name: string | undefined,
+  phone: string | undefined,
+  email: string | undefined,
+  summary: string | undefined,
+  dateStr: string,
+  expiresStr: string,
+): string {
+  const header = WHATSAPP_HEADERS[reason ?? ''] ?? '📬 Notificación Kalyo';
+  const lines = [
+    header,
+    `Nombre: ${name ?? '—'}`,
+    `Teléfono: ${phone ?? '—'}`,
+    `Email: ${email ?? '—'}`,
+    `Fecha: ${dateStr}`,
+  ];
+  if (reason === 'activate_trial' && expiresStr !== '—') {
+    lines.push(`Vence: ${expiresStr}`);
+  }
+  if (summary) lines.push(`Resumen: ${summary}`);
+  return lines.join('\n');
+}
+
 export async function notifySalesTeam(
   input: NotifySalesInput,
   creds: NotifySalesCreds,
@@ -38,17 +71,14 @@ export async function notifySalesTeam(
   const name = clean(input.name);
   const explicitPhone = clean(input.phone);
   const whatsappNumber = normalizePhone(input.whatsapp_number);
-  // Fall back to the sender's WhatsApp number when the lead did not give one.
+  // Fall back to the sender's WhatsApp number when the lead did not volunteer one.
   const phone = explicitPhone ?? whatsappNumber;
   const email = clean(input.email);
 
   // Require at least one identity field so an empty/accidental tool call
   // does not spam the sales team with blank leads.
   if (!name && !phone && !email) {
-    return {
-      status: 'error',
-      message: 'At least one of name, phone, or email is required',
-    };
+    return { status: 'error', message: 'At least one of name, phone, or email is required' };
   }
 
   const salesPhone = process.env.KALYO_SALES_PHONE;
@@ -57,14 +87,8 @@ export async function notifySalesTeam(
     return { status: 'error', message: 'Sales phone not configured' };
   }
 
-  console.log('[kalyo-notify] notifying sales team', {
-    salesPhone,
-    name: name ?? '—',
-    phone: phone ?? '—',
-    email: email ?? '—',
-    reason: clean(input.reason) ?? '—',
-  });
-
+  const reason = clean(input.reason);
+  const summary = clean(input.conversation_summary);
   const expiresAt = clean(input.expires_at);
 
   const localeOpts: Intl.DateTimeFormatOptions = {
@@ -75,32 +99,52 @@ export async function notifySalesTeam(
     hour: '2-digit',
     minute: '2-digit',
   };
-
   const dateStr = new Date().toLocaleString('es-MX', localeOpts);
   const expiresStr = expiresAt ? new Date(expiresAt).toLocaleString('es-MX', localeOpts) : '—';
 
-  const contentVariables: Record<string, string> = {
-    '1': email ?? '—',
-    '2': normalizePhone(phone) ?? '—',
-    '3': dateStr,
-    '4': expiresStr,
-    '5': 'WhatsApp',
-  };
+  console.log('[kalyo-notify] notifying sales team', {
+    salesPhone,
+    name: name ?? '—',
+    phone: phone ?? '—',
+    email: email ?? '—',
+    reason: reason ?? '—',
+  });
 
-  try {
-    await sendWhatsApp({
+  const whatsAppBody = buildWhatsAppBody(reason, name, phone, email, summary, dateStr, expiresStr);
+
+  const [waResult, tgResult] = await Promise.allSettled([
+    sendWhatsApp({
       accountSid: creds.accountSid,
       authToken: creds.authToken,
       from: creds.from,
       to: salesPhone,
-      contentSid: 'HX17bbd7e1e48a1f28805d284ad264e36a',
-      contentVariables,
-    });
-    console.log('[kalyo-notify] notification sent successfully');
-    return { status: 'success' };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('[kalyo-notify] send failed', error);
-    return { status: 'error', message };
+      body: whatsAppBody,
+    }),
+    sendLeadTelegram({ name, phone, email, reason, conversation_summary: summary, expires_at: expiresAt }),
+  ]);
+
+  // Log each channel independently
+  if (waResult.status === 'fulfilled') {
+    console.log('[kalyo-notify] WhatsApp: success');
+  } else {
+    console.error('[kalyo-notify] WhatsApp: failed', waResult.reason);
   }
+
+  if (tgResult.status === 'rejected') {
+    console.error('[telegram-notify] Telegram: failed (rejected)', tgResult.reason);
+  } else if (!tgResult.value.success) {
+    console.error('[telegram-notify] Telegram: failed', tgResult.value.error);
+  } else {
+    console.log('[telegram-notify] Telegram: success');
+  }
+
+  const waOk = waResult.status === 'fulfilled';
+  const tgOk = tgResult.status === 'fulfilled' && tgResult.value.success;
+
+  if (!waOk && !tgOk) {
+    const waMsg = waResult.status === 'rejected' ? String(waResult.reason) : 'WhatsApp send error';
+    return { status: 'error', message: `Both channels failed. WhatsApp: ${waMsg}` };
+  }
+
+  return { status: 'success' };
 }

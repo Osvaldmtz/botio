@@ -385,10 +385,10 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           if (result.status === 'success' && creds) {
             notifySalesTeam(
               {
-                title: '🎉 Trial activado por Botio',
                 email,
                 phone: senderFrom,
                 whatsapp_number: senderFrom,
+                reason: 'activate_trial',
                 expires_at: result.expires_at,
               },
               creds,
