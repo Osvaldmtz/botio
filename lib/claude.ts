@@ -74,13 +74,19 @@ async function runToolHandlers(
   return results;
 }
 
+export type GenerateReplyResult = {
+  text: string;
+  hadToolUse: boolean;
+};
+
 export async function generateReply(
   systemPrompt: string,
   history: ChatMessage[],
   options: GenerateReplyOptions = {},
-): Promise<string> {
+): Promise<GenerateReplyResult> {
   const { tools, toolHandlers } = options;
   const anthropic = getClient();
+  let hadToolUse = false;
 
   const messages: Anthropic.Messages.MessageParam[] = history.map((m) => ({
     role: m.role,
@@ -111,8 +117,10 @@ export async function generateReply(
     console.log('[anthropic]', 'stop_reason:', response.stop_reason, '| first_block:', JSON.stringify(response.content[0]));
 
     if (response.stop_reason !== 'tool_use') {
-      return extractFinalText(response.content);
+      return { text: extractFinalText(response.content), hadToolUse };
     }
+
+    hadToolUse = true;
 
     // Echo the full assistant turn (including tool_use blocks) back into the
     // message history — Claude requires the exact content to resolve tool ids.
@@ -126,5 +134,5 @@ export async function generateReply(
   }
 
   console.warn('[claude] tool-use loop exceeded max iterations');
-  return 'Sorry, I got stuck. Please try again.';
+  return { text: 'Sorry, I got stuck. Please try again.', hadToolUse };
 }

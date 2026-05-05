@@ -5,6 +5,13 @@ import { sendWhatsApp, emptyTwimlResponse } from '@/lib/twilio';
 import { buildKalyoClaudeOptions } from '@/lib/kalyo-bot-options';
 import { normalizePhone } from '@/lib/phone';
 
+const HUMAN_ESCALATION_RE =
+  /human[oa]|asesor[a]?|(?:hablar|habla|quiero)\s+con\s+(?:alguien|una?\s+persona)|persona\b|agente\b|equipo\s+de\s+ventas|\bventas\b|soporte\b|contactar|contacto\s+directo/i;
+
+function detectHumanEscalation(text: string): boolean {
+  return HUMAN_ESCALATION_RE.test(text);
+}
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -103,12 +110,26 @@ export async function POST(request: Request, { params }: Params) {
   });
   const systemPrompt = (bot.system_prompt ?? '') + systemSuffix;
 
+  const escalationDetected = detectHumanEscalation(messageBody);
+  console.log('[webhook] last_message:', messageBody.slice(0, 120), '| escalation_detected:', escalationDetected);
+
   let replyText: string;
+  let hadToolUse = false;
   try {
-    replyText = await generateReply(systemPrompt, history, claudeOptions);
+    const result = await generateReply(systemPrompt, history, claudeOptions);
+    replyText = result.text;
+    hadToolUse = result.hadToolUse;
   } catch (error) {
     console.error('[webhook] Claude call failed', error);
     replyText = FALLBACK_MESSAGE;
+  }
+
+  console.log('[webhook] reply_generated | had_tool_use:', hadToolUse);
+  if (escalationDetected && !hadToolUse) {
+    console.warn('[escalation-warning] User requested human but Claude did not call notify_sales_team', {
+      from,
+      messageBody: messageBody.slice(0, 120),
+    });
   }
 
   // Persist the assistant reply (best effort — don't abort on failure).

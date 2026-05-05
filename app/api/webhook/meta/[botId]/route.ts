@@ -210,7 +210,8 @@ async function handleMessage({
 
   let replyText: string;
   try {
-    replyText = await generateReply(fullSystemPrompt, history, claudeOptions);
+    const { text } = await generateReply(fullSystemPrompt, history, claudeOptions);
+    replyText = text;
   } catch (error) {
     console.error('[meta-webhook] Claude call failed', error);
     replyText = FALLBACK_MESSAGE;
