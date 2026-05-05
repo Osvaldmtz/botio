@@ -31,12 +31,14 @@ const LOCALE_OPTS: Intl.DateTimeFormatOptions = {
 export async function sendLeadTelegram(
   input: TelegramNotifyInput,
 ): Promise<TelegramNotifyResult> {
+  console.log('[telegram-notify] starting...');
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
   if (!token || !chatId) {
     console.warn('[telegram-notify] missing env vars (TELEGRAM_BOT_TOKEN or TELEGRAM_ADMIN_CHAT_ID)');
     return { success: false, error: 'missing env vars' };
   }
+  console.log('[telegram-notify] env vars present, sending...');
 
   const reason = input.reason?.trim() || 'new_lead';
   const header = REASON_HEADERS[reason] ?? '📬 <b>Notificación Kalyo</b>';
@@ -94,7 +96,7 @@ export async function sendLeadTelegram(
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('[telegram-notify] error', error);
+    console.error('[telegram-notify] error', message);
     return { success: false, error: message };
   }
 }

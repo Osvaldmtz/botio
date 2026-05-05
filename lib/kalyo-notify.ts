@@ -112,6 +112,7 @@ export async function notifySalesTeam(
 
   const whatsAppBody = buildWhatsAppBody(reason, name, phone, email, summary, dateStr, expiresStr);
 
+  console.log('[kalyo-notify] about to call Promise.allSettled for both channels');
   const [waResult, tgResult] = await Promise.allSettled([
     sendWhatsApp({
       accountSid: creds.accountSid,
@@ -122,6 +123,8 @@ export async function notifySalesTeam(
     }),
     sendLeadTelegram({ name, phone, email, reason, conversation_summary: summary, expires_at: expiresAt }),
   ]);
+
+  console.log('[kalyo-notify] Promise.allSettled done | wa:', waResult.status, '| tg:', tgResult.status);
 
   // Log each channel independently
   if (waResult.status === 'fulfilled') {
