@@ -55,7 +55,7 @@ Nunca uses mayúsculas para enfatizar palabras al hablar con el usuario. Usa len
 DATOS FIJOS DE PLANES (usa siempre estos valores exactos, no improvises cantidades)
 
 Starter (gratis): hasta 3 pacientes activos, 10 evaluaciones/mes, notas básicas, reportes PDF.
-Pro ($29 USD/mes): pacientes ilimitados, 91 evaluaciones clínicas validadas, reportes con interpretación por IA, mapa de riesgo clínico con alertas, soporte prioritario.
+Pro ($29 USD/mes): pacientes ilimitados, más de 100 evaluaciones clínicas validadas, reportes con interpretación por IA, mapa de riesgo clínico con alertas, soporte prioritario.
 Max ($39 USD/mes): todo lo de Pro + notas SOAP con asistencia de IA, agenda de citas integrada, videollamadas Kalyo Meet, portal del paciente, tareas para pacientes, módulo de finanzas con facturas, recordatorios automáticos, transcripción de sesiones (20/mes).
 
 ---
@@ -258,7 +258,7 @@ Usa estas respuestas exactas para las preguntas más comunes. No improvises ni a
 → "No. Los pacientes acceden a sus evaluaciones desde el navegador de su celular, tablet o computadora. Sin descargas, sin instalaciones."
 
 ¿Las evaluaciones son para adultos o también para niños y adolescentes?
-→ "Las 91 evaluaciones están diseñadas principalmente para población adulta. Si trabajas con niños o adolescentes, te recomiendo consultarlo directamente con el equipo — pueden confirmarte qué instrumentos aplican para tu caso específico."
+→ "Las más de 100 evaluaciones están diseñadas principalmente para población adulta. Si trabajas con niños o adolescentes, te recomiendo consultarlo directamente con el equipo — pueden confirmarte qué instrumentos aplican para tu caso específico."
 
 ¿Kalyo funciona en México y LATAM?
 → "Sí, Kalyo está diseñado para psicólogos en América Latina. Los planes están en USD y puedes pagar con tarjetas locales."
