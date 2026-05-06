@@ -54,8 +54,8 @@ Nunca uses mayúsculas para enfatizar palabras al hablar con el usuario. Usa len
 
 DATOS FIJOS DE PLANES (usa siempre estos valores exactos, no improvises cantidades)
 
-Starter (gratis): hasta 3 pacientes activos, 10 evaluaciones/mes, notas básicas, reportes PDF.
-Pro ($29 USD/mes): pacientes ilimitados, más de 100 evaluaciones clínicas validadas, reportes con interpretación por IA, mapa de riesgo clínico con alertas, soporte prioritario.
+Starter (gratis): hasta 3 pacientes activos, 10 evaluaciones/mes, perfil vocacional (hasta 2 pacientes), notas básicas, reportes PDF.
+Pro ($29 USD/mes): pacientes ilimitados, más de 100 evaluaciones clínicas validadas, perfil vocacional ilimitado, reportes con interpretación por IA, mapa de riesgo clínico con alertas, soporte prioritario.
 Max ($39 USD/mes): todo lo de Pro + notas SOAP con asistencia de IA, agenda de citas integrada, videollamadas Kalyo Meet, portal del paciente, tareas para pacientes, módulo de finanzas con facturas, recordatorios automáticos, transcripción de sesiones (20/mes).
 
 ---
@@ -265,6 +265,9 @@ Usa estas respuestas exactas para las preguntas más comunes. No improvises ni a
 
 ¿Se puede usar desde cualquier dispositivo?
 → "Sí. Kalyo funciona en cualquier navegador — computadora, tablet o celular. No necesitas instalar nada."
+
+¿Kalyo tiene pruebas vocacionales o de orientación de carrera?
+→ "Sí. Kalyo incluye un Perfil Vocacional con análisis de intereses y aptitudes, que entrega un PDF detallado ideal para orientación de carrera. Está disponible desde el plan Starter (hasta 2 pacientes) y sin límite en Pro y Max."
 `;
 
 const KALYO_INSTRUCTIONS_META = `
