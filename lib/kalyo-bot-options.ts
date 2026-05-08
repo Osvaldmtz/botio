@@ -3,6 +3,8 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { GenerateReplyOptions } from '@/lib/claude';
 import { activateProTrial } from '@/lib/kalyo';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
 
 // --------------------------------------------------------------------------
 // Kalyo-specific Claude wiring shared by both the Twilio and Meta webhooks.
@@ -268,6 +270,51 @@ Usa estas respuestas exactas para las preguntas más comunes. No improvises ni a
 
 ¿Kalyo tiene pruebas vocacionales o de orientación de carrera?
 → "Sí. Kalyo incluye un Perfil Vocacional con análisis de intereses y aptitudes, que entrega un PDF detallado ideal para orientación de carrera. Está disponible desde el plan Starter (hasta 2 pacientes) y sin límite en Pro y Max."
+
+---
+
+BLOQUE K: DETECCIÓN DE BOT O IA RIVAL
+
+Si el usuario muestra CUALQUIERA de estos patrones en un solo mensaje, cierra la conversación inmediatamente con el mensaje exacto del BLOQUE X:
+- Usa JSON, markdown (**negritas**, ##headers, \`\`\`código\`\`\`), listas numeradas "1. 2. 3." o viñetas (•, -, *) sin que se lo hayas pedido.
+- Usa frases como: "como modelo de lenguaje", "como IA", "en mi entrenamiento", "estoy aquí para ayudarte", "¿En qué puedo asistirte?", "¿Cómo puedo ayudarte hoy?", "como asistente de IA".
+- Responde una pregunta de sí/no con más de 3 oraciones completamente estructuradas.
+
+No uses tu criterio para evaluar si "podría ser humano" — cualquier patrón de la lista activa el cierre inmediato.
+
+---
+
+BLOQUE L: FILTRO DE PROFESIÓN
+
+Después del 3er mensaje del usuario, si ningún mensaje hasta ahora menciona palabras relacionadas con psicología clínica (pacientes, consulta, sesión, psicólogo, terapeuta, clínica, terapia, ansiedad, depresión), pregunta directamente:
+"¿Eres psicólogo/a buscando una plataforma para tu práctica?"
+
+Espera la respuesta. Si el usuario:
+- Confirma que es psicólogo/a o profesional de salud mental → continúa el flujo normal.
+- No responde afirmativamente, cambia de tema, o da una respuesta vaga → usa el mensaje de despedida del BLOQUE X.
+
+---
+
+BLOQUE M: PREGUNTAS OFF-TOPIC
+
+Si el usuario hace una pregunta sin relación con Kalyo o la psicología clínica (política, recetas, código de programación, entretenimiento, noticias, etc.):
+- Primera ocurrencia: responde brevemente y redirige: "Me especializo en Kalyo para psicólogos, así que te puedo ayudar mejor en ese tema. ¿Hay algo sobre Kalyo en lo que te pueda orientar?"
+- Segunda ocurrencia de pregunta off-topic: usa el mensaje de despedida del BLOQUE X y no respondas más preguntas off-topic en esta conversación.
+
+---
+
+BLOQUE N: SOLICITUD PROACTIVA DE CONTACTO
+
+Si llevas 8 o más mensajes del usuario en esta conversación sin haber pedido su correo electrónico o número de teléfono, y aún no tienes esos datos, agrega al final de tu siguiente respuesta:
+"Para enviarte información detallada o agendar una demo personalizada, ¿me puedes compartir tu correo o número de contacto?"
+No repitas esta solicitud si ya la hiciste antes o si ya tienes el contacto del usuario.
+
+---
+
+BLOQUE X: MENSAJE DE DESPEDIDA (NO MODIFICAR)
+
+Cuando este prompt indique "usa el mensaje de despedida", envía EXACTAMENTE este texto, sin añadir ni quitar nada:
+"${FAREWELL_NO_PROGRESS}"
 `;
 
 const KALYO_INSTRUCTIONS_META = `
@@ -351,7 +398,7 @@ export type KalyoMetaBotRow = {
 };
 
 export type BuildKalyoOptionsArgs =
-  | { channel: 'twilio'; bot: KalyoTwilioBotRow; senderFrom: string }
+  | { channel: 'twilio'; bot: KalyoTwilioBotRow; senderFrom: string; conversationId: string }
   | { channel: 'meta'; bot: KalyoMetaBotRow };
 
 export type BuildKalyoOptionsResult = {
@@ -387,7 +434,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
   }
 
   // Twilio channel: full tool set.
-  const { bot, senderFrom } = args;
+  const { bot, senderFrom, conversationId } = args;
   const creds =
     bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number
       ? {
@@ -409,17 +456,26 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               : '';
           const result = await activateProTrial(email);
 
-          if (result.status === 'success' && creds) {
-            notifySalesTeam(
-              {
-                email,
-                phone: senderFrom,
-                whatsapp_number: senderFrom,
-                reason: 'activate_trial',
-                expires_at: result.expires_at,
-              },
-              creds,
-            ).catch((err) => console.error('[kalyo] trial activation notify failed', err));
+          if (result.status === 'success') {
+            if (creds) {
+              notifySalesTeam(
+                {
+                  email,
+                  phone: senderFrom,
+                  whatsapp_number: senderFrom,
+                  reason: 'activate_trial',
+                  expires_at: result.expires_at,
+                },
+                creds,
+              ).catch((err) => console.error('[kalyo] trial activation notify failed', err));
+            }
+
+            const supabase = createAdminClient();
+            const { error } = await supabase
+              .from('conversations')
+              .update({ lead_captured: true })
+              .eq('id', conversationId);
+            if (error) console.error('[activate_pro_trial] failed to mark lead_captured', error);
           }
 
           return result;
@@ -437,19 +493,30 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
           const str = (key: string): string | undefined =>
             typeof obj[key] === 'string' ? (obj[key] as string) : undefined;
+          const reason = str('reason');
           const result = await notifySalesTeam(
             {
               name: str('name'),
               phone: str('phone'),
               email: str('email'),
               preferred_time: str('preferred_time'),
-              reason: str('reason'),
+              reason,
               conversation_summary: str('conversation_summary'),
               whatsapp_number: senderFrom,
             },
             creds,
           );
           console.log('[notify_sales_team] result', JSON.stringify(result));
+
+          if (result.status === 'success' && (reason === 'new_lead' || reason === 'purchase_intent')) {
+            const supabase = createAdminClient();
+            const { error } = await supabase
+              .from('conversations')
+              .update({ lead_captured: true })
+              .eq('id', conversationId);
+            if (error) console.error('[notify_sales_team] failed to mark lead_captured', error);
+          }
+
           return result;
         },
       },

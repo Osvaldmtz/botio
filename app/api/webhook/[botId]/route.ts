@@ -4,6 +4,7 @@ import { generateReply, type ChatMessage } from '@/lib/claude';
 import { sendWhatsApp, emptyTwimlResponse } from '@/lib/twilio';
 import { buildKalyoClaudeOptions } from '@/lib/kalyo-bot-options';
 import { normalizePhone } from '@/lib/phone';
+import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
 
 const HUMAN_ESCALATION_RE =
   /human[oa]|asesor[a]?|(?:hablar|habla|quiero)\s+con\s+(?:alguien|una?\s+persona)|persona\b|agente\b|equipo\s+de\s+ventas|\bventas\b|soporte\b|contactar|contacto\s+directo/i;
@@ -17,6 +18,48 @@ export const dynamic = 'force-dynamic';
 
 const HISTORY_LIMIT = 20;
 const FALLBACK_MESSAGE = "Sorry, I'm having trouble right now. Please try again in a moment.";
+const USER_MSG_LIMIT = 15;
+const BOT_STDDEV_THRESHOLD_MS = 500;
+const BOT_MIN_SAMPLES = 5;
+
+const PROFESSION_RE =
+  /pacientes?|consulta|sesi[oó]n|psic[oó]log|terapeuta|cl[ií]nica|ansiedad|depresi[oó]n|terapia/i;
+
+type BotCredentials = {
+  twilio_account_sid: string | null;
+  twilio_auth_token: string | null;
+  twilio_whatsapp_number: string | null;
+};
+
+async function sendFarewellAndClose(
+  supabase: ReturnType<typeof createAdminClient>,
+  bot: BotCredentials,
+  to: string,
+  conversationId: string,
+  closeReason: string,
+): Promise<void> {
+  await Promise.allSettled([
+    bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number
+      ? sendWhatsApp({
+          accountSid: bot.twilio_account_sid,
+          authToken: bot.twilio_auth_token,
+          from: bot.twilio_whatsapp_number,
+          to,
+          body: FAREWELL_NO_PROGRESS,
+        })
+      : Promise.resolve(),
+    supabase.from('messages').insert({
+      conversation_id: conversationId,
+      role: 'assistant',
+      content: FAREWELL_NO_PROGRESS,
+    }),
+    supabase
+      .from('conversations')
+      .update({ is_closed: true, close_reason: closeReason, closed_at: new Date().toISOString() })
+      .eq('id', conversationId),
+  ]);
+  console.log('[webhook] conversation closed', { conversationId, closeReason });
+}
 
 type Params = { params: { botId: string } };
 
@@ -60,12 +103,18 @@ export async function POST(request: Request, { params }: Params) {
   const { data: conversation, error: convError } = await supabase
     .from('conversations')
     .upsert({ bot_id: bot.id, customer_phone: from }, { onConflict: 'bot_id,customer_phone' })
-    .select('id')
+    .select('id, is_closed, lead_captured')
     .single();
 
   if (convError || !conversation) {
     console.error('[webhook] failed to upsert conversation', convError);
     return new Response('Internal error', { status: 500 });
+  }
+
+  // Guard 0 — Conversation already closed by a previous guard.
+  if ((conversation as { is_closed: boolean }).is_closed) {
+    console.log('[webhook] conversation already closed, ignoring message', { conversationId: conversation.id });
+    return emptyTwimlResponse();
   }
 
   // Persist the incoming user message.
@@ -100,6 +149,53 @@ export async function POST(request: Request, { params }: Params) {
       content: m.content,
     }));
 
+  const leadCaptured = (conversation as { lead_captured: boolean }).lead_captured;
+
+  // Count total user messages in this conversation (separate query; historyRows is capped at 20).
+  const { count: userMsgCount, error: countError } = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversation.id)
+    .eq('role', 'user');
+
+  if (countError) {
+    console.error('[webhook] failed to count user messages — guards 1/3 will be skipped', countError);
+  }
+  const totalUserMsgs = userMsgCount ?? 0;
+
+  // Guard 2 — Bot timing heuristic: std dev of inter-message deltas < 500ms in 5+ user messages.
+  const userTimestamps = (historyRows ?? [])
+    .filter((m) => m.role === 'user')
+    .map((m) => new Date((m as { created_at: string }).created_at).getTime())
+    .sort((a, b) => a - b);
+
+  if (userTimestamps.length >= BOT_MIN_SAMPLES) {
+    const deltas: number[] = [];
+    for (let i = 1; i < userTimestamps.length; i++) {
+      deltas.push(userTimestamps[i] - userTimestamps[i - 1]);
+    }
+    const mean = deltas.reduce((s, d) => s + d, 0) / deltas.length;
+    const variance = deltas.reduce((s, d) => s + Math.pow(d - mean, 2), 0) / deltas.length;
+    const stdDev = Math.sqrt(variance);
+    console.log('[webhook] bot-timing-check', {
+      samples: userTimestamps.length,
+      stdDevMs: Math.round(stdDev),
+      meanMs: Math.round(mean),
+    });
+    if (stdDev < BOT_STDDEV_THRESHOLD_MS) {
+      console.warn('[webhook] suspected_bot — closing conversation', { from, stdDevMs: Math.round(stdDev) });
+      await sendFarewellAndClose(supabase, bot, from, conversation.id, 'suspected_bot');
+      return emptyTwimlResponse();
+    }
+  }
+
+  // Guard 1 — Message limit: more than 15 user messages without a captured lead.
+  if (totalUserMsgs > USER_MSG_LIMIT && !leadCaptured) {
+    console.warn('[webhook] no_lead_limit — closing conversation', { from, totalUserMsgs });
+    await sendFarewellAndClose(supabase, bot, from, conversation.id, 'no_lead_limit');
+    return emptyTwimlResponse();
+  }
+
   // Generate the assistant reply. For the Kalyo bot on the Twilio channel,
   // this exposes the activate_pro_trial + notify_sales_team tools; all other
   // bots see no suffix and no tools.
@@ -107,8 +203,24 @@ export async function POST(request: Request, { params }: Params) {
     channel: 'twilio',
     bot,
     senderFrom: from,
+    conversationId: conversation.id,
   });
-  const systemPrompt = (bot.system_prompt ?? '') + systemSuffix;
+  let systemPrompt = (bot.system_prompt ?? '') + systemSuffix;
+
+  // Guard 3 — Profession injection: if this is the 3rd user message and no profession keywords
+  // have appeared yet, force Sofía to ask the profession filter question in this turn.
+  if (totalUserMsgs === 3 && !leadCaptured) {
+    const userContents = (historyRows ?? [])
+      .filter((m) => m.role === 'user')
+      .map((m) => m.content)
+      .join(' ');
+    if (!PROFESSION_RE.test(userContents)) {
+      systemPrompt +=
+        '\n\n[INSTRUCCIÓN INMEDIATA — ESTE TURNO ÚNICAMENTE] ' +
+        'En este mensaje DEBES preguntar directamente al usuario, sin texto adicional antes: ' +
+        '"¿Eres psicólogo/a buscando una plataforma para tu práctica?"';
+    }
+  }
 
   const escalationDetected = detectHumanEscalation(messageBody);
   console.log('[webhook] last_message:', messageBody.slice(0, 120), '| escalation_detected:', escalationDetected);
