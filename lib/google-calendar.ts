@@ -822,6 +822,16 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
   return { eventId, meetLink, demoId: demoRow.id };
 }
 
+export async function deleteDemoCalendarEvent(googleEventId: string): Promise<void> {
+  if (!googleEventId) return;
+  const calendar = await getCalendarClient();
+  await calendar.events.delete({
+    calendarId: 'primary',
+    eventId: googleEventId,
+    sendUpdates: 'all',
+  });
+}
+
 export async function cancelDemoEvent(demoId: string, reason: string): Promise<void> {
   const supabase = createAdminClient();
   const { data: demo, error } = await supabase
@@ -835,12 +845,7 @@ export async function cancelDemoEvent(demoId: string, reason: string): Promise<v
   if (demo.status === 'cancelled') return;
 
   if (demo.google_event_id) {
-    const calendar = await getCalendarClient();
-    await calendar.events.delete({
-      calendarId: 'primary',
-      eventId: demo.google_event_id,
-      sendUpdates: 'all',
-    });
+    await deleteDemoCalendarEvent(demo.google_event_id);
   }
 
   const { error: updateError } = await supabase

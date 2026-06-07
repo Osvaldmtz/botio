@@ -26,9 +26,11 @@ import {
 import { buildCustomerPhone, type ConversationChannel } from '@/lib/channel-utils';
 import {
   handleDemoConfirmInterception,
+  handleDemoReminderResponse,
   handleDemoTimeCheckInterception,
   loadConversationPending,
   shouldInterceptDemoConfirm,
+  shouldInterceptDemoReminderResponse,
   shouldInterceptDemoTimeCheck,
 } from '@/lib/demo-flow-interceptor';
 import {
@@ -58,7 +60,8 @@ export type ProcessMessageSource =
   | 'ab-test'
   | 'closed'
   | 'auto_demo_confirm'
-  | 'auto_demo_check';
+  | 'auto_demo_check'
+  | 'auto_demo_reminder';
 
 export type ProcessIncomingMessageInput = {
   supabase: SupabaseClient;
@@ -254,6 +257,47 @@ export async function processIncomingMessage(
             from: bot.twilio_whatsapp_number,
           }
         : null;
+
+    const reminderDemo = await shouldInterceptDemoReminderResponse(
+      supabase,
+      conversation.customer_phone,
+      messageBody,
+    );
+    if (reminderDemo) {
+      const intercept = await handleDemoReminderResponse({
+        supabase,
+        conversationId: conversation.id,
+        customerPhone: conversation.customer_phone,
+        messageBody,
+        demo: reminderDemo,
+        creds: kalyoCreds,
+      });
+
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: intercept.replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: intercept.source,
+          tools_called: intercept.toolsCalled,
+          reminder_response: intercept.reminderResponse,
+        },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      console.log(
+        `[process-message] channel=${channel} | source=${intercept.source} | conv=${conversation.id}`,
+      );
+
+      return {
+        replyText: intercept.replyText,
+        storedReply: intercept.replyText,
+        conversationId: conversation.id,
+        source: intercept.source,
+      };
+    }
 
     if (pending && shouldInterceptDemoConfirm(pending, messageBody)) {
       const intercept = await handleDemoConfirmInterception({

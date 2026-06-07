@@ -41,6 +41,9 @@ const WHATSAPP_HEADERS: Record<string, string> = {
   activate_trial: '🎁 Trial Pro activado',
   trial_activated_via_botio: '🎁 Trial activado vía Botio',
   demo_scheduled: '📅 Demo agendada',
+  demo_confirmed_by_customer: '✅ Demo confirmada por cliente',
+  demo_reschedule_requested: '🔄 Cliente pidió reagendar demo',
+  demo_cancelled_by_customer: '❌ Demo cancelada por cliente',
 };
 
 const TEMPERATURE_EMOJI: Record<EnrichedLead['temperature'], string> = {

@@ -44,6 +44,12 @@ export function parseSlotChoice(
   return null;
 }
 
+export function parseReminderResponseChoice(text: string): 1 | 2 | 3 | null {
+  const choice = parseSlotChoice(text, null);
+  if (choice === 1 || choice === 2 || choice === 3) return choice;
+  return null;
+}
+
 export function hasCustomTimeRequest(text: string): boolean {
   return TIME_REQUEST_RE.test(text) && parseTimeFromText(text) !== null;
 }

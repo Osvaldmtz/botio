@@ -9,13 +9,27 @@ import {
   type KalyoTwilioCreds,
 } from '@/lib/demo-slot-actions';
 import { parseSlotChoice } from '@/lib/demo-flow-parsing';
+import {
+  handleDemoReminderResponse,
+  shouldInterceptDemoReminderResponse,
+  type ActiveReminderDemo,
+  type DemoReminderInterceptResult,
+} from '@/lib/demo-reminder-response';
 
 export {
   hasCustomTimeRequest,
   parseSlotChoice,
+  parseReminderResponseChoice,
   shouldInterceptDemoConfirm,
   shouldInterceptDemoTimeCheck,
 } from '@/lib/demo-flow-parsing';
+
+export {
+  handleDemoReminderResponse,
+  shouldInterceptDemoReminderResponse,
+  type ActiveReminderDemo,
+  type DemoReminderInterceptResult,
+};
 
 export type DemoInterceptResult = {
   replyText: string;
