@@ -7,6 +7,7 @@ import {
   appendQuickReplyPrompt,
   FAREWELL_NO_PROGRESS,
   mapQuickReplySelection,
+  shouldAttachQuickReplies,
 } from '@/lib/kalyo-messages';
 import { isAdPrefillMessage, isKalyoBotId, touchConversation } from '@/lib/conversation-utils';
 import { enrichAndNotifyLead, type ConversationMessage } from '@/lib/lead-enrichment';
@@ -456,10 +457,16 @@ export async function processIncomingMessage(
     });
   }
 
-  const isFirstKalyoReply = totalUserMsgs === 1 && isKalyoBotId(bot.id);
-  const useQuickReplies = channel === 'whatsapp' && isFirstKalyoReply;
-  const storedReply =
-    source === 'cache' || !useQuickReplies ? replyText : appendQuickReplyPrompt(replyText);
+  const useQuickReplies = shouldAttachQuickReplies({
+    channel,
+    botId: bot.id,
+    totalUserMsgs,
+    messageBody,
+    hadToolUse,
+    source,
+    replyText,
+  });
+  const storedReply = useQuickReplies ? appendQuickReplyPrompt(replyText) : replyText;
 
   const assistantNow = new Date().toISOString();
   const { error: assistantMsgError } = await supabase.from('messages').insert({

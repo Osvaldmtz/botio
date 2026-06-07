@@ -51,7 +51,7 @@ const CACHE_PATTERNS: CachePattern[] = [
     name: 'quick_3',
     regex: /^(3|prueba gratis|trial)$/,
     response:
-      'La prueba de 15 días del plan Pro es muy rápida en 2 pasos:\n\n1. Te registras en app.kalyo.io/login?mode=register (1-2 minutos)\n2. Me escribes por aquí con el email que usaste y activo tu Pro al instante\n\n¿Te animas?',
+      '¡Excelente! Te activo el trial Pro de 15 días sin tarjeta de crédito. ¿Ya tienes cuenta en Kalyo o es tu primera vez?',
   },
   {
     name: 'gracias',
