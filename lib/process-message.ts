@@ -271,20 +271,6 @@ export async function processIncomingMessage(
 
   const leadCaptured = conversation.lead_captured;
 
-  let abAssignments: AbAssignmentContext[] = [];
-  if (isKalyoBotId(bot.id)) {
-    try {
-      abAssignments = await ensureConversationAssignments(
-        supabase,
-        bot.id,
-        conversation.id,
-        'first_message',
-      );
-    } catch (abErr) {
-      console.error('[ab-testing] assignment failed', abErr);
-    }
-  }
-
   const { count: userMsgCount, error: countError } = await supabase
     .from('messages')
     .select('id', { count: 'exact', head: true })
@@ -296,6 +282,24 @@ export async function processIncomingMessage(
   }
 
   const totalUserMsgs = userMsgCount ?? 0;
+
+  let abAssignments: AbAssignmentContext[] = [];
+  if (isKalyoBotId(bot.id) && totalUserMsgs === 1) {
+    try {
+      abAssignments = await ensureConversationAssignments(
+        supabase,
+        bot.id,
+        conversation.id,
+        'first_message',
+      );
+    } catch (abErr) {
+      console.error('[ab-testing] assignment failed', abErr);
+    }
+  } else if (isKalyoBotId(bot.id) && totalUserMsgs > 1) {
+    console.log(
+      `[ab-testing] skipping assignment — not first user message (count=${totalUserMsgs}) conv=${conversation.id}`,
+    );
+  }
   const isFirstUserMessage = totalUserMsgs === 1;
   const firstMessageOverride = isFirstUserMessage
     ? getFirstMessageOverride(abAssignments)

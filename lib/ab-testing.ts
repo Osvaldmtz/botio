@@ -143,7 +143,7 @@ export async function assignVariant(
   if (insertError) throw insertError;
 
   console.log(
-    `[ab-testing] assigned | exp=${experimentId} | conv=${conversationId} | variant=${variant}`,
+    `[ab-testing] assigned conv=${conversationId} to variant=${variant} in exp=${experimentId}`,
   );
 
   return variant;
@@ -155,7 +155,15 @@ export async function ensureConversationAssignments(
   conversationId: string,
   scope: ExperimentScope = 'first_message',
 ): Promise<AbAssignmentContext[]> {
+  console.log(`[ab-testing] checking active experiments for bot=${botId} scope=${scope}`);
+
   const experiments = await getActiveExperiments(supabase, botId, scope);
+  if (experiments.length === 0) {
+    console.log('[ab-testing] no active experiments found');
+    return [];
+  }
+
+  console.log(`[ab-testing] found ${experiments.length} experiments`);
   const contexts: AbAssignmentContext[] = [];
 
   for (const exp of experiments) {
