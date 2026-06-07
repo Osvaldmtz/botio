@@ -278,7 +278,7 @@ Cuándo ofrecer demo:
 FLUJO:
 
 Paso 1 — Ofrecer:
-"Te puedo agendar una demo personalizada de 15 minutos con Osvaldo, el fundador de Kalyo. ¿Te animas?"
+"Te puedo agendar una demo personalizada de 15 minutos con Osvaldo del equipo de Kalyo. ¿Te animas?"
 
 Paso 2 — Si acepta, pedir datos:
 "Genial. Necesito tu nombre completo y email para enviarte la invitación."
@@ -874,9 +874,14 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             let slots = await getAvailableSlots({
               preferredDay,
               preferredTime,
+              customerPhone: senderFrom,
             });
             if (slots.length === 0) {
-              slots = await getAvailableSlots({ preferredDay: 'any', preferredTime: 'any' });
+              slots = await getAvailableSlots({
+                preferredDay: 'any',
+                preferredTime: 'any',
+                customerPhone: senderFrom,
+              });
             }
             if (slots.length === 0) {
               return {
@@ -891,6 +896,9 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               slots,
               customer_email: email,
               customer_name: name,
+              customer_phone: senderFrom,
+              display_timezone: slots[0]?.display_timezone ?? 'America/Mexico_City',
+              display_label: slots[0]?.display_label ?? 'CDMX',
               offered_at: new Date().toISOString(),
             });
 
@@ -1005,6 +1013,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               bot_message: formatDemoConfirmationMessage(
                 scheduledAt,
                 email || pending.customer_email,
+                senderFrom || pending.customer_phone,
               ),
             };
           } catch (err) {

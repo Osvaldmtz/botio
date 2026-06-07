@@ -1,16 +1,22 @@
+import { register } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { join } from 'node:path';
-import {
-  cancelDemoEvent,
-  createDemoEvent,
-  formatSlotsForBot,
-  getAvailableSlots,
-  getCalendarConnectionStatus,
-} from '../lib/google-calendar';
+
+register('server-only', pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), 'mock-server-only.mjs')));
 
 dotenv.config({ path: join(process.cwd(), '.env.local') });
 
 async function main() {
+  const {
+    cancelDemoEvent,
+    createDemoEvent,
+    formatSlotsForBot,
+    getAvailableSlots,
+    getCalendarConnectionStatus,
+  } = await import('../lib/google-calendar');
+
   console.log('\n=== 1. Verificar credenciales ===');
   const status = await getCalendarConnectionStatus();
   console.log(status);

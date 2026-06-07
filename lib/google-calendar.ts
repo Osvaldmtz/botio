@@ -1,21 +1,44 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { google, type calendar_v3 } from 'googleapis';
-import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { es } from 'date-fns/locale';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  formatSlotForES,
+  formatSlotLabelsForPhone,
+  generateHostCandidateSlots,
+  getHostTzParts,
+  hostLocalToDate,
+  HOST_TIMEZONE,
+  isWithinHostBusinessHours,
+  toGoogleHostDateTime,
+} from '@/lib/calendar-slots';
+import {
+  getCustomerTimezone,
+  getCustomerTimezoneLabel,
+  type CustomerTimezone,
+  type CustomerTimezoneLabel,
+} from '@/lib/timezone-from-phone';
 
-export const DEMO_TIMEZONE = process.env.DEMO_HOST_TIMEZONE ?? 'America/Bogota';
+export const DEMO_TIMEZONE = HOST_TIMEZONE;
 export const DEMO_HOST_EMAIL = process.env.DEMO_HOST_EMAIL ?? 'osvamtz@gmail.com';
 export const DEMO_HOST_NAME = process.env.DEMO_HOST_NAME ?? 'Osvaldo Martínez';
+export const DEMO_HOST_TEAM_LABEL = 'Osvaldo del equipo de Kalyo';
+
+export {
+  formatSlotForES,
+  generateHostCandidateSlots,
+  getHostTzParts,
+  hostLocalToDate,
+  isWithinHostBusinessHours,
+} from '@/lib/calendar-slots';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.readonly',
 ];
 
-const BOGOTA_OFFSET = '-05:00';
-const WORK_DAYS = new Set([1, 2, 3, 4, 5, 6]); // Mon–Sat
 const WORK_START_HOUR = 9;
 const WORK_END_HOUR = 20;
 const DEFAULT_DURATION_MINUTES = 15;
@@ -25,6 +48,8 @@ export type CalendarSlot = {
   start: string;
   end: string;
   label_es: string;
+  display_timezone: CustomerTimezone;
+  display_label: CustomerTimezoneLabel;
 };
 
 export type ParsedDateTimeIntent = {
@@ -213,66 +238,6 @@ export async function getCalendarClient(): Promise<calendar_v3.Calendar> {
   return google.calendar({ version: 'v3', auth: oauth2 });
 }
 
-type BogotaParts = {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  weekday: number;
-};
-
-function getBogotaParts(date: Date): BogotaParts {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: DEMO_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    weekday: 'short',
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(date);
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parseInt(parts.find((p) => p.type === type)?.value ?? '0', 10);
-
-  const weekdayMap: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-  const weekdayStr = parts.find((p) => p.type === 'weekday')?.value ?? 'Mon';
-
-  return {
-    year: get('year'),
-    month: get('month'),
-    day: get('day'),
-    hour: get('hour'),
-    minute: get('minute'),
-    weekday: weekdayMap[weekdayStr] ?? 1,
-  };
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-function bogotaLocalToDate(year: number, month: number, day: number, hour: number, minute: number): Date {
-  const iso = `${year}-${pad2(month)}-${pad2(day)}T${pad2(hour)}:${pad2(minute)}:00${BOGOTA_OFFSET}`;
-  return new Date(iso);
-}
-
-export function formatSlotForES(slotStart: Date): string {
-  const label = format(slotStart, "EEEE d MMM, HH:mm", { locale: es });
-  const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
-  return `${capitalized} hora Cali`;
-}
-
 export function parseUserDateTimeIntent(text: string, currentDate = new Date()): ParsedDateTimeIntent {
   const normalized = text
     .toLowerCase()
@@ -303,56 +268,18 @@ export function parseUserDateTimeIntent(text: string, currentDate = new Date()):
   return { preferred_day, preferred_time };
 }
 
-function addDaysBogota(base: Date, days: number): Date {
-  const p = getBogotaParts(base);
-  const d = bogotaLocalToDate(p.year, p.month, p.day, p.hour, p.minute);
+function addDaysHost(base: Date, days: number): Date {
+  const p = getHostTzParts(base);
+  const d = hostLocalToDate(p.year, p.month, p.day, 12, 0);
   d.setUTCDate(d.getUTCDate() + days);
   return d;
 }
 
-function generateCandidateSlots(
-  startDate: Date,
-  endDate: Date,
-  durationMinutes: number,
-): Date[] {
-  const slots: Date[] = [];
-  const startParts = getBogotaParts(startDate);
-  let cursor = bogotaLocalToDate(
-    startParts.year,
-    startParts.month,
-    startParts.day,
-    0,
-    0,
-  );
-
-  const endMs = endDate.getTime();
-
-  while (cursor.getTime() <= endMs) {
-    const parts = getBogotaParts(cursor);
-    if (WORK_DAYS.has(parts.weekday)) {
-      for (let hour = WORK_START_HOUR; hour < WORK_END_HOUR; hour++) {
-        for (const minute of [0, 30]) {
-          const slotStart = bogotaLocalToDate(parts.year, parts.month, parts.day, hour, minute);
-          const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
-          const endParts = getBogotaParts(slotEnd);
-          if (endParts.hour > WORK_END_HOUR || (endParts.hour === WORK_END_HOUR && endParts.minute > 0)) {
-            continue;
-          }
-          if (slotStart.getTime() >= startDate.getTime() && slotStart.getTime() <= endMs) {
-            slots.push(slotStart);
-          }
-        }
-      }
-    }
-    cursor = addDaysBogota(cursor, 1);
-    const cp = getBogotaParts(cursor);
-    cursor = bogotaLocalToDate(cp.year, cp.month, cp.day, 0, 0);
-  }
-
-  return slots;
-}
-
-function slotOverlapsBusy(slotStart: Date, slotEnd: Date, busy: { start?: string | null; end?: string | null }[]): boolean {
+function slotOverlapsBusy(
+  slotStart: Date,
+  slotEnd: Date,
+  busy: { start?: string | null; end?: string | null }[],
+): boolean {
   const s = slotStart.getTime();
   const e = slotEnd.getTime();
   return busy.some((b) => {
@@ -371,19 +298,18 @@ function matchesPreferences(
 ): boolean {
   if (preferredDay === 'any' && preferredTime === 'any') return true;
 
-  const parts = getBogotaParts(slotStart);
-  const nowParts = getBogotaParts(now);
+  const parts = getHostTzParts(slotStart);
 
   if (preferredDay !== 'any') {
     const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
     const targetDay = dayNames[parts.weekday];
     if (preferredDay === 'manana') {
-      const tomorrow = addDaysBogota(now, 1);
-      const tp = getBogotaParts(tomorrow);
+      const tomorrow = addDaysHost(now, 1);
+      const tp = getHostTzParts(tomorrow);
       if (parts.year !== tp.year || parts.month !== tp.month || parts.day !== tp.day) return false;
     } else if (preferredDay === 'pasado_manana') {
-      const dayAfter = addDaysBogota(now, 2);
-      const tp = getBogotaParts(dayAfter);
+      const dayAfter = addDaysHost(now, 2);
+      const tp = getHostTzParts(dayAfter);
       if (parts.year !== tp.year || parts.month !== tp.month || parts.day !== tp.day) return false;
     } else if (targetDay !== preferredDay) {
       return false;
@@ -395,21 +321,20 @@ function matchesPreferences(
     if (preferredTime === 'tarde' && parts.hour < 12) return false;
   }
 
-  void nowParts;
   return true;
 }
 
 function pickDistributedSlots(candidates: Date[], max = 3): Date[] {
   if (candidates.length <= max) return candidates;
 
-  const morning = candidates.filter((d) => getBogotaParts(d).hour < 12);
-  const afternoon = candidates.filter((d) => getBogotaParts(d).hour >= 12);
+  const morning = candidates.filter((d) => getHostTzParts(d).hour < 12);
+  const afternoon = candidates.filter((d) => getHostTzParts(d).hour >= 12);
 
   const picked: Date[] = [];
   const usedDays = new Set<string>();
 
   const dayKey = (d: Date) => {
-    const p = getBogotaParts(d);
+    const p = getHostTzParts(d);
     return `${p.year}-${p.month}-${p.day}`;
   };
 
@@ -439,6 +364,7 @@ export type GetAvailableSlotsParams = {
   durationMinutes?: number;
   preferredDay?: string;
   preferredTime?: string;
+  customerPhone?: string;
 };
 
 export async function getAvailableSlots(params: GetAvailableSlotsParams = {}): Promise<CalendarSlot[]> {
@@ -465,10 +391,12 @@ export async function getAvailableSlots(params: GetAvailableSlotsParams = {}): P
 
   const busy = freebusy.data.calendars?.[DEMO_HOST_EMAIL]?.busy ?? [];
 
-  let candidates = generateCandidateSlots(startDate, endDate, durationMinutes).filter((slotStart) => {
-    const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
-    return !slotOverlapsBusy(slotStart, slotEnd, busy);
-  });
+  let candidates = generateHostCandidateSlots(startDate, endDate, durationMinutes)
+    .filter((slotStart) => isWithinHostBusinessHours(slotStart, durationMinutes))
+    .filter((slotStart) => {
+      const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
+      return !slotOverlapsBusy(slotStart, slotEnd, busy);
+    });
 
   const preferredDay = params.preferredDay ?? 'any';
   const preferredTime = params.preferredTime ?? 'any';
@@ -485,10 +413,15 @@ export async function getAvailableSlots(params: GetAvailableSlotsParams = {}): P
 
   return selected.map((slotStart) => {
     const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
+    const hostHour = getHostTzParts(slotStart).hour;
+    if (hostHour < WORK_START_HOUR || hostHour >= WORK_END_HOUR) {
+      console.warn(`[calendar] slot outside host hours skipped | host_hour=${hostHour}`);
+    }
+    const labels = formatSlotLabelsForPhone(slotStart, params.customerPhone);
     return {
       start: slotStart.toISOString(),
       end: slotEnd.toISOString(),
-      label_es: formatSlotForES(slotStart),
+      ...labels,
     };
   });
 }
@@ -498,7 +431,7 @@ export function formatSlotsForBot(slots: CalendarSlot[]): string {
     return 'No encontré horarios disponibles en los próximos días. ¿Te funciona algún día de la próxima semana?';
   }
 
-  const lines = slots.map((slot, i) => `${i + 1}️⃣ ${slot.label_es} (UTC-5)`);
+  const lines = slots.map((slot, i) => `${i + 1}️⃣ ${slot.label_es}`);
   return (
     'Aquí tienes horarios disponibles:\n' +
     lines.join('\n') +
@@ -535,11 +468,11 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
       summary: `Demo Kalyo — ${params.customerName}`,
       description,
       start: {
-        dateTime: scheduledAt.toISOString(),
+        dateTime: toGoogleHostDateTime(scheduledAt),
         timeZone: DEMO_TIMEZONE,
       },
       end: {
-        dateTime: endAt.toISOString(),
+        dateTime: toGoogleHostDateTime(endAt),
         timeZone: DEMO_TIMEZONE,
       },
       attendees: [
@@ -635,15 +568,18 @@ export async function cancelDemoEvent(demoId: string, reason: string): Promise<v
 export function formatDemoConfirmationMessage(
   scheduledAt: Date,
   customerEmail: string,
+  customerPhone?: string,
 ): string {
-  const dateLabel = formatSlotForES(scheduledAt);
-  const timeLabel = format(scheduledAt, 'HH:mm', { locale: es });
+  const displayTimezone = getCustomerTimezone(customerPhone);
+  const displayLabel = getCustomerTimezoneLabel(customerPhone);
+  const dateLabel = formatSlotForES(scheduledAt, displayTimezone, displayLabel);
+  const timeLabel = formatInTimeZone(scheduledAt, displayTimezone, 'HH:mm', { locale: es });
 
   return (
     '✅ ¡Demo agendada!\n\n' +
     `📅 ${dateLabel}\n` +
-    `⏰ ${timeLabel} hora Cali\n` +
-    `👤 Con ${DEMO_HOST_NAME} (Fundador Kalyo)\n` +
+    `⏰ ${timeLabel} hora ${displayLabel}\n` +
+    `👤 Con ${DEMO_HOST_TEAM_LABEL}\n` +
     '🎥 Te llegará el link de Google Meet por email\n' +
     `📨 Invitación enviada a ${customerEmail}\n\n` +
     'Te llegará un recordatorio 1 hora antes. ¿Algo más en lo que te pueda ayudar?'

@@ -20,6 +20,7 @@
     "@supabase/supabase-js": "^2.103.0",
     "@upstash/qstash": "^2.10.1",
     "date-fns": "^4.4.0",
+    "date-fns-tz": "^3.2.0",
     "geist": "^1.7.0",
     "googleapis": "^173.0.0",
     "lucide-react": "^1.17.0",
