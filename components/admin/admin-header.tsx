@@ -11,6 +11,7 @@ export function AdminHeader() {
   const isPipeline = pathname?.includes('/pipeline');
   const isExperiments = pathname?.includes('/experiments');
   const isDemos = pathname?.includes('/demos');
+  const isOnboarding = pathname?.includes('/trial-onboarding');
   const isConversations =
     pathname?.startsWith('/admin/conversations') && !isPipeline;
 
@@ -29,6 +30,11 @@ export function AdminHeader() {
       href: '/admin/demos',
       label: 'Demos',
       active: isDemos,
+    },
+    {
+      href: '/admin/trial-onboarding',
+      label: 'Onboarding',
+      active: isOnboarding,
     },
     {
       href: '/admin/experiments',

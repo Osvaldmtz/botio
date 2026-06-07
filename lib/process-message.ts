@@ -37,6 +37,7 @@ import {
   applyDemoConfirmationGuard,
   notifyDemoFlowWarning,
 } from '@/lib/demo-response-guard';
+import { handleTrialOnboardingMessage } from '@/lib/trial-onboarding-interceptor';
 
 const HISTORY_LIMIT = 20;
 const FALLBACK_MESSAGE =
@@ -61,7 +62,8 @@ export type ProcessMessageSource =
   | 'closed'
   | 'auto_demo_confirm'
   | 'auto_demo_check'
-  | 'auto_demo_reminder';
+  | 'auto_demo_reminder'
+  | 'trial_onboarding';
 
 export type ProcessIncomingMessageInput = {
   supabase: SupabaseClient;
@@ -257,6 +259,39 @@ export async function processIncomingMessage(
             from: bot.twilio_whatsapp_number,
           }
         : null;
+
+    const trialOnboarding = await handleTrialOnboardingMessage({
+      supabase,
+      conversationId: conversation.id,
+      customerPhone: conversation.customer_phone,
+      messageBody,
+      creds: kalyoCreds,
+    });
+    if (trialOnboarding) {
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: trialOnboarding.replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: trialOnboarding.source,
+          trial_onboarding_action: trialOnboarding.action,
+        },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      console.log(
+        `[process-message] channel=${channel} | source=${trialOnboarding.source} | action=${trialOnboarding.action} | conv=${conversation.id}`,
+      );
+
+      return {
+        replyText: trialOnboarding.replyText,
+        storedReply: trialOnboarding.replyText,
+        conversationId: conversation.id,
+        source: trialOnboarding.source,
+      };
+    }
 
     const reminderDemo = await shouldInterceptDemoReminderResponse(
       supabase,

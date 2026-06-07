@@ -6,6 +6,7 @@ import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
 import { setPipelineStageTrial } from '@/lib/pipeline-utils';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { savePendingDemoSlots } from '@/lib/demo-conversation';
+import { enrollTrialOnboarding } from '@/lib/trial-onboarding-enrollment';
 import {
   formatSlotsForBot,
   getAvailableSlots,
@@ -759,6 +760,7 @@ async function onTrialSuccessSideEffects(
   senderFrom: string,
   creds: { accountSid: string; authToken: string; from: string } | null,
   notifyReason: 'activate_trial' | 'trial_activated_via_botio',
+  options?: { trialUserName?: string | null; trialEndsAt?: string },
 ): Promise<void> {
   if (creds) {
     notifySalesTeam(
@@ -797,6 +799,18 @@ async function onTrialSuccessSideEffects(
 
   await recordOutcome(supabase, conversationId, 'trial_activated', { email });
   await recordOutcome(supabase, conversationId, 'lead_captured', { source: 'trial' });
+
+  try {
+    await enrollTrialOnboarding(supabase, {
+      customerPhone: senderFrom,
+      trialUserEmail: email,
+      trialUserName: options?.trialUserName,
+      conversationId,
+      trialEndsAt: options?.trialEndsAt,
+    });
+  } catch (enrollErr) {
+    console.error('[trial-onboarding] enroll after activation failed', enrollErr);
+  }
 }
 
 function isKalyoBot(botId: string): boolean {
@@ -870,6 +884,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               senderFrom,
               creds,
               'trial_activated_via_botio',
+              { trialEndsAt: result.expires_at },
             );
           }
 
@@ -894,6 +909,10 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               senderFrom,
               creds,
               'trial_activated_via_botio',
+              {
+                trialUserName: fullName,
+                trialEndsAt: result.trial_ends_at,
+              },
             );
 
             return {
