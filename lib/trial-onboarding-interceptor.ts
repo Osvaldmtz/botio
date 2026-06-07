@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { formatPayIntentReply } from '@/lib/kalyo-payment-links';
 import type { NotifySalesCreds } from '@/lib/kalyo-notify';
 
 const UNSUBSCRIBE_RE =
   /\b(?:stop|unsubscribe|no\s+m[aá]s\s+mensajes|para\s+de\s+escribirme|deja\s+de\s+escribir)\b/i;
 
 const PAY_INTENT_RE =
-  /^(?:s[ií]|si|yes|ok|dale|de\s+acuerdo)$|quiero\s+pagar|quiero\s+continuar|activar\s+(?:el\s+)?(?:plan\s+)?pro|link\s+de\s+pago/i;
+  /^(?:s[ií]|si|yes|ok|dale|de\s+acuerdo)$|quiero\s+pagar|quiero\s+continuar|activar(?:me)?\s+(?:el\s+)?(?:plan\s+)?pro|link\s+de\s+pago/i;
 
 export type TrialOnboardingInterceptResult = {
   replyText: string;
@@ -18,6 +19,7 @@ export type TrialOnboardingActiveRow = {
   trial_user_email: string;
   trial_user_name: string | null;
   day_13_sent_at: string | null;
+  day_15_sent_at: string | null;
   customer_responded: boolean;
 };
 
@@ -27,7 +29,7 @@ export async function loadActiveTrialOnboarding(
 ): Promise<TrialOnboardingActiveRow | null> {
   const { data, error } = await supabase
     .from('trial_onboarding_messages')
-    .select('id, trial_user_email, trial_user_name, day_13_sent_at, customer_responded')
+    .select('id, trial_user_email, trial_user_name, day_13_sent_at, day_15_sent_at, customer_responded')
     .eq('customer_phone', customerPhone)
     .eq('unsubscribed', false)
     .is('upgraded_to_paid_at', null)
@@ -113,8 +115,11 @@ export async function handleTrialOnboardingMessage(params: {
     });
 
     return {
-      replyText:
-        '¡Genial! Puedes activar tu plan Pro aquí: https://app.kalyo.io/billing\n\nSi tienes dudas con el pago, dime y te ayudo.',
+      replyText: formatPayIntentReply({
+        trialUserName: row.trial_user_name,
+        trialUserEmail: row.trial_user_email,
+        day15SentAt: row.day_15_sent_at,
+      }),
       source: 'trial_onboarding',
       action: 'pay_intent',
     };

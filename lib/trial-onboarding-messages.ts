@@ -1,3 +1,5 @@
+import { getPaymentLink } from '@/lib/kalyo-payment-links';
+
 export type TrialOnboardingUser = {
   trial_user_name?: string | null;
   trial_user_email: string;
@@ -57,8 +59,10 @@ export function formatDay13(user: TrialOnboardingUser): string {
     `✓ Evaluaciones ilimitadas\n` +
     `✓ Reportes ejecutivos automáticos\n` +
     `✓ Pacientes ilimitados (quedarás en 5)\n\n` +
-    `Continuar con Pro cuesta $29/mes (cancelas cuando quieras).\n\n` +
-    `¿Quieres continuar? Dime 'sí' y te paso el link de pago.`
+    `Continuar cuesta:\n` +
+    `💎 Pro $29/mes: ${getPaymentLink('pro')}\n` +
+    `🚀 Max $39/mes (incluye asistente de voz): ${getPaymentLink('max')}\n\n` +
+    `Cancelas cuando quieras desde Configuración.`
   );
 }
 
@@ -68,9 +72,10 @@ export function formatDay15(user: TrialOnboardingUser): string {
     `🔥 ÚLTIMA OPORTUNIDAD ${name}.\n\n` +
     `Tu trial Pro vence HOY a las 23:59.\n\n` +
     `Por ser uno de nuestros primeros usuarios beta, te ofrezco:\n\n` +
-    `*50% descuento en tu primer mes* con código PRIMER50\n` +
-    `$14.50 el primer mes, después $29/mes normal.\n\n` +
-    `Activa aquí: https://app.kalyo.io/billing?coupon=PRIMER50\n\n` +
+    `*50% descuento en tu primer mes* (código PRIMER50, aplicado automáticamente)\n\n` +
+    `💎 Pro $14.50 primer mes: ${getPaymentLink('pro', 'PRIMER50')}\n` +
+    `🚀 Max $19.50 primer mes: ${getPaymentLink('max', 'PRIMER50')}\n\n` +
+    `Después del primer mes vuelves al precio normal. Cancelas cuando quieras.\n\n` +
     `Después de hoy, este descuento ya no aplica.`
   );
 }
