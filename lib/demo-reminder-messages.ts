@@ -15,6 +15,7 @@ export type DemoReminderRow = {
   customer_email: string;
   customer_phone: string | null;
   scheduled_at: string;
+  google_meet_link?: string | null;
 };
 
 export type DemoDisplayTimezone = {
@@ -60,7 +61,7 @@ export async function resolveDemoDisplayTimezone(
   };
 }
 
-function formatDemoDateTime(
+export function formatDemoDateTime(
   scheduledAt: string,
   timezone: string,
   timezoneLabel: string,

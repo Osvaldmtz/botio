@@ -7,10 +7,16 @@ import {
   type DemoReminderRow,
 } from '@/lib/demo-reminder-messages';
 import type { NotifySalesCreds, NotifySalesInput } from '@/lib/kalyo-notify';
+import {
+  notifyDemoReminderEvent,
+  type SendTelegramFn,
+} from '@/lib/demo-reminder-notifications';
+
 export type ActiveReminderDemo = DemoReminderRow & {
   reminder_24h_sent_at: string | null;
   reminder_1h_sent_at: string | null;
   google_event_id: string | null;
+  google_meet_link: string | null;
 };
 
 export type DemoReminderInterceptResult = {
@@ -21,7 +27,7 @@ export type DemoReminderInterceptResult = {
 };
 
 const REMINDER_DEMO_SELECT =
-  'id, conversation_id, customer_name, customer_email, customer_phone, scheduled_at, reminder_24h_sent_at, reminder_1h_sent_at, google_event_id';
+  'id, conversation_id, customer_name, customer_email, customer_phone, scheduled_at, google_meet_link, reminder_24h_sent_at, reminder_1h_sent_at, google_event_id';
 
 export async function findActiveReminderDemo(
   supabase: SupabaseClient,
@@ -141,6 +147,7 @@ export async function handleDemoReminderResponse(params: {
   messageBody: string;
   demo: ActiveReminderDemo;
   creds: NotifySalesCreds | null;
+  sendTelegram?: SendTelegramFn;
 }): Promise<DemoReminderInterceptResult> {
   const choice = parseReminderResponseChoice(params.messageBody);
   if (!choice) {
@@ -175,6 +182,12 @@ export async function handleDemoReminderResponse(params: {
       reason: 'demo_confirmed_by_customer',
       preferred_time: params.demo.scheduled_at,
       conversation_summary: `Cliente confirmó asistencia a demo del ${params.demo.scheduled_at}`,
+    });
+
+    await notifyDemoReminderEvent('customer_confirmed', params.demo, {}, {
+      supabase: params.supabase,
+      display,
+      sendTelegram: params.sendTelegram,
     });
 
     return {
@@ -215,6 +228,12 @@ export async function handleDemoReminderResponse(params: {
       conversation_summary: 'Cliente pidió reagendar demo vía recordatorio WhatsApp',
     });
 
+    await notifyDemoReminderEvent('customer_requested_reschedule', params.demo, {}, {
+      supabase: params.supabase,
+      display,
+      sendTelegram: params.sendTelegram,
+    });
+
     return {
       replyText,
       source: 'auto_demo_reminder',
@@ -249,6 +268,13 @@ export async function handleDemoReminderResponse(params: {
     reason: 'demo_cancelled_by_customer',
     conversation_summary: 'Cliente canceló demo vía recordatorio WhatsApp',
   });
+
+  await notifyDemoReminderEvent(
+    'customer_cancelled',
+    params.demo,
+    { cancellation_reason: 'cancelled_by_customer_via_reminder' },
+    { supabase: params.supabase, display, sendTelegram: params.sendTelegram },
+  );
 
   return {
     replyText:

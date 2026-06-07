@@ -99,6 +99,10 @@ async function insertDemo(params: {
 
 import { parseReminderResponseChoice } from '../lib/demo-flow-parsing';
 import {
+  buildDemoReminderTelegramText,
+  type DemoReminderNotifyEvent,
+} from '../lib/demo-reminder-notifications';
+import {
   fetchPending1hReminders,
   fetchPending24hReminders,
   runDemoRemindersCron,
@@ -108,10 +112,42 @@ import {
   shouldInterceptDemoReminderResponse,
 } from '../lib/demo-reminder-response';
 
+const telegramCalls: Array<{ event: DemoReminderNotifyEvent; demoId: string; text: string }> = [];
+
 async function runTests(): Promise<void> {
+  const display = { timezone: 'America/Mexico_City', label: 'CDMX' };
+  const sampleDemo = {
+    id: 'demo-sample',
+    conversation_id: null,
+    customer_name: 'Test User',
+    customer_email: 'test@example.com',
+    customer_phone: '+52999000000',
+    scheduled_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    google_meet_link: 'https://meet.google.com/abc-defg-hij',
+  };
+
+  for (const event of [
+    'reminder_24h_sent',
+    'reminder_1h_sent',
+    'customer_confirmed',
+    'customer_requested_reschedule',
+    'customer_cancelled',
+  ] as const) {
+    const text = buildDemoReminderTelegramText(
+      event,
+      sampleDemo,
+      display,
+      event === 'customer_cancelled'
+        ? { cancellation_reason: 'cancelled_by_customer_via_reminder' }
+        : undefined,
+    );
+    assert(text.includes('Test User'), `template ${event} includes customer name`);
+    assert(text.length > 20, `template ${event} not empty`);
+  }
 
   console.log('Demo reminders tests\n');
   await cleanup();
+  telegramCalls.length = 0;
 
   assert(parseReminderResponseChoice('1') === 1, 'parse 1');
   assert(parseReminderResponseChoice('3') === 3, 'parse 3');
@@ -130,13 +166,25 @@ async function runTests(): Promise<void> {
   assert(pending24.some((d) => d.id === demo24Id), '24h demo in pending window');
 
   sentMessages.length = 0;
+  telegramCalls.length = 0;
   const cron24 = await runDemoRemindersCron({
     supabase,
     creds: mockCreds,
     sendFn: async (args) => mockSend({ to: args.to, body: args.body }),
+    sendTelegram: async (text) => {
+      telegramCalls.push({ event: 'reminder_24h_sent', demoId: demo24Id, text });
+    },
   });
   assert(cron24.sent24h >= 1, '24h reminder sent');
   assert(sentMessages.length >= 1, 'mock twilio received message');
+  assert(
+    telegramCalls.some((c) => c.event === 'reminder_24h_sent' && c.demoId === demo24Id),
+    '24h telegram notify fired',
+  );
+  assert(
+    telegramCalls.some((c) => c.text.includes('Recordatorio 24h enviado')),
+    '24h telegram payload correct',
+  );
 
   const { data: after24 } = await supabase
     .from('scheduled_demos')
@@ -163,12 +211,20 @@ async function runTests(): Promise<void> {
   assert(pending1h.some((d) => d.id === demo1hId), '1h demo in pending window');
 
   sentMessages.length = 0;
+  telegramCalls.length = 0;
   const cron1h = await runDemoRemindersCron({
     supabase,
     creds: mockCreds,
     sendFn: async (args) => mockSend({ to: args.to, body: args.body }),
+    sendTelegram: async (text) => {
+      telegramCalls.push({ event: 'reminder_1h_sent', demoId: demo1hId, text });
+    },
   });
   assert(cron1h.sent1h >= 1, '1h reminder sent');
+  assert(
+    telegramCalls.some((c) => c.event === 'reminder_1h_sent' && c.demoId === demo1hId),
+    '1h telegram notify fired',
+  );
 
   const { data: after1h } = await supabase
     .from('scheduled_demos')
@@ -185,6 +241,7 @@ async function runTests(): Promise<void> {
   const reminderDemo = await shouldInterceptDemoReminderResponse(supabase, testPhone, '1');
   assert(reminderDemo?.id === demo1hId, 'intercept reminder response');
 
+  telegramCalls.length = 0;
   const confirmResult = await handleDemoReminderResponse({
     supabase,
     conversationId,
@@ -192,8 +249,15 @@ async function runTests(): Promise<void> {
     messageBody: '1',
     demo: reminderDemo!,
     creds: null,
+    sendTelegram: async (text) => {
+      telegramCalls.push({ event: 'customer_confirmed', demoId: demo1hId, text });
+    },
   });
   assert(confirmResult.reminderResponse === 'confirmed', 'confirm response');
+  assert(
+    telegramCalls.some((c) => c.event === 'customer_confirmed'),
+    'confirm telegram notify fired',
+  );
 
   const { data: confirmed } = await supabase
     .from('scheduled_demos')
@@ -213,6 +277,7 @@ async function runTests(): Promise<void> {
   const cancelDemo = await shouldInterceptDemoReminderResponse(supabase, testPhone, '3');
   assert(cancelDemo?.id === cancelDemoId, 'intercept cancel');
 
+  telegramCalls.length = 0;
   await handleDemoReminderResponse({
     supabase,
     conversationId,
@@ -220,7 +285,36 @@ async function runTests(): Promise<void> {
     messageBody: '3',
     demo: cancelDemo!,
     creds: null,
+    sendTelegram: async (text) => {
+      telegramCalls.push({ event: 'customer_cancelled', demoId: cancelDemoId, text });
+    },
   });
+  assert(
+    telegramCalls.some((c) => c.event === 'customer_cancelled'),
+    'cancel telegram notify fired',
+  );
+
+  const failTelegramDemoId = await insertDemo({
+    conversationId,
+    scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  });
+  sentMessages.length = 0;
+  const cronDespiteTelegramFail = await runDemoRemindersCron({
+    supabase,
+    creds: mockCreds,
+    sendFn: async (args) => mockSend({ to: args.to, body: args.body }),
+    sendTelegram: async () => {
+      throw new Error('telegram down');
+    },
+  });
+  assert(cronDespiteTelegramFail.sent24h >= 1, 'whatsapp still sent when telegram fails');
+  const { data: despiteFail } = await supabase
+    .from('scheduled_demos')
+    .select('reminder_24h_sent_at')
+    .eq('id', failTelegramDemoId)
+    .single();
+  assert(despiteFail?.reminder_24h_sent_at != null, 'reminder still marked sent on telegram fail');
+  await supabase.from('scheduled_demos').delete().eq('id', failTelegramDemoId);
 
   const { data: cancelled } = await supabase
     .from('scheduled_demos')

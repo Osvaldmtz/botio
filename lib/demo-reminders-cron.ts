@@ -5,6 +5,10 @@ import {
   resolveDemoDisplayTimezone,
   type DemoReminderRow,
 } from '@/lib/demo-reminder-messages';
+import {
+  notifyDemoReminderEvent,
+  type SendTelegramFn,
+} from '@/lib/demo-reminder-notifications';
 
 export type TwilioCreds = {
   accountSid: string;
@@ -21,7 +25,7 @@ export type SendWhatsAppFn = (args: {
 }) => Promise<void>;
 
 const DEMO_SELECT =
-  'id, conversation_id, customer_name, customer_email, customer_phone, scheduled_at, reminder_24h_sent_at, reminder_1h_sent_at';
+  'id, conversation_id, customer_name, customer_email, customer_phone, scheduled_at, google_meet_link, reminder_24h_sent_at, reminder_1h_sent_at';
 
 function windowBounds(
   minMs: number,
@@ -77,6 +81,7 @@ async function sendReminder(params: {
   creds: TwilioCreds;
   type: '24h' | '1h';
   sendFn: SendWhatsAppFn;
+  sendTelegram?: SendTelegramFn;
 }): Promise<'sent' | 'skipped' | 'failed'> {
   const phone = params.demo.customer_phone?.trim();
   if (!phone) {
@@ -134,6 +139,14 @@ async function sendReminder(params: {
   console.log(
     `[demo-reminders] sent | demo_id=${params.demo.id} | phone=${phone} | type=${params.type}`,
   );
+
+  await notifyDemoReminderEvent(
+    params.type === '24h' ? 'reminder_24h_sent' : 'reminder_1h_sent',
+    params.demo,
+    {},
+    { supabase: params.supabase, sendTelegram: params.sendTelegram },
+  );
+
   return 'sent';
 }
 
@@ -141,6 +154,7 @@ export async function runDemoRemindersCron(params: {
   supabase: SupabaseClient;
   creds: TwilioCreds;
   sendFn?: SendWhatsAppFn;
+  sendTelegram?: SendTelegramFn;
 }): Promise<{
   pending24h: number;
   pending1h: number;
@@ -175,6 +189,7 @@ export async function runDemoRemindersCron(params: {
       creds: params.creds,
       type: '24h',
       sendFn,
+      sendTelegram: params.sendTelegram,
     });
     if (result === 'sent') sent24h++;
     else if (result === 'failed') failed++;
@@ -188,6 +203,7 @@ export async function runDemoRemindersCron(params: {
       creds: params.creds,
       type: '1h',
       sendFn,
+      sendTelegram: params.sendTelegram,
     });
     if (result === 'sent') sent1h++;
     else if (result === 'failed') failed++;
