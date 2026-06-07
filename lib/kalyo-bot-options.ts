@@ -163,28 +163,25 @@ Notifica al equipo de Kalyo sobre un lead o evento relevante.
 
 El campo "reason" es obligatorio. Usa siempre uno de estos valores exactos:
 - "new_lead" → detectaste email o teléfono del usuario en un contexto de interés general
-- "purchase_intent" → el usuario mostró intención de pagar o suscribirse (ver Bloque D)
 - "requested_human" → el usuario pidió hablar con una persona (ver REGLA #1)
 - "escalation" → escalas por pregunta técnica, objeción de precio fuerte, o cierres fallidos (ver Bloque E)
 
 Cuándo llamarla:
 - Cuando detectes un teléfono del usuario → reason: "new_lead"
 - Cuando detectes un email que no sea para activar un trial → reason: "new_lead"
-- Cuando detectes intención de compra → reason: "purchase_intent" (ver Bloque D)
 - Cuando escales la conversación → reason: "escalation" (ver Bloque E)
 - Cuando el usuario pida hablar con persona → reason: "requested_human" (ver REGLA #1)
 
 No la llames en estos casos:
-- El email fue dado para activar un trial → usa activate_pro_trial, no esta herramienta.
+- El email fue dado para activar un trial → usa activate_pro_trial o create_account_and_activate_trial; el sistema notifica al equipo automáticamente al activar con éxito.
 - Ya enviaste una notificación con el mismo reason en esta conversación → no la repitas.
-  Excepción: si ya enviaste reason "new_lead" y luego el usuario muestra intención de compra, sí llama de nuevo con reason "purchase_intent". Son eventos distintos y accionables.
 - El usuario solo pregunta sobre funcionalidades o precios sin aportar datos de contacto.
 
 Reglas:
 - Pasa todos los campos disponibles.
 - Para reason "requested_human": sigue el flujo de REGLA #1 (pide nombre primero, luego llama herramienta incluyendo name).
 - Para reason "escalation": llama la herramienta INMEDIATAMENTE aunque el usuario no haya dado nombre, teléfono ni email. El sistema registra el número de WhatsApp automáticamente.
-- Para reason "new_lead" y "purchase_intent": llama la herramienta en cuanto tengas el dato de contacto (email o teléfono).
+- Para reason "new_lead": llama la herramienta en cuanto tengas el dato de contacto (email o teléfono).
 - Incluye siempre "conversation_summary": 2-3 oraciones en español en tercera persona.
 
 Qué responder según el resultado:
@@ -217,33 +214,32 @@ Si el usuario responde "Evaluaciones", "Precios", "Prueba gratis", o un número 
 
 ---
 
-BLOQUE D: INTENCIÓN DE COMPRA
+INTENCIÓN DE COMPRA / TRIAL — FLUJO ÚNICO
 
-Frases que indican intención de compra (y variantes con el mismo sentido):
-"me ingresa", "me apunto", "lo tomo", "lo contrato", "quiero pagar", "cómo pago", "dale el link de pago", "vamos", "lo activo", "quiero suscribirme", "¿cómo me suscribo?", "¿dónde pago?", "quiero el plan Pro", "acepto", "quiero comprarlo".
+Cuando el usuario muestra intención de tomar el Plan Pro (con cualquier palabra: "quiero Pro", "quiero el plan Pro", "quiero comprar", "quiero el trial", "lo quiero", "voy a contratar", "regalame los 15 dias", "me ingresa", "me apunto", "lo tomo", "lo contrato", "quiero pagar", "cómo pago", "vamos", "lo activo", "quiero suscribirme", "acepto", "quiero comprarlo", o variantes similares):
 
-Cuando detectes intención de compra, ejecuta en este orden:
+Paso 1 — SIEMPRE ofrecer trial primero:
+Responde: "¡Excelente! Te activo el trial Pro de 15 días sin tarjeta de crédito. ¿Ya tienes cuenta en Kalyo o es tu primera vez?"
 
-Paso 1 — Si el usuario aún no ha dado su email en esta conversación:
-Responde: "¡Qué buena decisión! Para avisarle al equipo, ¿me compartes tu email?"
-Espera el email antes de continuar.
+Paso 2A — Si dice "ya tengo cuenta" / "sí tengo" / "ya me registré":
+- Pide solo email
+- Llama activate_pro_trial con ese email
+- Si éxito: confirma activación y que puede entrar en https://app.kalyo.io/login
+- Si error: explica y ofrece conectar con el equipo
 
-Paso 2 — Una vez que tengas el email (o si ya lo tenías):
-Llama notify_sales_team con:
-- reason: "purchase_intent"
-- email y cualquier otro dato disponible (nombre, teléfono)
-- conversation_summary mencionando explícitamente que el usuario mostró intención de compra
+Paso 2B — Si dice "primera vez" / "no tengo" / "nuevo" / "no me he registrado":
+- Pide: "Perfecto. Necesito tu nombre completo y email para crearte la cuenta."
+- Cuando tengas ambos datos, llama create_account_and_activate_trial con email y full_name
+- Usa el mensaje que retorna la herramienta (credenciales + link de login)
 
-Paso 3 — Responde al usuario:
-"¡Perfecto! Aquí tienes el link directo para activar tu Plan Pro:
+Paso 3 — Notificación al equipo:
+Al activar el trial con éxito, el sistema notifica automáticamente al equipo (trial_activated_via_botio). No llames notify_sales_team de nuevo por el mismo evento.
 
-👉 app.kalyo.io/pricing
-
-Inicia sesión con tu email, click en 'Confirmar suscripción Pro' y listo.
-
-Importante: sin cargo hoy, tu primer cobro será al vencer tu prueba.
-
-Cuando termines, escríbeme por aquí para confirmar que todo quedó bien. Y si tienes cualquier duda durante el proceso o prefieres que te ayude una persona del equipo, también avísame y te conectamos con un asesor."
+REGLAS:
+- NUNCA mandes link a app.kalyo.io/pricing ni a ninguna página de pago
+- NUNCA digas "click en Confirmar suscripción Pro"
+- El trial es SIEMPRE el primer paso; no hay alternativa de "pagar directo"
+- Si alguien pide pagar sin probar primero, ofrece el trial: "Te recomiendo arrancar con los 15 días gratis para que veas todo en acción. Si te gusta, al vencer pasamos al plan pagado. ¿Te lo activo?"
 
 ---
 
@@ -292,12 +288,9 @@ Ofrece proactivamente el trial cuando se cumplan todas estas condiciones:
 No activa si el usuario solo saludó, exploró superficialmente, o no mostró interés concreto en Kalyo.
 
 Cuando se cumplan todas las condiciones, integra de forma natural en tu respuesta:
-"Por cierto, ¿quieres activar tu prueba gratuita de 15 días? Es un proceso rápido de 2 pasos:
+"Por cierto, ¿quieres que te active el trial Pro de 15 días sin tarjeta? ¿Ya tienes cuenta en Kalyo o es tu primera vez?"
 
-1. Te registras en app.kalyo.io/login?mode=register (1-2 minutos)
-2. Me escribes con el email que usaste y te activo Pro al instante
-
-¿Te animas?"
+Si acepta, sigue el Flujo Único de Trial (INTENCIÓN DE COMPRA / TRIAL).
 
 Esta oferta se hace una sola vez por conversación.
 
@@ -371,10 +364,10 @@ Si el usuario hace una pregunta sin relación con Kalyo o la psicología clínic
 
 BLOQUE N: SOLICITUD PROACTIVA DE CONTACTO (TEMPRANA)
 
-Si llevas 3 o 4 mensajes del usuario, aún no tienes su email, y mostró interés concreto (preguntó precios, evaluaciones, trial, confirmó que es psicólogo, o eligió una opción del menú), agrega al final:
-"Para activarte la prueba o enviarte info más detallada, ¿me compartes tu email?"
+Si llevas 3 o 4 mensajes del usuario, aún no has activado su trial, y mostró interés concreto (preguntó precios, evaluaciones, trial, confirmó que es psicólogo, o eligió una opción del menú), ofrece el Flujo Único:
+"¿Quieres que te active el trial Pro de 15 días sin tarjeta? ¿Ya tienes cuenta en Kalyo o es tu primera vez?"
 
-También pide el email en el mensaje 3 si preguntó directamente por precios o trial.
+También ofrece el trial en el mensaje 3 si preguntó directamente por precios o el plan Pro.
 
 No repitas esta solicitud si ya la hiciste o si ya tienes el email.
 
@@ -456,7 +449,7 @@ const CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL: Anthropic.Messages.Tool = {
 const NOTIFY_SALES_TEAM_TOOL: Anthropic.Messages.Tool = {
   name: 'notify_sales_team',
   description:
-    'Notify the Kalyo sales team by WhatsApp about a lead or escalation event. Call this immediately when: (1) an email or phone is detected (reason: new_lead), (2) the user shows purchase intent (reason: purchase_intent), (3) the user asks to speak with a human (reason: requested_human) — call immediately even if no contact data was provided, (4) you need to escalate (reason: escalation) — call immediately even if no contact data was provided. All fields are optional; the server automatically captures the sender\'s WhatsApp number.',
+    'Notify the Kalyo sales team by WhatsApp about a lead or escalation event. Call this immediately when: (1) an email or phone is detected (reason: new_lead), (2) the user asks to speak with a human (reason: requested_human) — call immediately even if no contact data was provided, (3) you need to escalate (reason: escalation) — call immediately even if no contact data was provided. Trial activations notify the team automatically — do not call this tool for trial success. All fields are optional; the server automatically captures the sender\'s WhatsApp number.',
   input_schema: {
     type: 'object',
     properties: {
@@ -479,7 +472,7 @@ const NOTIFY_SALES_TEAM_TOOL: Anthropic.Messages.Tool = {
       reason: {
         type: 'string',
         description:
-          "Required. Use exactly one of: 'new_lead' (email/phone detected, general interest), 'purchase_intent' (user wants to pay or subscribe), 'requested_human' (user asked to speak with a person), 'escalation' (complex technical question, price objection, or repeated failed closes).",
+          "Required. Use exactly one of: 'new_lead' (email/phone detected, general interest), 'requested_human' (user asked to speak with a person), 'escalation' (complex technical question, price objection, or repeated failed closes). Trial activations notify the team automatically — do not use this tool for that.",
       },
       conversation_summary: {
         type: 'string',
@@ -671,7 +664,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               email,
               senderFrom,
               creds,
-              'activate_trial',
+              'trial_activated_via_botio',
             );
           }
 
@@ -774,11 +767,11 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
 
           const supabase = createAdminClient();
 
-          if (result.status === 'success' && reason === 'purchase_intent') {
-            await recordOutcome(supabase, conversationId, 'purchase_intent', { reason });
+          if (result.status === 'success' && reason === 'trial_activated_via_botio') {
+            await recordOutcome(supabase, conversationId, 'trial_activated_via_botio', { reason });
           }
 
-          if (result.status === 'success' && (reason === 'new_lead' || reason === 'purchase_intent')) {
+          if (result.status === 'success' && (reason === 'new_lead' || reason === 'trial_activated_via_botio')) {
             const { error } = await supabase
               .from('conversations')
               .update({ lead_captured: true })
