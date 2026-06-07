@@ -1,10 +1,14 @@
 'use client';
 
+import { RefreshCw, Search } from 'lucide-react';
 import type {
   ConversationStatusFilter,
   DateRangeFilter,
 } from '../lib/conversation-queries';
 import type { ChannelFilter } from '@/lib/channel-utils';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
 
 export type FilterState = {
   status: ConversationStatusFilter;
@@ -29,18 +33,18 @@ type Props = {
 
 const STATUS_CHIPS: Array<{ id: ConversationStatusFilter; label: string }> = [
   { id: 'all', label: 'Todos' },
-  { id: 'hot', label: 'Hot Leads 🔥' },
-  { id: 'warm', label: 'Warm Leads 🟡' },
+  { id: 'hot', label: 'Hot Leads' },
+  { id: 'warm', label: 'Warm Leads' },
   { id: 'unanswered', label: 'Sin responder' },
-  { id: 'handoff', label: 'En handoff 🙋' },
+  { id: 'handoff', label: 'En handoff' },
   { id: 'closed', label: 'Cerradas' },
 ];
 
 const CHANNEL_CHIPS: Array<{ id: ChannelFilter; label: string }> = [
   { id: 'all', label: 'Todos' },
-  { id: 'whatsapp', label: '📱 WhatsApp' },
-  { id: 'webchat', label: '💬 Web' },
-  { id: 'telegram', label: '📨 Telegram' },
+  { id: 'whatsapp', label: 'WhatsApp' },
+  { id: 'webchat', label: 'Web' },
+  { id: 'telegram', label: 'Telegram' },
 ];
 
 const DATE_CHIPS: Array<{ id: DateRangeFilter; label: string }> = [
@@ -51,6 +55,31 @@ const DATE_CHIPS: Array<{ id: DateRangeFilter; label: string }> = [
   { id: 'custom', label: 'Custom' },
 ];
 
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded px-2.5 py-1 text-[13px] font-medium transition-colors duration-150',
+        active
+          ? 'bg-bg-subtle text-fg'
+          : 'text-fg-muted hover:bg-bg-subtle hover:text-fg',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function ConversationFilters({
   filters,
   bots,
@@ -60,95 +89,76 @@ export function ConversationFilters({
   secondsSinceUpdate,
 }: Props) {
   return (
-    <div className="space-y-4 rounded-xl border border-bg-border bg-bg-elevated p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <input
-          type="search"
-          placeholder="Buscar por teléfono, ciudad, intención..."
-          value={filters.search}
-          onChange={(e) => onChange({ search: e.target.value })}
-          className="w-full rounded-lg border border-bg-border bg-bg px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-accent/50 focus:outline-none sm:max-w-md"
-        />
-
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-tertiary" strokeWidth={1.5} />
+          <Input
+            type="search"
+            placeholder="Buscar por teléfono, ciudad, intención..."
+            value={filters.search}
+            onChange={(e) => onChange({ search: e.target.value })}
+            className="pl-9"
+          />
+        </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-fg-muted">
-            Actualizado hace {secondsSinceUpdate}s
-          </span>
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={refreshing}
-            className="rounded-lg border border-bg-border px-3 py-1.5 text-xs text-fg-muted transition-colors hover:border-accent/40 hover:text-fg disabled:opacity-50"
-          >
-            {refreshing ? 'Actualizando…' : '↻ Refresh'}
-          </button>
+          <span className="text-xs text-fg-tertiary">hace {secondsSinceUpdate}s</span>
+          <Button variant="secondary" size="sm" onClick={onRefresh} disabled={refreshing}>
+            <RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} strokeWidth={1.5} />
+            Refresh
+          </Button>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1 border-b border-bg-border pb-3">
         {CHANNEL_CHIPS.map((chip) => (
-          <button
+          <Chip
             key={chip.id}
-            type="button"
+            active={filters.channel === chip.id}
             onClick={() => onChange({ channel: chip.id })}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-              filters.channel === chip.id
-                ? 'border-violet-500/50 bg-violet-500/10 text-violet-300'
-                : 'border-bg-border text-fg-muted hover:text-fg'
-            }`}
           >
             {chip.label}
-          </button>
+          </Chip>
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1">
         {STATUS_CHIPS.map((chip) => (
-          <button
+          <Chip
             key={chip.id}
-            type="button"
+            active={filters.status === chip.id}
             onClick={() => onChange({ status: chip.id })}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-              filters.status === chip.id
-                ? 'border-accent/50 bg-accent/10 text-accent'
-                : 'border-bg-border text-fg-muted hover:text-fg'
-            }`}
           >
             {chip.label}
-          </button>
+          </Chip>
         ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         {DATE_CHIPS.map((chip) => (
-          <button
+          <Chip
             key={chip.id}
-            type="button"
+            active={filters.dateRange === chip.id}
             onClick={() => onChange({ dateRange: chip.id })}
-            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-              filters.dateRange === chip.id
-                ? 'border-electric/50 bg-electric/10 text-electric'
-                : 'border-bg-border text-fg-muted hover:text-fg'
-            }`}
           >
             {chip.label}
-          </button>
+          </Chip>
         ))}
 
         {filters.dateRange === 'custom' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <input
+          <div className="flex items-center gap-2">
+            <Input
               type="date"
               value={filters.from}
               onChange={(e) => onChange({ from: e.target.value })}
-              className="rounded-lg border border-bg-border bg-bg px-2 py-1 text-xs text-fg"
+              className="w-auto text-xs"
             />
-            <span className="text-xs text-fg-muted">→</span>
-            <input
+            <span className="text-fg-tertiary">→</span>
+            <Input
               type="date"
               value={filters.to}
               onChange={(e) => onChange({ to: e.target.value })}
-              className="rounded-lg border border-bg-border bg-bg px-2 py-1 text-xs text-fg"
+              className="w-auto text-xs"
             />
           </div>
         ) : null}
@@ -156,7 +166,7 @@ export function ConversationFilters({
         <select
           value={filters.botId}
           onChange={(e) => onChange({ botId: e.target.value })}
-          className="rounded-lg border border-bg-border bg-bg px-3 py-1 text-xs text-fg"
+          className="rounded border border-bg-border bg-bg px-2.5 py-1.5 text-[13px] text-fg focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-muted"
         >
           <option value="">Todos los bots</option>
           {bots.map((bot) => (

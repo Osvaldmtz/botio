@@ -15,6 +15,7 @@ import { PIPELINE_STAGES, type PipelineStage } from '@/lib/pipeline';
 import type { PipelineLead } from '../lib/pipeline-queries';
 import { STAGE_UI } from '../lib/pipeline-config';
 import { PipelineCard } from './pipeline-card';
+import { cn } from '@/lib/cn';
 
 type Grouped = Record<PipelineStage, PipelineLead[]>;
 
@@ -44,19 +45,16 @@ function PipelineColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex h-full min-w-[260px] max-w-[280px] flex-col rounded-xl border ${ui.columnClass} ${
-        isOver ? 'ring-2 ring-accent/40' : ''
-      }`}
+      className={cn(
+        'flex h-full min-w-[260px] max-w-[280px] flex-col border-r border-bg-border bg-bg-elevated',
+        isOver && 'bg-accent-muted/20',
+      )}
     >
-      <div
-        className={`flex items-center justify-between border-b px-3 py-2 ${ui.headerClass} rounded-t-xl border`}
-      >
-        <span className="text-sm font-semibold">
+      <div className="flex items-center justify-between border-b border-bg-border px-3 py-3">
+        <span className="text-sm font-medium text-fg">
           {ui.emoji} {ui.label}
         </span>
-        <span className="rounded-full bg-bg/50 px-2 py-0.5 text-xs tabular-nums">
-          {leads.length}
-        </span>
+        <span className="text-xs tabular-nums text-fg-tertiary">{leads.length}</span>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-2">
         {leads.map((lead) => (
@@ -68,7 +66,7 @@ function PipelineColumn({
           />
         ))}
         {leads.length === 0 ? (
-          <p className="py-6 text-center text-xs text-fg-muted">Sin leads</p>
+          <p className="py-8 text-center text-xs text-fg-tertiary">Sin leads</p>
         ) : null}
       </div>
     </div>
@@ -119,7 +117,7 @@ export function PipelineBoard({
       onDragEnd={(e) => void handleDragEnd(e)}
       onDragCancel={() => setActiveDragId(null)}
     >
-      <div className="flex h-full gap-3 overflow-x-auto pb-2">
+      <div className="flex h-full overflow-x-auto rounded-card border border-bg-border">
         {PIPELINE_STAGES.map((stage) => (
           <PipelineColumn
             key={stage}
@@ -132,7 +130,7 @@ export function PipelineBoard({
       </div>
       <DragOverlay>
         {activeLead ? (
-          <div className="w-[260px] opacity-90">
+          <div className="w-[260px] opacity-80 transition-opacity duration-100">
             <PipelineCard lead={activeLead} selected={false} onSelect={() => {}} />
           </div>
         ) : null}

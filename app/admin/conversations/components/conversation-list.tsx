@@ -12,14 +12,14 @@ type Props = {
 export function ConversationList({ conversations, selectedId, onSelect }: Props) {
   if (conversations.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-bg-border p-8 text-center">
+      <div className="rounded-card border border-dashed border-bg-border py-12 text-center">
         <p className="text-sm text-fg-muted">No hay conversaciones con estos filtros.</p>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="flex flex-col gap-2">
       {conversations.map((conversation) => (
         <ConversationCard
           key={conversation.id}

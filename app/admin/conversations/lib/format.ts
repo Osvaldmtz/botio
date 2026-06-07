@@ -25,7 +25,9 @@ export function avatarLabel(phone: string, temperature: string | null): string {
   if (temperature === 'hot') return '🔥';
   if (temperature === 'warm') return '🟡';
   const digits = phone.replace(/\D/g, '');
-  return digits.slice(-2) || '?';
+  if (digits.length >= 2) return digits.slice(-2);
+  const cleaned = phone.replace(/^webchat:|^tg:/, '');
+  return cleaned.slice(0, 2).toUpperCase() || '?';
 }
 
 export function whatsAppUrl(phone: string): string {
@@ -49,17 +51,19 @@ export function conversationStatus(conv: {
 
 export function temperatureBadge(temperature: string | null): {
   label: string;
-  className: string;
+  tone: 'hot' | 'warm' | 'cold';
 } | null {
   if (!temperature) return null;
-  if (temperature === 'hot') {
-    return { label: 'Hot', className: 'bg-red-500/20 text-red-300 border-red-500/30' };
-  }
-  if (temperature === 'warm') {
-    return {
-      label: 'Warm',
-      className: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-    };
-  }
-  return { label: 'Cold', className: 'bg-bg-border text-fg-muted border-bg-border' };
+  if (temperature === 'hot') return { label: 'Hot', tone: 'hot' };
+  if (temperature === 'warm') return { label: 'Warm', tone: 'warm' };
+  return { label: 'Cold', tone: 'cold' };
+}
+
+export function statusToneToBadge(
+  tone: 'active' | 'unanswered' | 'closed' | 'handoff',
+): 'primary' | 'hot' | 'warning' | 'gray' {
+  if (tone === 'unanswered') return 'hot';
+  if (tone === 'handoff') return 'warning';
+  if (tone === 'closed') return 'gray';
+  return 'primary';
 }

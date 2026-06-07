@@ -1,16 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import type {
   ConversationSummary,
   DashboardStats,
 } from '../lib/conversation-queries';
+import { AdminShell } from '@/components/admin/admin-shell';
 import { ConversationFilters, type FilterState } from './conversation-filters';
 import { ConversationStats } from './conversation-stats';
 import { ConversationList } from './conversation-list';
 import { ConversationDetailPanel } from './conversation-detail';
-import { ConversationsNav } from './conversations-nav';
 
 type Bot = { id: string; name: string };
 
@@ -19,10 +18,6 @@ type InitialData = {
   stats: DashboardStats;
   bots: Bot[];
   fetchedAt: string;
-};
-
-type Props = {
-  initial: InitialData;
 };
 
 const POLL_INTERVAL_MS = 10_000;
@@ -39,7 +34,7 @@ function buildQuery(filters: FilterState): string {
   return params.toString();
 }
 
-export function ConversationsDashboard({ initial }: Props) {
+export function ConversationsDashboard({ initial }: { initial: InitialData }) {
   const [conversations, setConversations] = useState(initial.conversations);
   const [stats, setStats] = useState(initial.stats);
   const [bots] = useState(initial.bots);
@@ -77,16 +72,12 @@ export function ConversationsDashboard({ initial }: Props) {
   }, [queryString]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void loadData();
-    }, 300);
+    const timer = setTimeout(() => void loadData(), 300);
     return () => clearTimeout(timer);
   }, [loadData]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      void loadData();
-    }, POLL_INTERVAL_MS);
+    const interval = setInterval(() => void loadData(), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [loadData]);
 
@@ -98,58 +89,34 @@ export function ConversationsDashboard({ initial }: Props) {
     return () => clearInterval(tick);
   }, [fetchedAt]);
 
-  function handleFilterChange(patch: Partial<FilterState>) {
-    setFilters((prev) => ({ ...prev, ...patch }));
-  }
-
   return (
-    <div className="flex h-screen max-h-screen min-h-0 flex-col overflow-hidden bg-bg lg:flex-row">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-        <header className="border-b border-bg-border px-4 py-4 sm:px-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-fg">Conversaciones</h1>
-              <p className="text-sm text-fg-muted">
-                {conversations.length} resultado(s) · polling cada 10s
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <ConversationsNav />
-              <Link
-                href="/admin"
-                className="shrink-0 rounded-lg border border-bg-border px-3 py-2 text-sm text-fg-muted hover:text-fg"
-              >
-                ← Admin
-              </Link>
-            </div>
-          </div>
-        </header>
-
-        <div className="space-y-4 p-4 sm:p-6">
-          <ConversationStats stats={stats} />
-          <ConversationFilters
-            filters={filters}
-            bots={bots}
-            onChange={handleFilterChange}
-            onRefresh={() => void loadData()}
-            refreshing={refreshing}
-            secondsSinceUpdate={secondsSinceUpdate}
+    <AdminShell
+      title="Conversaciones"
+      subtitle={`${conversations.length} resultado(s) · polling cada 10s`}
+      aside={
+        selectedId ? (
+          <ConversationDetailPanel
+            conversationId={selectedId}
+            onClose={() => setSelectedId(null)}
+            onHandoffChange={() => void loadData()}
           />
-          <ConversationList
-            conversations={conversations}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
-        </div>
-      </div>
-
-      {selectedId ? (
-        <ConversationDetailPanel
-          conversationId={selectedId}
-          onClose={() => setSelectedId(null)}
-          onHandoffChange={() => void loadData()}
-        />
-      ) : null}
-    </div>
+        ) : null
+      }
+    >
+      <ConversationStats stats={stats} />
+      <ConversationFilters
+        filters={filters}
+        bots={bots}
+        onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
+        onRefresh={() => void loadData()}
+        refreshing={refreshing}
+        secondsSinceUpdate={secondsSinceUpdate}
+      />
+      <ConversationList
+        conversations={conversations}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+      />
+    </AdminShell>
   );
 }

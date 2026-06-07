@@ -10,28 +10,16 @@ export function normalizeChannel(value: string | null | undefined): Conversation
 export function channelBadge(channel: string | null | undefined): {
   label: string;
   emoji: string;
-  className: string;
+  tone: 'primary' | 'info' | 'gray';
 } {
   const c = normalizeChannel(channel);
   if (c === 'webchat') {
-    return {
-      label: 'Web',
-      emoji: '💬',
-      className: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
-    };
+    return { label: 'Web', emoji: '💬', tone: 'info' };
   }
   if (c === 'telegram') {
-    return {
-      label: 'Telegram',
-      emoji: '📨',
-      className: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-    };
+    return { label: 'Telegram', emoji: '📨', tone: 'info' };
   }
-  return {
-    label: 'WhatsApp',
-    emoji: '📱',
-    className: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  };
+  return { label: 'WhatsApp', emoji: '📱', tone: 'primary' };
 }
 
 export function formatCustomerIdentifier(

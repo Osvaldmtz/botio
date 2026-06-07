@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { X, Copy, ExternalLink } from 'lucide-react';
 import type { ConversationDetail } from '../lib/conversation-queries';
 import { channelBadge, formatCustomerIdentifier } from '@/lib/channel-utils';
 import {
+  avatarLabel,
   conversationStatus,
   extractLeadName,
   formatRelativeTime,
@@ -11,15 +13,29 @@ import {
   temperatureBadge,
   whatsAppUrl,
 } from '../lib/format';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { MessageBubble } from './message-bubble';
 import { HandoffControls, getHandoffAdminName } from './handoff-controls';
 import { HandoffChatBox } from './handoff-chat-box';
+import { cn } from '@/lib/cn';
 
 type Props = {
   conversationId: string | null;
   onClose: () => void;
   onHandoffChange?: () => void;
 };
+
+function LeadField({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 py-2">
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
+        {label}
+      </dt>
+      <dd className="text-right text-sm text-fg">{value}</dd>
+    </div>
+  );
+}
 
 export function ConversationDetailPanel({
   conversationId,
@@ -30,6 +46,7 @@ export function ConversationDetailPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'info' | 'messages'>('messages');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadDetail = useCallback(async (id: string) => {
@@ -61,15 +78,13 @@ export function ConversationDetailPanel({
 
   useEffect(() => {
     if (!conversationId || !isHandoffActive(detail)) return;
-    const interval = setInterval(() => {
-      void loadDetail(conversationId);
-    }, 10_000);
+    const interval = setInterval(() => void loadDetail(conversationId), 10_000);
     return () => clearInterval(interval);
   }, [conversationId, detail?.handoff_active, loadDetail]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [detail?.messages.length]);
+  }, [detail?.messages.length, activeTab]);
 
   function handleUpdated() {
     if (conversationId) void loadDetail(conversationId);
@@ -81,6 +96,9 @@ export function ConversationDetailPanel({
   const status = detail ? conversationStatus(detail) : null;
   const temp = detail ? temperatureBadge(detail.lead_temperature) : null;
   const channel = detail ? channelBadge(detail.channel) : null;
+  const title = detail
+    ? extractLeadName(detail.customer_phone, detail.lead_signals)
+    : 'Cargando…';
 
   async function copyPhone() {
     if (!detail?.customer_phone) return;
@@ -92,32 +110,65 @@ export function ConversationDetailPanel({
   return (
     <>
       <div
-        className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+        className="fixed inset-0 z-40 bg-fg/20 transition-opacity duration-200 lg:hidden"
         onClick={onClose}
         aria-hidden
       />
-      <aside className="fixed inset-y-0 right-0 z-50 flex h-screen max-h-screen w-full max-w-md min-h-0 flex-col border-l border-bg-border bg-bg shadow-2xl lg:static lg:z-0 lg:max-w-lg lg:shadow-none">
-        <header className="flex items-center justify-between border-b border-bg-border px-4 py-3">
-          <div>
-            <h2 className="font-semibold text-fg">Detalle</h2>
-            {detail ? (
-              <p className="font-mono text-xs text-fg-muted">{detail.customer_phone}</p>
-            ) : null}
+
+      <aside
+        className={cn(
+          'fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col border-l border-bg-border bg-bg',
+          'transition-transform duration-200 ease-out lg:static lg:z-0 lg:shrink-0',
+        )}
+      >
+        <header className="border-b border-bg-border px-4 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-bg-subtle text-sm font-medium text-fg-muted">
+                {detail ? avatarLabel(detail.customer_phone, detail.lead_temperature) : '…'}
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-fg">{title}</h2>
+                {detail ? (
+                  <p className="font-mono text-xs text-fg-muted">
+                    {formatCustomerIdentifier(detail.customer_phone, detail.channel)}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded text-fg-muted transition-colors hover:bg-bg-subtle hover:text-fg"
+            >
+              <X className="h-4 w-4" strokeWidth={1.5} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-bg-border px-2 py-1 text-sm text-fg-muted hover:text-fg"
-          >
-            ✕
-          </button>
+
+          <div className="mt-4 flex gap-4 border-b border-bg-border">
+            {(['messages', 'info'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  'border-b-2 pb-2 text-sm transition-colors duration-150',
+                  activeTab === tab
+                    ? 'border-accent font-medium text-fg'
+                    : 'border-transparent text-fg-muted hover:text-fg',
+                )}
+              >
+                {tab === 'messages' ? 'Mensajes' : 'Info'}
+              </button>
+            ))}
+          </div>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {loading && !detail ? (
             <p className="p-4 text-sm text-fg-muted">Cargando conversación…</p>
           ) : error ? (
-            <p className="p-4 text-sm text-red-300">{error}</p>
+            <p className="p-4 text-sm text-semantic-hot">{error}</p>
           ) : detail ? (
             <div className="space-y-4 p-4">
               <HandoffControls detail={detail} onUpdated={handleUpdated} />
@@ -130,133 +181,82 @@ export function ConversationDetailPanel({
                 />
               ) : null}
 
-              <section className="rounded-xl border border-bg-border bg-bg-elevated p-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                  Lead
-                </h3>
-                <dl className="mt-3 space-y-2 text-sm">
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Contacto</dt>
-                    <dd className="text-right text-fg">
-                      {extractLeadName(detail.customer_phone, detail.lead_signals)}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Canal</dt>
-                    <dd>
-                      {channel ? (
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-xs ${channel.className}`}
-                        >
-                          {channel.emoji} {channel.label}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Identificador</dt>
-                    <dd className="font-mono text-fg">
-                      {formatCustomerIdentifier(detail.customer_phone, detail.channel)}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Bot</dt>
-                    <dd className="text-fg">{detail.bot_name}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Estado</dt>
-                    <dd className="text-fg">{status?.label}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Score</dt>
-                    <dd className="text-fg">{detail.lead_score ?? '—'}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Temperatura</dt>
-                    <dd>
-                      {temp ? (
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-xs ${temp.className}`}
-                        >
-                          {temp.label}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Intención</dt>
-                    <dd className="text-right text-fg">{detail.lead_intent ?? '—'}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Ciudad</dt>
-                    <dd className="text-fg">{detail.lead_city ?? '—'}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">País</dt>
-                    <dd className="text-fg">{detail.lead_country ?? '—'}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Lead capturado</dt>
-                    <dd className="text-fg">{detail.lead_captured ? 'Sí' : 'No'}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Último mensaje</dt>
-                    <dd className="text-fg">{formatRelativeTime(detail.last_message_at)}</dd>
-                  </div>
-                </dl>
+              {activeTab === 'info' ? (
+                <section className="rounded-card border border-bg-border p-4">
+                  <dl className="divide-y divide-bg-border">
+                    <LeadField label="Contacto" value={title} />
+                    <LeadField
+                      label="Canal"
+                      value={
+                        channel ? (
+                          <Badge tone={channel.tone}>
+                            {channel.emoji} {channel.label}
+                          </Badge>
+                        ) : (
+                          '—'
+                        )
+                      }
+                    />
+                    <LeadField label="Bot" value={detail.bot_name} />
+                    <LeadField label="Estado" value={status?.label ?? '—'} />
+                    <LeadField label="Score" value={detail.lead_score ?? '—'} />
+                    <LeadField
+                      label="Temperatura"
+                      value={
+                        temp ? (
+                          <Badge tone={temp.tone === 'hot' ? 'hot' : temp.tone === 'warm' ? 'warning' : 'gray'}>
+                            {temp.label}
+                          </Badge>
+                        ) : (
+                          '—'
+                        )
+                      }
+                    />
+                    <LeadField label="Intención" value={detail.lead_intent ?? '—'} />
+                    <LeadField label="Ciudad" value={detail.lead_city ?? '—'} />
+                    <LeadField label="País" value={detail.lead_country ?? '—'} />
+                    <LeadField label="Lead capturado" value={detail.lead_captured ? 'Sí' : 'No'} />
+                    <LeadField label="Último mensaje" value={formatRelativeTime(detail.last_message_at)} />
+                  </dl>
 
-                {detail.lead_signals?.length ? (
-                  <div className="mt-3">
-                    <p className="text-xs text-fg-muted">Señales</p>
-                    <div className="mt-1 flex flex-wrap gap-1">
+                  {detail.lead_signals?.length ? (
+                    <div className="mt-4 flex flex-wrap gap-1">
                       {detail.lead_signals.map((signal) => (
-                        <span
-                          key={signal}
-                          className="rounded-full border border-bg-border px-2 py-0.5 text-[10px] text-fg-muted"
-                        >
+                        <Badge key={signal} tone="gray">
                           {signal}
-                        </span>
+                        </Badge>
                       ))}
                     </div>
-                  </div>
-                ) : null}
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={copyPhone}
-                    className="rounded-lg border border-bg-border px-3 py-1.5 text-xs text-fg-muted hover:text-fg"
-                  >
-                    {copied ? '✓ Copiado' : 'Copiar teléfono'}
-                  </button>
-                  {(detail.channel ?? 'whatsapp') === 'whatsapp' ? (
-                    <a
-                      href={whatsAppUrl(detail.customer_phone)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs text-accent hover:bg-accent/20"
-                    >
-                      Abrir WhatsApp
-                    </a>
                   ) : null}
-                </div>
-              </section>
 
-              <section>
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                  Mensajes ({detail.messages.length})
-                </h3>
-                <div className="flex flex-col gap-3">
-                  {detail.messages.map((msg) => (
-                    <MessageBubble key={msg.id} message={msg} />
-                  ))}
-                  <div ref={messagesEndRef} />
-                </div>
-              </section>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => void copyPhone()}>
+                      <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      {copied ? 'Copiado' : 'Copiar ID'}
+                    </Button>
+                    {(detail.channel ?? 'whatsapp') === 'whatsapp' ? (
+                      <a
+                        href={whatsAppUrl(detail.customer_phone)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded border border-bg-border bg-bg px-2.5 py-1 text-xs font-medium text-fg transition-colors hover:bg-bg-elevated"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        WhatsApp
+                      </a>
+                    ) : null}
+                  </div>
+                </section>
+              ) : (
+                <section>
+                  <div className="flex flex-col gap-4">
+                    {detail.messages.map((msg) => (
+                      <MessageBubble key={msg.id} message={msg} />
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </section>
+              )}
             </div>
           ) : null}
         </div>

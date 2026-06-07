@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, type KeyboardEvent } from 'react';
+import { Send } from 'lucide-react';
 import { extractLeadName } from '../lib/format';
 import type { ConversationDetail } from '../lib/conversation-queries';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
 
 type Props = {
   detail: ConversationDetail;
@@ -56,14 +59,14 @@ export function HandoffChatBox({ detail, adminName, onSent }: Props) {
   }
 
   return (
-    <section className="rounded-xl border border-orange-500/30 bg-bg-elevated p-4">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-orange-300">
-        Responder por WhatsApp
+    <section className="rounded-card border border-bg-border bg-bg p-4">
+      <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-fg-tertiary">
+        Responder manualmente
       </h3>
       {sentFlash ? (
-        <p className="mb-2 text-xs text-accent">✓ Mensaje enviado por WhatsApp</p>
+        <p className="mb-2 text-xs text-accent-muted-fg">✓ Mensaje enviado</p>
       ) : null}
-      {error ? <p className="mb-2 text-xs text-red-300">{error}</p> : null}
+      {error ? <p className="mb-2 text-xs text-semantic-hot">{error}</p> : null}
       <div className="flex gap-2">
         <textarea
           value={text}
@@ -72,19 +75,21 @@ export function HandoffChatBox({ detail, adminName, onSent }: Props) {
           rows={3}
           disabled={sending}
           placeholder={`Escribe tu mensaje a ${recipient}...`}
-          className="min-h-[72px] flex-1 resize-none rounded-lg border border-bg-border bg-bg px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-orange-500/50 focus:outline-none disabled:opacity-50"
+          className={cn(
+            'min-h-[72px] flex-1 resize-none rounded border border-bg-border bg-bg px-3 py-2 text-sm text-fg',
+            'placeholder:text-fg-tertiary focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-muted disabled:opacity-50',
+          )}
         />
-        <button
-          type="button"
+        <Button
+          size="sm"
+          className="self-end"
           onClick={() => void sendMessage()}
           disabled={sending || !text.trim()}
-          className="flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-lg bg-orange-500 text-bg transition-opacity hover:bg-orange-400 disabled:opacity-40"
-          title="Enviar"
         >
-          {sending ? '…' : '➤'}
-        </button>
+          <Send className="h-4 w-4" strokeWidth={1.5} />
+        </Button>
       </div>
-      <p className="mt-1 text-[10px] text-fg-muted">Enter envía · Shift+Enter nueva línea</p>
+      <p className="mt-2 text-xs text-fg-tertiary">Enter envía · Shift+Enter nueva línea</p>
     </section>
   );
 }

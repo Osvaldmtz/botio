@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { UserRound } from 'lucide-react';
 import { formatRelativeTime, isHandoffActive } from '../lib/format';
 import type { ConversationDetail } from '../lib/conversation-queries';
+import { Button } from '@/components/ui/button';
 
 const ADMIN_NAME_KEY = 'botio_handoff_name';
 
@@ -73,40 +75,47 @@ export function HandoffControls({ detail, onUpdated }: Props) {
 
   if (isHandoffActive(detail)) {
     return (
-      <section className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
-        <p className="text-sm text-orange-200">
-          🙋 Atendido por <strong>{detail.handoff_taken_by ?? 'Admin'}</strong>
-          {detail.handoff_started_at
-            ? ` desde ${formatRelativeTime(detail.handoff_started_at)}`
-            : ''}
-        </p>
-        {error ? <p className="mt-2 text-xs text-red-300">{error}</p> : null}
-        <button
-          type="button"
-          onClick={() => void handleRelease()}
-          disabled={loading}
-          className="mt-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
-        >
-          {loading ? 'Procesando…' : 'Devolver al bot'}
-        </button>
+      <section className="rounded-card border-l-[3px] border-l-semantic-warning bg-semantic-warning-bg px-4 py-3">
+        <div className="flex items-start gap-2">
+          <UserRound className="mt-0.5 h-4 w-4 text-semantic-warning" strokeWidth={1.5} />
+          <div className="flex-1">
+            <p className="text-sm text-fg">
+              Atendido por <span className="font-medium">{detail.handoff_taken_by ?? 'Admin'}</span>
+              {detail.handoff_started_at
+                ? ` desde ${formatRelativeTime(detail.handoff_started_at)}`
+                : ''}
+            </p>
+            {error ? <p className="mt-1 text-xs text-semantic-hot">{error}</p> : null}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="mt-3"
+              onClick={() => void handleRelease()}
+              disabled={loading}
+            >
+              {loading ? 'Procesando…' : 'Devolver al bot'}
+            </Button>
+          </div>
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="rounded-xl border border-bg-border bg-bg-elevated p-4">
+    <section className="rounded-card border border-bg-border bg-bg-elevated p-4">
       <p className="text-sm text-fg-muted">
-        Toma control para responder manualmente por WhatsApp. El bot dejará de contestar.
+        Toma control para responder manualmente. El bot dejará de contestar.
       </p>
-      {error ? <p className="mt-2 text-xs text-red-300">{error}</p> : null}
-      <button
-        type="button"
+      {error ? <p className="mt-2 text-xs text-semantic-hot">{error}</p> : null}
+      <Button
+        variant="secondary"
+        size="sm"
+        className="mt-3"
         onClick={() => void handleTake()}
         disabled={loading || detail.is_closed}
-        className="mt-3 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-bg hover:bg-orange-400 disabled:opacity-50"
       >
         {loading ? 'Procesando…' : 'Tomar control'}
-      </button>
+      </Button>
     </section>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from 'lucide-react';
 import type { PipelineLead } from '../lib/pipeline-queries';
 import {
   avatarLabel,
@@ -9,7 +10,9 @@ import {
   formatRelativeTime,
   temperatureBadge,
 } from '../lib/format';
+import { Badge } from '@/components/ui/badge';
 import { differenceInDays } from 'date-fns';
+import { cn } from '@/lib/cn';
 
 type Props = {
   lead: PipelineLead;
@@ -25,7 +28,7 @@ export function PipelineCard({ lead, selected, onSelect }: Props) {
 
   const style = {
     transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.6 : 1,
   };
 
   const temp = temperatureBadge(lead.lead_temperature);
@@ -38,43 +41,38 @@ export function PipelineCard({ lead, selected, onSelect }: Props) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border p-3 transition-colors ${
-        selected
-          ? 'border-accent/50 bg-accent/5'
-          : 'border-bg-border bg-bg hover:border-fg-muted/30'
-      }`}
+      className={cn(
+        'rounded-card border bg-bg p-3 transition-colors duration-150',
+        selected ? 'border-accent bg-accent-muted/20' : 'border-bg-border hover:border-bg-border-hover',
+        isDragging && 'cursor-grabbing',
+      )}
     >
       <div className="flex items-start gap-2">
         <button
           type="button"
-          className="flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded-full border border-bg-border bg-bg text-xs active:cursor-grabbing"
+          className="mt-0.5 flex shrink-0 cursor-grab items-center text-fg-tertiary active:cursor-grabbing"
           {...listeners}
           {...attributes}
           aria-label="Arrastrar tarjeta"
         >
-          {avatarLabel(lead.customer_phone, lead.lead_temperature)}
+          <GripVertical className="h-4 w-4" strokeWidth={1.5} />
         </button>
-        <button
-          type="button"
-          onClick={() => onSelect(lead.id)}
-          className="min-w-0 flex-1 text-left"
-        >
+
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-subtle text-[10px] font-medium text-fg-muted">
+          {avatarLabel(lead.customer_phone, lead.lead_temperature)}
+        </div>
+
+        <button type="button" onClick={() => onSelect(lead.id)} className="min-w-0 flex-1 text-left">
           <p className="truncate text-sm font-medium text-fg">{title}</p>
-          <p className="font-mono text-[10px] text-fg-muted">{lead.customer_phone}</p>
-          {lead.lead_city ? (
-            <p className="mt-0.5 text-[10px] text-fg-muted">📍 {lead.lead_city}</p>
-          ) : null}
-          <div className="mt-2 flex flex-wrap gap-1">
+          <p className="truncate font-mono text-[11px] text-fg-tertiary">{lead.customer_phone}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {temp ? (
-              <span
-                className={`rounded-full border px-1.5 py-0.5 text-[9px] ${temp.className}`}
-              >
+              <Badge tone={temp.tone === 'hot' ? 'hot' : temp.tone === 'warm' ? 'warning' : 'gray'}>
                 {temp.label}
-                {lead.lead_score !== null ? ` ${lead.lead_score}` : ''}
-              </span>
+              </Badge>
             ) : null}
-            <span className="text-[9px] text-fg-muted">{daysInStage}d en etapa</span>
-            <span className="text-[9px] text-fg-muted">
+            <span className="text-[11px] text-fg-tertiary">{daysInStage}d en etapa</span>
+            <span className="text-[11px] text-fg-tertiary">
               {formatRelativeTime(lead.last_message_at)}
             </span>
           </div>

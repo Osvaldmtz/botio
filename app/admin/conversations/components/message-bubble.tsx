@@ -1,6 +1,8 @@
 'use client';
 
 import type { ConversationMessage } from '../lib/conversation-queries';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/cn';
 
 type Props = {
   message: ConversationMessage;
@@ -29,40 +31,38 @@ export function MessageBubble({ message }: Props) {
       : null;
 
   return (
-    <div className={`flex ${isUser ? 'justify-start' : 'justify-end'}`}>
-      <div className={`max-w-[85%] flex flex-col gap-1 ${isUser ? '' : 'items-end'}`}>
-        <div className="flex flex-wrap items-center gap-2 px-1">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-fg-muted">
-            {isUser ? 'Usuario' : isHuman ? `Humano${sentBy ? ` · ${sentBy}` : ''}` : 'Bot'}
+    <div className={cn('flex gap-2', isUser ? 'justify-end' : 'justify-start')}>
+      {!isUser ? (
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-muted text-xs">
+          S
+        </div>
+      ) : null}
+
+      <div className={cn('max-w-[85%]', isUser && 'items-end')}>
+        <div className="mb-1 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
+            {isUser ? 'Usuario' : isHuman ? `🙋 ${sentBy ?? 'Humano'}` : 'Sofía'}
           </span>
           {isAudio ? (
-            <span className="rounded-full border border-electric/30 bg-electric/10 px-2 py-0.5 text-[10px] text-electric">
-              🎙 Audio{duration !== null ? ` · ${duration}s` : ''}
-            </span>
+            <Badge tone="gray">🎙 Audio{duration !== null ? ` ${duration}s` : ''}</Badge>
           ) : null}
-          {isCache ? (
-            <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] text-accent">
-              ⚡ Cache
-            </span>
-          ) : null}
-          {isHuman ? (
-            <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[10px] text-orange-300">
-              🙋 Handoff
-            </span>
-          ) : null}
+          {isCache ? <Badge tone="gray">⚡ Cache</Badge> : null}
         </div>
+
         <div
-          className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed text-fg ${
+          className={cn(
+            'rounded-card px-3 py-2 text-sm leading-relaxed',
             isUser
-              ? 'rounded-tl-sm border border-bg-border bg-bg-elevated'
+              ? 'bg-bg-subtle text-fg'
               : isHuman
-                ? 'rounded-tr-sm border border-orange-500/20 bg-orange-500/10'
-                : 'rounded-tr-sm bg-accent/15'
-          }`}
+                ? 'border border-semantic-warning bg-semantic-warning-bg text-fg'
+                : 'border border-bg-border bg-bg text-fg',
+          )}
         >
           {message.content}
         </div>
-        <span className="px-1 text-[11px] text-fg-muted">{formatTime(message.created_at)}</span>
+
+        <span className="mt-1 block text-xs text-fg-tertiary">{formatTime(message.created_at)}</span>
       </div>
     </div>
   );

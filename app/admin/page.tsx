@@ -27,7 +27,7 @@ export default async function AdminPage() {
     return (
       <main className="mx-auto max-w-2xl px-6 py-10">
         <h1 className="text-2xl font-bold text-fg">Admin dashboard</h1>
-        <p className="mt-4 text-red-400">
+        <p className="mt-4 text-semantic-hot">
           Failed to load data: {businessesResult.error?.message ?? botsResult.error?.message}
         </p>
       </main>

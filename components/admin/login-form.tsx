@@ -4,30 +4,37 @@ const loginFormAction = loginAction as unknown as (formData: FormData) => void |
 
 export function LoginForm() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-glow px-6">
+    <main className="flex min-h-screen items-center justify-center bg-bg-elevated px-6">
       <form
         action={loginFormAction}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-bg-border bg-bg-elevated p-8"
+        className="w-full max-w-sm space-y-5 rounded-card border border-bg-border bg-bg p-8"
       >
-        <h1 className="text-2xl font-semibold text-fg">Admin</h1>
-        <p className="text-sm text-fg-muted">
-          Temporary password-protected area. Real auth coming soon.
-        </p>
-        <label className="block space-y-1">
-          <span className="text-xs uppercase tracking-wide text-fg-muted">Password</span>
+        <div>
+          <div className="mb-4 flex h-10 w-10 items-center justify-center rounded bg-accent text-sm font-semibold text-white">
+            B
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-fg">Botio Admin</h1>
+          <p className="mt-1 text-sm text-fg-muted">
+            Acceso temporal con contraseña. Auth completo próximamente.
+          </p>
+        </div>
+        <label className="block space-y-1.5">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
+            Contraseña
+          </span>
           <input
             type="password"
             name="password"
             required
             autoFocus
-            className="w-full rounded-md border border-bg-border bg-bg px-3 py-2 text-fg outline-none focus:border-accent"
+            className="w-full rounded border border-bg-border bg-bg px-3 py-2 text-sm text-fg focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-muted"
           />
         </label>
         <button
           type="submit"
-          className="w-full rounded-md bg-accent px-3 py-2 font-semibold text-bg transition-colors hover:bg-accent-hover"
+          className="w-full rounded bg-accent px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-accent-hover"
         >
-          Sign in
+          Iniciar sesión
         </button>
       </form>
     </main>

@@ -1,10 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { PIPELINE_STAGES, type PipelineStage } from '@/lib/pipeline';
 import type { PipelineLead, PipelineStats } from '../lib/pipeline-queries';
-import { ConversationsNav } from './conversations-nav';
+import { AdminShell } from '@/components/admin/admin-shell';
 import { PipelineStatsHeader } from './pipeline-stats';
 import { PipelineFilters, type PipelineFilterState } from './pipeline-filters';
 import { PipelineBoard } from './pipeline-board';
@@ -49,6 +48,7 @@ export function PipelineDashboard({ initial }: { initial: InitialData }) {
   });
 
   const queryString = useMemo(() => buildQuery(filters), [filters]);
+  const totalLeads = PIPELINE_STAGES.reduce((n, s) => n + grouped[s].length, 0);
 
   const loadData = useCallback(async () => {
     setRefreshing(true);
@@ -97,57 +97,38 @@ export function PipelineDashboard({ initial }: { initial: InitialData }) {
   }
 
   return (
-    <div className="flex h-screen max-h-screen min-h-0 flex-col overflow-hidden bg-bg lg:flex-row">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="shrink-0 border-b border-bg-border px-4 py-4 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-fg">Pipeline de ventas</h1>
-              <p className="text-sm text-fg-muted">
-                {PIPELINE_STAGES.reduce((n, s) => n + grouped[s].length, 0)} leads · polling 10s
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <ConversationsNav />
-              <Link
-                href="/admin"
-                className="rounded-lg border border-bg-border px-3 py-2 text-sm text-fg-muted hover:text-fg"
-              >
-                ← Admin
-              </Link>
-            </div>
-          </div>
-        </header>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-6">
-          <PipelineStatsHeader stats={stats} />
-          <PipelineFilters
-            filters={filters}
-            bots={bots}
-            onChange={(patch) => setFilters((p) => ({ ...p, ...patch }))}
-            onRefresh={() => void loadData()}
-            refreshing={refreshing}
+    <AdminShell
+      title="Pipeline de ventas"
+      subtitle={`${totalLeads} leads · polling cada 10s`}
+      className="flex min-h-0 flex-1 flex-col"
+      aside={
+        selectedId ? (
+          <ConversationDetailPanel
+            conversationId={selectedId}
+            onClose={() => setSelectedId(null)}
+            onHandoffChange={() => void loadData()}
           />
-          <div className="min-h-0 flex-1">
-            <PipelineBoard
-              grouped={grouped}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              onMove={handleMove}
-              activeDragId={activeDragId}
-              setActiveDragId={setActiveDragId}
-            />
-          </div>
-        </div>
-      </div>
-
-      {selectedId ? (
-        <ConversationDetailPanel
-          conversationId={selectedId}
-          onClose={() => setSelectedId(null)}
-          onHandoffChange={() => void loadData()}
+        ) : null
+      }
+    >
+      <PipelineStatsHeader stats={stats} />
+      <PipelineFilters
+        filters={filters}
+        bots={bots}
+        onChange={(patch) => setFilters((p) => ({ ...p, ...patch }))}
+        onRefresh={() => void loadData()}
+        refreshing={refreshing}
+      />
+      <div className="min-h-[480px] flex-1">
+        <PipelineBoard
+          grouped={grouped}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onMove={handleMove}
+          activeDragId={activeDragId}
+          setActiveDragId={setActiveDragId}
         />
-      ) : null}
-    </div>
+      </div>
+    </AdminShell>
   );
 }
