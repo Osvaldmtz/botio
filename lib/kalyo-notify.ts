@@ -2,20 +2,21 @@ import 'server-only';
 import { sendWhatsApp } from '@/lib/twilio';
 import { normalizePhone } from '@/lib/phone';
 import { sendLeadTelegram } from '@/lib/telegram-notify';
+import { enrichLead, type ConversationMessage, type EnrichedLead } from '@/lib/lead-enrichment';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export type NotifySalesInput = {
   title?: string;
   name?: string;
   phone?: string;
   email?: string;
-  // ISO string for the trial expiry date.
   expires_at?: string;
   preferred_time?: string;
   reason?: string;
   conversation_summary?: string;
-  // Injected server-side by the webhook from the Twilio "From" field, not set
-  // by Claude. Used to fall back as the phone value when the lead did not volunteer one.
   whatsapp_number?: string;
+  conversationId?: string;
+  conversationMessages?: ConversationMessage[];
 };
 
 export type NotifySalesCreds = {
@@ -40,6 +41,48 @@ const WHATSAPP_HEADERS: Record<string, string> = {
   activate_trial: '🎁 Trial Pro activado',
 };
 
+const TEMPERATURE_EMOJI: Record<EnrichedLead['temperature'], string> = {
+  hot: '🔥',
+  warm: '🟡',
+  cold: '❄️',
+};
+
+async function loadConversationMessages(conversationId: string): Promise<ConversationMessage[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from('messages')
+    .select('role, content, created_at')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.error('[kalyo-notify] failed to load conversation messages', { conversationId, error });
+    return [];
+  }
+  return (data ?? []) as ConversationMessage[];
+}
+
+async function persistLeadEnrichment(
+  conversationId: string,
+  enriched: EnrichedLead,
+): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from('conversations')
+    .update({
+      lead_score: enriched.score,
+      lead_temperature: enriched.temperature,
+      lead_country: enriched.country,
+      lead_city: enriched.city ?? null,
+      lead_intent: enriched.intent,
+      lead_signals: enriched.signals,
+      enriched_at: new Date().toISOString(),
+    })
+    .eq('id', conversationId);
+  if (error) {
+    console.error('[kalyo-notify] failed to persist lead enrichment', { conversationId, error });
+  }
+}
+
 function buildWhatsAppBody(
   reason: string | undefined,
   name: string | undefined,
@@ -48,8 +91,18 @@ function buildWhatsAppBody(
   summary: string | undefined,
   dateStr: string,
   expiresStr: string,
+  enriched?: EnrichedLead,
 ): string {
-  const header = WHATSAPP_HEADERS[reason ?? ''] ?? '📬 Notificación Kalyo';
+  const header = enriched
+    ? `${TEMPERATURE_EMOJI[enriched.temperature]} Lead ${enriched.temperature.toUpperCase()} — ${WHATSAPP_HEADERS[reason ?? ''] ?? 'Notificación Kalyo'}`
+    : (WHATSAPP_HEADERS[reason ?? ''] ?? '📬 Notificación Kalyo');
+
+  const location = enriched
+    ? enriched.city
+      ? `${enriched.city}, ${enriched.country}`
+      : enriched.country
+    : undefined;
+
   const lines = [
     header,
     `Nombre: ${name ?? '—'}`,
@@ -57,6 +110,17 @@ function buildWhatsAppBody(
     `Email: ${email ?? '—'}`,
     `Fecha: ${dateStr}`,
   ];
+
+  if (enriched) {
+    lines.push(
+      `Ubicación: ${location}`,
+      `Score: ${enriched.score}/100`,
+      `Interés: ${enriched.intent}`,
+      `Señales: ${enriched.signals.join(', ') || '—'}`,
+      `Acción: ${enriched.recommendedAction}`,
+    );
+  }
+
   if (reason === 'activate_trial' && expiresStr !== '—') {
     lines.push(`Vence: ${expiresStr}`);
   }
@@ -71,12 +135,9 @@ export async function notifySalesTeam(
   const name = clean(input.name);
   const explicitPhone = clean(input.phone);
   const whatsappNumber = normalizePhone(input.whatsapp_number);
-  // Fall back to the sender's WhatsApp number when the lead did not volunteer one.
   const phone = explicitPhone ?? whatsappNumber;
   const email = clean(input.email);
 
-  // Require at least one identity field so an empty/accidental tool call
-  // does not spam the sales team with blank leads.
   if (!name && !phone && !email) {
     return { status: 'error', message: 'At least one of name, phone, or email is required' };
   }
@@ -91,8 +152,28 @@ export async function notifySalesTeam(
   const summary = clean(input.conversation_summary);
   const expiresAt = clean(input.expires_at);
 
+  let messages = input.conversationMessages ?? [];
+  if (messages.length === 0 && input.conversationId) {
+    messages = await loadConversationMessages(input.conversationId);
+  }
+
+  const enriched = enrichLead({
+    phone: phone ?? '',
+    conversationMessages: messages,
+    email,
+    name,
+  });
+
+  console.log(
+    `[lead-enrichment] phone=${phone ?? '—'} score=${enriched.score} temperature=${enriched.temperature}`,
+  );
+
+  if (input.conversationId) {
+    await persistLeadEnrichment(input.conversationId, enriched);
+  }
+
   const localeOpts: Intl.DateTimeFormatOptions = {
-    timeZone: 'America/Mexico_City',
+    timeZone: enriched.timezone,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -108,9 +189,20 @@ export async function notifySalesTeam(
     phone: phone ?? '—',
     email: email ?? '—',
     reason: reason ?? '—',
+    score: enriched.score,
+    temperature: enriched.temperature,
   });
 
-  const whatsAppBody = buildWhatsAppBody(reason, name, phone, email, summary, dateStr, expiresStr);
+  const whatsAppBody = buildWhatsAppBody(
+    reason,
+    name,
+    phone,
+    email,
+    summary,
+    dateStr,
+    expiresStr,
+    enriched,
+  );
 
   console.log('[kalyo-notify] about to call Promise.allSettled for both channels');
   const [waResult, tgResult] = await Promise.allSettled([
@@ -121,12 +213,19 @@ export async function notifySalesTeam(
       to: salesPhone,
       body: whatsAppBody,
     }),
-    sendLeadTelegram({ name, phone, email, reason, conversation_summary: summary, expires_at: expiresAt }),
+    sendLeadTelegram({
+      name,
+      phone,
+      email,
+      reason,
+      conversation_summary: summary,
+      expires_at: expiresAt,
+      enriched,
+    }),
   ]);
 
   console.log('[kalyo-notify] Promise.allSettled done | wa:', waResult.status, '| tg:', tgResult.status);
 
-  // Log each channel independently
   if (waResult.status === 'fulfilled') {
     console.log('[kalyo-notify] WhatsApp: success');
   } else {

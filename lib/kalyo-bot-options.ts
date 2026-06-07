@@ -486,6 +486,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
                   whatsapp_number: senderFrom,
                   reason: 'activate_trial',
                   expires_at: result.expires_at,
+                  conversationId,
                 },
                 creds,
               ).catch((err) => console.error('[kalyo] trial activation notify failed', err));
@@ -524,6 +525,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               reason,
               conversation_summary: str('conversation_summary'),
               whatsapp_number: senderFrom,
+              conversationId,
             },
             creds,
           );

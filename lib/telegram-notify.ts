@@ -1,4 +1,5 @@
 import 'server-only';
+import type { EnrichedLead } from '@/lib/lead-enrichment';
 
 export type TelegramNotifyInput = {
   name?: string;
@@ -7,26 +8,34 @@ export type TelegramNotifyInput = {
   reason?: string;
   conversation_summary?: string;
   expires_at?: string;
+  enriched?: EnrichedLead;
 };
 
 export type TelegramNotifyResult = { success: boolean; error?: string };
 
-const REASON_HEADERS: Record<string, string> = {
-  requested_human: '🙋 <b>Lead pidió hablar con humano</b>',
-  purchase_intent: '💰 <b>Intención de compra</b>',
-  new_lead: '📬 <b>Nuevo lead Kalyo</b>',
-  escalation: '⚠️ <b>Escalación de conversación</b>',
-  activate_trial: '🎁 <b>Trial Pro activado</b>',
+const REASON_LABELS: Record<string, string> = {
+  requested_human: 'Pidió hablar con humano',
+  purchase_intent: 'Intención de compra',
+  new_lead: 'Nuevo lead',
+  escalation: 'Escalación de conversación',
+  activate_trial: 'Trial Pro activado',
 };
 
-const LOCALE_OPTS: Intl.DateTimeFormatOptions = {
-  timeZone: 'America/Mexico_City',
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-};
+function temperatureHeader(temperature: EnrichedLead['temperature'], reasonLabel: string): string {
+  if (temperature === 'hot') return `🔥 <b>LEAD CALIENTE — ${reasonLabel}</b>`;
+  if (temperature === 'warm') return `🟡 <b>LEAD TIBIO — ${reasonLabel}</b>`;
+  return `❄️ <b>LEAD FRÍO — ${reasonLabel}</b>`;
+}
+
+function formatLocation(enriched: EnrichedLead): string {
+  if (enriched.city) return `${enriched.city}, ${enriched.country}`;
+  return enriched.country;
+}
+
+function formatSignals(signals: string[]): string {
+  if (signals.length === 0) return '• Sin señales destacadas';
+  return signals.map((s) => `• ${s.charAt(0).toUpperCase() + s.slice(1)}`).join('\n');
+}
 
 export async function sendLeadTelegram(
   input: TelegramNotifyInput,
@@ -41,38 +50,90 @@ export async function sendLeadTelegram(
   console.log('[telegram-notify] env vars present, sending...');
 
   const reason = input.reason?.trim() || 'new_lead';
-  const header = REASON_HEADERS[reason] ?? '📬 <b>Notificación Kalyo</b>';
+  const reasonLabel = REASON_LABELS[reason] ?? 'Notificación Kalyo';
+  const enriched = input.enriched;
+
+  const header = enriched
+    ? temperatureHeader(enriched.temperature, reasonLabel)
+    : (reason === 'requested_human'
+        ? '🙋 <b>Lead pidió hablar con humano</b>'
+        : reason === 'purchase_intent'
+          ? '💰 <b>Intención de compra</b>'
+          : reason === 'escalation'
+            ? '⚠️ <b>Escalación de conversación</b>'
+            : reason === 'activate_trial'
+              ? '🎁 <b>Trial Pro activado</b>'
+              : '📬 <b>Nuevo lead Kalyo</b>');
 
   const name = input.name?.trim() || '—';
   const phone = input.phone?.trim() || '—';
   const email = input.email?.trim() || '—';
   const summary = input.conversation_summary?.trim() || '—';
-  const dateStr = new Date().toLocaleString('es-MX', LOCALE_OPTS);
+
+  const localeOpts: Intl.DateTimeFormatOptions = {
+    timeZone: enriched?.timezone ?? 'America/Mexico_City',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  };
+  const dateStr = new Date().toLocaleString('es-MX', localeOpts);
+  const tzLabel = enriched?.timezone?.includes('Mexico_City')
+    ? 'CDMX'
+    : enriched?.timezone?.includes('Bogota')
+      ? 'Bogotá'
+      : enriched?.country ?? '';
 
   const expiresLine =
     reason === 'activate_trial' && input.expires_at
-      ? `\n⏳ <b>Vence:</b> ${new Date(input.expires_at).toLocaleString('es-MX', LOCALE_OPTS)}`
+      ? `\n⏳ <b>Vence:</b> ${new Date(input.expires_at).toLocaleString('es-MX', localeOpts)}`
       : '';
 
-  // wa.me requires E.164 digits without the + prefix
   const waLine =
     phone !== '—'
-      ? `\n<a href="https://wa.me/${phone.replace(/^\+/, '')}">Abrir chat WhatsApp</a>`
+      ? `\n<a href="https://wa.me/${phone.replace(/^\+/, '')}">👉 Abrir chat WhatsApp</a>`
       : '';
 
-  const text = [
-    header,
-    '',
-    `👤 <b>Nombre:</b> ${name}`,
-    `📱 <b>Teléfono:</b> ${phone}`,
-    `📧 <b>Email:</b> ${email}`,
-    `💬 <b>Resumen:</b> ${summary}`,
-    `🕐 <b>Fecha:</b> ${dateStr}`,
-    expiresLine,
-    waLine,
-  ]
-    .filter((l) => l !== '')
-    .join('\n');
+  const sections: string[] = [header, ''];
+
+  if (enriched) {
+    sections.push(
+      `👤 <b>Nombre:</b> ${name}`,
+      `📞 <b>Teléfono:</b> ${phone}`,
+      `📧 <b>Email:</b> ${email}`,
+      `🌍 <b>Ubicación:</b> ${formatLocation(enriched)}`,
+      '',
+      `📊 <b>Score:</b> ${enriched.score}/100`,
+      `🎯 <b>Interés:</b> ${enriched.intent}`,
+      '',
+      '🔍 <b>Señales detectadas:</b>',
+      formatSignals(enriched.signals),
+      '',
+      '💬 <b>Resumen:</b>',
+      summary,
+      '',
+      '⚡ <b>Acción recomendada:</b>',
+      enriched.recommendedAction,
+      '',
+      `📅 ${dateStr}${tzLabel ? ` ${tzLabel}` : ''}`,
+      expiresLine,
+      waLine,
+    );
+  } else {
+    sections.push(
+      `👤 <b>Nombre:</b> ${name}`,
+      `📱 <b>Teléfono:</b> ${phone}`,
+      `📧 <b>Email:</b> ${email}`,
+      `💬 <b>Resumen:</b> ${summary}`,
+      `🕐 <b>Fecha:</b> ${dateStr}`,
+      expiresLine,
+      waLine,
+    );
+  }
+
+  const text = sections.filter((l) => l !== '').join('\n');
 
   try {
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
