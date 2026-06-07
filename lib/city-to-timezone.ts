@@ -99,23 +99,25 @@ export function cityToTimezone(cityText: string): TimezoneMatch | null {
   }
 
   for (const { alias, entry } of ALIAS_INDEX) {
-    if (normalized.length < 4 || alias.length < 4) continue;
-    if (alias.includes(normalized) || normalized.includes(alias)) {
-      return toMatch(entry, alias, 'medium');
-    }
+    if (normalized.length < 5 || alias.length < 5) continue;
+    if (!alias.includes(normalized) && !normalized.includes(alias)) continue;
+    if (Math.abs(normalized.length - alias.length) > 1) continue;
+    return toMatch(entry, alias, 'medium');
   }
 
-  let best: { entry: CityTimezoneEntry; alias: string; distance: number } | null = null;
-  for (const { alias, entry } of ALIAS_INDEX) {
-    const distance = levenshteinDistance(normalized, alias);
-    if (distance >= 3) continue;
-    if (!best || distance < best.distance) {
-      best = { entry, alias, distance };
+  // Fuzzy only for longer inputs; low-confidence matches are rejected (return null).
+  if (normalized.length >= 7) {
+    let best: { entry: CityTimezoneEntry; alias: string; distance: number } | null = null;
+    for (const { alias, entry } of ALIAS_INDEX) {
+      const distance = levenshteinDistance(normalized, alias);
+      if (distance > 2) continue;
+      if (!best || distance < best.distance) {
+        best = { entry, alias, distance };
+      }
     }
-  }
-
-  if (best) {
-    return toMatch(best.entry, best.alias, 'low');
+    if (best) {
+      void toMatch(best.entry, best.alias, 'low');
+    }
   }
 
   return null;

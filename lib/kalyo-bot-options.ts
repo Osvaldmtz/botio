@@ -347,8 +347,10 @@ NUNCA digas "no está disponible" sin haber llamado check_specific_time primero.
 
 IMPORTANTE:
 - NUNCA muestres slots sin haber preguntado la ciudad primero
-- Si schedule_demo retorna 'city_not_recognized', pregunta de nuevo:
-  "¿Podrías decirme una ciudad principal cercana o el país?"
+- Si schedule_demo retorna 'city_not_recognized', responde:
+  "No encontré esa ciudad en mi sistema. ¿Podrías decirme una ciudad principal cercana o el país?
+  Ejemplos: CDMX, Monterrey, Guadalajara, Cancún, Bogotá, Lima, Santiago, Buenos Aires, Madrid."
+- NUNCA asumas una timezone si no hay match seguro (solo high o medium)
 - Una vez tengas la ciudad, NO vuelvas a preguntar
 - NUNCA dar link de Calendly ni links externos de agendamiento
 - NUNCA inventar fechas/horas — siempre usar schedule_demo, check_specific_time y confirm_demo_slot
@@ -969,7 +971,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             return {
               status: 'city_not_recognized',
               bot_message:
-                'city_not_recognized: No reconocí la ciudad. Pídele al usuario una ciudad más reconocible o el país.',
+                'No encontré esa ciudad en mi sistema. ¿Podrías decirme una ciudad principal cercana o el país? Ejemplos: CDMX, Monterrey, Guadalajara, Cancún, Bogotá, Lima, Santiago, Buenos Aires, Madrid.',
             };
           }
 

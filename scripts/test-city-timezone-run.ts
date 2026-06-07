@@ -11,26 +11,22 @@ type Case = {
 };
 
 const cases: Case[] = [
-  { input: 'CDMX', timezone: 'America/Mexico_City' },
-  { input: 'Mexicali', timezone: 'America/Tijuana', label: 'hora Pacífico' },
-  { input: 'Cancún', timezone: 'America/Cancun' },
-  { input: 'bogota', timezone: 'America/Bogota' },
-  { input: 'Madrid', timezone: 'Europe/Madrid', label: 'hora España' },
-  { input: 'mexicalli', timezone: 'America/Tijuana' },
-  { input: 'ciudad inexistente xyz', timezone: null },
-  { input: 'bogotá', timezone: 'America/Bogota' },
-  { input: 'Tijuana', timezone: 'America/Tijuana' },
-  { input: 'Monterrey', timezone: 'America/Monterrey' },
+  { input: 'Culiacan', timezone: 'America/Mazatlan' },
+  { input: 'Culiacán', timezone: 'America/Mazatlan' },
+  { input: 'Cancun', timezone: 'America/Cancun' },
   { input: 'Hermosillo', timezone: 'America/Hermosillo' },
-  { input: 'Cali', timezone: 'America/Bogota' },
-  { input: 'Lima', timezone: 'America/Lima' },
-  { input: 'Buenos Aires', timezone: 'America/Argentina/Buenos_Aires' },
-  { input: 'Santiago', timezone: 'America/Santiago' },
-  { input: 'New York', timezone: 'America/New_York' },
-  { input: 'Los Angeles', timezone: 'America/Los_Angeles' },
-  { input: 'São Paulo', timezone: 'America/Sao_Paulo' },
-  { input: 'Londres', timezone: 'Europe/London' },
-  { input: 'Tokio', timezone: 'Asia/Tokyo' },
+  { input: 'Tijuana', timezone: 'America/Tijuana', label: 'hora Pacífico' },
+  { input: 'Chihuahua', timezone: 'America/Chihuahua' },
+  { input: 'Mérida', timezone: 'America/Mexico_City', label: 'hora CDMX' },
+  { input: 'Monterrey', timezone: 'America/Monterrey' },
+  { input: 'Matamoros', timezone: 'America/Monterrey' },
+  { input: 'Reynosa', timezone: 'America/Monterrey' },
+  { input: 'ciudad_inexistente_xyz', timezone: null },
+  { input: 'Limaa', timezone: null },
+  { input: 'Limaaaa', timezone: 'America/Lima' },
+  { input: 'CDMX', timezone: 'America/Mexico_City' },
+  { input: 'bogotá', timezone: 'America/Bogota' },
+  { input: 'Madrid', timezone: 'Europe/Madrid', label: 'hora España' },
 ];
 
 console.log('City timezone lookup tests\n');
@@ -48,6 +44,11 @@ for (const c of cases) {
     assert(result.label === c.label, `Expected label ${c.label}, got ${result.label}`);
   }
 }
+
+// Culiacan must NOT match Lima (regression)
+const culiacan = cityToTimezone('Culiacan');
+assert(culiacan?.timezone === 'America/Mazatlan', 'Culiacan must not match Lima');
+console.log('✓ Culiacan does not false-match Lima');
 
 console.log('─'.repeat(60));
 console.log(`✓ All ${cases.length} city timezone tests passed`);

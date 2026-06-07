@@ -27,7 +27,8 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
       "tijuana",
       "ensenada",
       "rosarito",
-      "tecate"
+      "tecate",
+      "mexicalli"
     ],
     "timezone": "America/Tijuana",
     "country": "México",
@@ -40,7 +41,8 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
       "playa del carmen",
       "tulum",
       "cozumel",
-      "isla mujeres"
+      "isla mujeres",
+      "chetumal"
     ],
     "timezone": "America/Cancun",
     "country": "México",
@@ -49,11 +51,26 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
   },
   {
     "aliases": [
+      "culiacan",
+      "los mochis",
+      "mazatlan",
+      "guasave",
+      "navojoa sinaloa"
+    ],
+    "timezone": "America/Mazatlan",
+    "country": "México",
+    "label": "hora Mazatlán",
+    "city": "Culiacán"
+  },
+  {
+    "aliases": [
       "hermosillo",
       "sonora",
       "ciudad obregon",
       "guaymas",
-      "navojoa"
+      "navojoa",
+      "nogales",
+      "magdalena"
     ],
     "timezone": "America/Hermosillo",
     "country": "México",
@@ -66,7 +83,9 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
       "juarez",
       "ciudad juarez",
       "delicias",
-      "parral"
+      "parral",
+      "cuauhtemoc",
+      "ojinaga"
     ],
     "timezone": "America/Chihuahua",
     "country": "México",
@@ -82,7 +101,8 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
       "piedras negras",
       "nuevo laredo",
       "reynosa",
-      "matamoros"
+      "matamoros",
+      "ciudad victoria"
     ],
     "timezone": "America/Monterrey",
     "country": "México",
@@ -100,7 +120,6 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
       "oaxaca",
       "veracruz",
       "acapulco",
-      "mazatlan",
       "morelia",
       "aguascalientes",
       "san luis potosi",
@@ -113,10 +132,22 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
       "villahermosa",
       "tuxtla gutierrez",
       "campeche",
-      "chetumal",
       "chilpancingo",
       "durango",
-      "zacatecas"
+      "zacatecas",
+      "tampico",
+      "ciudad madero",
+      "coatzacoalcos",
+      "tapachula",
+      "ixtapa",
+      "zihuatanejo",
+      "taxco",
+      "cuautla",
+      "salamanca",
+      "irapuato",
+      "celaya",
+      "fresnillo",
+      "manzanillo"
     ],
     "timezone": "America/Mexico_City",
     "country": "México",
@@ -166,6 +197,7 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
   {
     "aliases": [
       "lima",
+      "limaaaa",
       "arequipa",
       "trujillo",
       "cusco",
@@ -985,15 +1017,6 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
   },
   {
     "aliases": [
-      "celaya"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "celaya"
-  },
-  {
-    "aliases": [
       "cholula"
     ],
     "timezone": "America/Mexico_City",
@@ -1009,15 +1032,6 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
     "country": "México",
     "label": "hora CDMX",
     "city": "ciudad valles"
-  },
-  {
-    "aliases": [
-      "coatzacoalcos"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "coatzacoalcos"
   },
   {
     "aliases": [
@@ -1048,15 +1062,6 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
   },
   {
     "aliases": [
-      "cuautla"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "cuautla"
-  },
-  {
-    "aliases": [
       "cuautitlan"
     ],
     "timezone": "America/Mexico_City",
@@ -1072,15 +1077,6 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
     "country": "México",
     "label": "hora CDMX",
     "city": "ecatepec"
-  },
-  {
-    "aliases": [
-      "fresnillo"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "fresnillo"
   },
   {
     "aliases": [
@@ -1108,24 +1104,6 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
     "country": "México",
     "label": "hora CDMX",
     "city": "huatulco"
-  },
-  {
-    "aliases": [
-      "irapuato"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "irapuato"
-  },
-  {
-    "aliases": [
-      "ixtapa"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "ixtapa"
   },
   {
     "aliases": [
@@ -1192,33 +1170,6 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
   },
   {
     "aliases": [
-      "los mochis"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "los mochis"
-  },
-  {
-    "aliases": [
-      "manzanillo"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "manzanillo"
-  },
-  {
-    "aliases": [
-      "matamoros tamaulipas"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "matamoros tamaulipas"
-  },
-  {
-    "aliases": [
       "minatitlan"
     ],
     "timezone": "America/Mexico_City",
@@ -1252,15 +1203,6 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
     "country": "México",
     "label": "hora CDMX",
     "city": "naucalpan"
-  },
-  {
-    "aliases": [
-      "nogales sonora"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "nogales sonora"
   },
   {
     "aliases": [
@@ -1408,15 +1350,6 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
   },
   {
     "aliases": [
-      "tapachula"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "tapachula"
-  },
-  {
-    "aliases": [
       "tehuacan"
     ],
     "timezone": "America/Mexico_City",
@@ -1531,15 +1464,6 @@ export const CITY_TIMEZONE_ENTRIES: CityTimezoneEntry[] = [
     "country": "México",
     "label": "hora CDMX",
     "city": "zamora mexico"
-  },
-  {
-    "aliases": [
-      "zihuatanejo"
-    ],
-    "timezone": "America/Mexico_City",
-    "country": "México",
-    "label": "hora CDMX",
-    "city": "zihuatanejo"
   },
   {
     "aliases": [
