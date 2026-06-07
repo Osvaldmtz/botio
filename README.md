@@ -199,6 +199,22 @@ Requires `GROQ_API_KEY` in `.env.local`. The script downloads a public OGG sampl
 - Non-audio media (images, video) receives a friendly fallback — not processed yet
 - Requires migration `0007_message_metadata.sql` to persist `source` and `metadata` on `messages`
 
+## Sprint 3 — Daily AI Analytics
+
+Nightly cron at **05:00 UTC** (~23:00 CDMX) analyzes the day's Kalyo conversations with **Claude Sonnet 4.6** and sends an executive report to Telegram.
+
+**Flow:** load conversations/messages for the CDMX calendar day → compute metrics → Sonnet JSON analysis → persist in `daily_reports` → Telegram to `TELEGRAM_ADMIN_CHAT_ID`.
+
+**Cron:** `/api/cron/daily-analytics` (schedule `0 5 * * *` in `vercel.json`).
+
+**Manual run** (optional date override `YYYY-MM-DD`):
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-host>/api/cron/daily-analytics?date=2026-06-06"
+```
+
+Requires migrations `0006_lead_enrichment.sql` (lead fields) and `0008_daily_reports.sql` (report storage).
+
 ## Conversation funnel metrics
 
 `/admin/conversations` shows a 20-day funnel summary: ghost rate (2-message threads), engagement (3+ messages), lead capture rate, follow-ups sent, and guard closures.
