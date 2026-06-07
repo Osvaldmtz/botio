@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { formatRelativeTime } from '../lib/format';
+import { formatRelativeTime, isHandoffActive } from '../lib/format';
 import type { ConversationDetail } from '../lib/conversation-queries';
 
 const ADMIN_NAME_KEY = 'botio_handoff_name';
@@ -71,7 +71,7 @@ export function HandoffControls({ detail, onUpdated }: Props) {
     }
   }
 
-  if (detail.handoff_active) {
+  if (isHandoffActive(detail)) {
     return (
       <section className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
         <p className="text-sm text-orange-200">

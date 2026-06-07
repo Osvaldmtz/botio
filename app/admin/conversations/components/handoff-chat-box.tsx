@@ -56,7 +56,10 @@ export function HandoffChatBox({ detail, adminName, onSent }: Props) {
   }
 
   return (
-    <div className="border-t border-bg-border bg-bg-elevated p-4">
+    <section className="rounded-xl border border-orange-500/30 bg-bg-elevated p-4">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-orange-300">
+        Responder por WhatsApp
+      </h3>
       {sentFlash ? (
         <p className="mb-2 text-xs text-accent">✓ Mensaje enviado por WhatsApp</p>
       ) : null}
@@ -82,6 +85,6 @@ export function HandoffChatBox({ detail, adminName, onSent }: Props) {
         </button>
       </div>
       <p className="mt-1 text-[10px] text-fg-muted">Enter envía · Shift+Enter nueva línea</p>
-    </div>
+    </section>
   );
 }

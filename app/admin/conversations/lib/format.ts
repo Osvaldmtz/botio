@@ -32,6 +32,10 @@ export function whatsAppUrl(phone: string): string {
   return `https://wa.me/${phone.replace(/\D/g, '')}`;
 }
 
+export function isHandoffActive(conv: { handoff_active?: boolean | null } | null): boolean {
+  return Boolean(conv?.handoff_active);
+}
+
 export function conversationStatus(conv: {
   is_closed: boolean;
   needs_reply: boolean;

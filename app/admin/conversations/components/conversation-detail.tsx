@@ -6,6 +6,7 @@ import {
   conversationStatus,
   extractLeadName,
   formatRelativeTime,
+  isHandoffActive,
   temperatureBadge,
   whatsAppUrl,
 } from '../lib/format';
@@ -58,7 +59,7 @@ export function ConversationDetailPanel({
   }, [conversationId, loadDetail]);
 
   useEffect(() => {
-    if (!conversationId || !detail?.handoff_active) return;
+    if (!conversationId || !isHandoffActive(detail)) return;
     const interval = setInterval(() => {
       void loadDetail(conversationId);
     }, 10_000);
@@ -93,7 +94,7 @@ export function ConversationDetailPanel({
         onClick={onClose}
         aria-hidden
       />
-      <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-bg-border bg-bg shadow-2xl lg:static lg:z-0 lg:max-w-lg lg:shadow-none">
+      <aside className="fixed inset-y-0 right-0 z-50 flex h-screen max-h-screen w-full max-w-md min-h-0 flex-col border-l border-bg-border bg-bg shadow-2xl lg:static lg:z-0 lg:max-w-lg lg:shadow-none">
         <header className="flex items-center justify-between border-b border-bg-border px-4 py-3">
           <div>
             <h2 className="font-semibold text-fg">Detalle</h2>
@@ -110,7 +111,7 @@ export function ConversationDetailPanel({
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {loading && !detail ? (
             <p className="p-4 text-sm text-fg-muted">Cargando conversación…</p>
           ) : error ? (
@@ -118,6 +119,14 @@ export function ConversationDetailPanel({
           ) : detail ? (
             <div className="space-y-4 p-4">
               <HandoffControls detail={detail} onUpdated={handleUpdated} />
+
+              {isHandoffActive(detail) ? (
+                <HandoffChatBox
+                  detail={detail}
+                  adminName={getHandoffAdminName()}
+                  onSent={handleUpdated}
+                />
+              ) : null}
 
               <section className="rounded-xl border border-bg-border bg-bg-elevated p-4">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
@@ -231,14 +240,6 @@ export function ConversationDetailPanel({
             </div>
           ) : null}
         </div>
-
-        {detail?.handoff_active ? (
-          <HandoffChatBox
-            detail={detail}
-            adminName={getHandoffAdminName()}
-            onSent={handleUpdated}
-          />
-        ) : null}
       </aside>
     </>
   );
