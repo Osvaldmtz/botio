@@ -21,6 +21,7 @@
     "@upstash/qstash": "^2.10.1",
     "date-fns": "^4.4.0",
     "geist": "^1.7.0",
+    "googleapis": "^173.0.0",
     "lucide-react": "^1.17.0",
     "next": "14.2.18",
     "react": "^18",

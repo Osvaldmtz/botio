@@ -10,6 +10,7 @@ export function AdminHeader() {
   const pathname = usePathname();
   const isPipeline = pathname?.includes('/pipeline');
   const isExperiments = pathname?.includes('/experiments');
+  const isDemos = pathname?.includes('/demos');
   const isConversations =
     pathname?.startsWith('/admin/conversations') && !isPipeline;
 
@@ -23,6 +24,11 @@ export function AdminHeader() {
       href: '/admin/conversations/pipeline',
       label: 'Pipeline',
       active: isPipeline,
+    },
+    {
+      href: '/admin/demos',
+      label: 'Demos',
+      active: isDemos,
     },
     {
       href: '/admin/experiments',
@@ -47,9 +53,9 @@ export function AdminHeader() {
 
         <div className="ml-auto flex items-center gap-1">
           <Link
-            href="/admin"
+            href="/admin/calendar-settings"
             className="flex h-8 w-8 items-center justify-center rounded text-fg-muted transition-colors hover:bg-bg-subtle hover:text-fg"
-            title="Configuración"
+            title="Google Calendar"
           >
             <Settings className="h-4 w-4" strokeWidth={1.5} />
           </Link>

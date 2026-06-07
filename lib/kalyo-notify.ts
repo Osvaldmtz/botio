@@ -40,6 +40,7 @@ const WHATSAPP_HEADERS: Record<string, string> = {
   escalation: '⚠️ Escalación de conversación',
   activate_trial: '🎁 Trial Pro activado',
   trial_activated_via_botio: '🎁 Trial activado vía Botio',
+  demo_scheduled: '📅 Demo agendada',
 };
 
 const TEMPERATURE_EMOJI: Record<EnrichedLead['temperature'], string> = {

@@ -3,8 +3,21 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { GenerateReplyOptions } from '@/lib/claude';
 import { activateProTrial } from '@/lib/kalyo';
 import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
-import { setPipelineStageTrial } from '@/lib/pipeline-utils';
+import { movePipelineStage, setPipelineStageTrial } from '@/lib/pipeline-utils';
+import { normalizeStage, STAGE_RANK } from '@/lib/pipeline';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
+import {
+  clearPendingDemoSlots,
+  loadPendingDemoSlots,
+  savePendingDemoSlots,
+} from '@/lib/demo-conversation';
+import {
+  createDemoEvent,
+  formatDemoConfirmationMessage,
+  formatSlotsForBot,
+  getAvailableSlots,
+  isValidEmail,
+} from '@/lib/google-calendar';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
 import { recordOutcome } from '@/lib/ab-testing';
@@ -34,9 +47,6 @@ import { es } from 'date-fns/locale';
 
 const KALYO_TRIAL_DEEP_LINK =
   'https://wa.me/15559374917?text=Hola,%20quiero%20mi%20prueba%20gratis%20de%20Kalyo';
-
-const CALENDLY_URL =
-  process.env.CALENDLY_URL ?? 'https://calendly.com/osvaldo-21/demo-kalyo';
 
 const KALYO_PERSUASION_BLOCKS = `
 
@@ -69,7 +79,7 @@ Cuando el usuario muestra duda final sobre activar trial:
 
 BLOQUE: DEMO PERSONALIZADA
 Si el perfil es clinic_team, institution_decision_maker, O el usuario explícitamente pide "demo" / "llamada" / "ver en vivo" / "agendar":
-Ofrecer: "Te puedo agendar una demo en vivo de 15 minutos. Aquí mi calendario: ${CALENDLY_URL}"
+Sigue el BLOQUE DEMO — AGENDADO AUTOMÁTICO (agenda en Google Calendar, no links externos).
 
 NO ofrecer demo proactivamente a perfiles private_practice o student (genera fricción innecesaria).
 `;
@@ -256,6 +266,38 @@ REGLAS:
 - NUNCA digas "click en Confirmar suscripción Pro"
 - El trial es SIEMPRE el primer paso; no hay alternativa de "pagar directo"
 - Si alguien pide pagar sin probar primero, ofrece el trial: "Te recomiendo arrancar con los 15 días gratis para que veas todo en acción. Si te gusta, al vencer pasamos al plan pagado. ¿Te lo activo?"
+
+---
+
+BLOQUE DEMO — AGENDADO AUTOMÁTICO
+
+Cuándo ofrecer demo:
+- Perfil clinic_team o institution_decision_maker
+- Usuario explícitamente pide: "demo", "llamada", "ver en vivo", "reunión", "agendar"
+
+FLUJO:
+
+Paso 1 — Ofrecer:
+"Te puedo agendar una demo personalizada de 15 minutos con Osvaldo, el fundador de Kalyo. ¿Te animas?"
+
+Paso 2 — Si acepta, pedir datos:
+"Genial. Necesito tu nombre completo y email para enviarte la invitación."
+
+Paso 3 — Cuando tengas nombre + email, opcionalmente preguntar preferencia:
+"¿Hay algún día u horario que te venga mejor? (ej: mañana en la tarde, jueves por la mañana)"
+Si no responde con preferencia clara, usar any.
+
+Paso 4 — Llamar tool schedule_demo con email + nombre + preferencias detectadas
+
+Paso 5 — Mostrar los 3 slots y esperar elección del cliente (1, 2 o 3)
+
+Paso 6 — Cuando elija un slot, llamar tool confirm_demo_slot
+
+IMPORTANTE:
+- NUNCA dar link de Calendly ni links externos de agendamiento
+- NUNCA inventar fechas/horas — siempre usar las tools schedule_demo y confirm_demo_slot
+- Si la tool retorna error de disponibilidad, ofrecer próxima semana
+- Validar que el email tenga formato correcto antes de llamar schedule_demo
 
 ---
 
@@ -462,6 +504,53 @@ const CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL: Anthropic.Messages.Tool = {
   },
 };
 
+const SCHEDULE_DEMO_TOOL: Anthropic.Messages.Tool = {
+  name: 'schedule_demo',
+  description:
+    'Inicia el flujo de agendar una demo: consulta disponibilidad en Google Calendar y muestra 3 slots. SOLO usar cuando el usuario ya pidió la demo y confirmó, con nombre y email válidos.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      customer_email: {
+        type: 'string',
+        description: 'Email del cliente para la invitación.',
+      },
+      customer_name: {
+        type: 'string',
+        description: 'Nombre completo del cliente.',
+      },
+      preferred_day: {
+        type: 'string',
+        description:
+          'Día preferido (opcional): mañana, pasado_mañana, martes, miércoles, etc. Si no especificó, usar "any".',
+      },
+      preferred_time: {
+        type: 'string',
+        description: 'Hora preferida (opcional): mañana, tarde, X PM. Si no especificó, usar "any".',
+      },
+    },
+    required: ['customer_email', 'customer_name'],
+  },
+};
+
+const CONFIRM_DEMO_SLOT_TOOL: Anthropic.Messages.Tool = {
+  name: 'confirm_demo_slot',
+  description:
+    'Confirma un slot de demo (1, 2 o 3) y crea el evento en Google Calendar con Google Meet. Usar cuando el cliente eligió uno de los slots ofrecidos previamente.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      slot_number: {
+        type: 'number',
+        description: '1, 2 o 3 según lo que eligió el cliente.',
+      },
+      customer_email: { type: 'string' },
+      customer_name: { type: 'string' },
+    },
+    required: ['slot_number', 'customer_email', 'customer_name'],
+  },
+};
+
 const NOTIFY_SALES_TEAM_TOOL: Anthropic.Messages.Tool = {
   name: 'notify_sales_team',
   description:
@@ -664,6 +753,8 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
       tools: [
         ACTIVATE_PRO_TRIAL_TOOL,
         CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL,
+        SCHEDULE_DEMO_TOOL,
+        CONFIRM_DEMO_SLOT_TOOL,
         NOTIFY_SALES_TEAM_TOOL,
       ],
       toolHandlers: {
@@ -751,6 +842,179 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             bot_message:
               'Tuve un problema creando la cuenta. El equipo ya fue notificado — ¿puedes intentar de nuevo en unos minutos?',
           };
+        },
+        schedule_demo: async (input: unknown) => {
+          const obj =
+            typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+          const email = typeof obj.customer_email === 'string' ? obj.customer_email.trim() : '';
+          const name = typeof obj.customer_name === 'string' ? obj.customer_name.trim() : '';
+          const preferredDay =
+            typeof obj.preferred_day === 'string' && obj.preferred_day.trim()
+              ? obj.preferred_day.trim()
+              : 'any';
+          const preferredTime =
+            typeof obj.preferred_time === 'string' && obj.preferred_time.trim()
+              ? obj.preferred_time.trim()
+              : 'any';
+
+          if (!isValidEmail(email)) {
+            return {
+              status: 'error',
+              bot_message: 'El email no parece válido. ¿Me lo compartes de nuevo?',
+            };
+          }
+          if (!name) {
+            return {
+              status: 'error',
+              bot_message: 'Necesito tu nombre completo para agendar la demo.',
+            };
+          }
+
+          try {
+            let slots = await getAvailableSlots({
+              preferredDay,
+              preferredTime,
+            });
+            if (slots.length === 0) {
+              slots = await getAvailableSlots({ preferredDay: 'any', preferredTime: 'any' });
+            }
+            if (slots.length === 0) {
+              return {
+                status: 'error',
+                bot_message:
+                  'No encontré horarios en los próximos días. ¿Te funciona algún día de la próxima semana?',
+              };
+            }
+
+            const supabase = createAdminClient();
+            await savePendingDemoSlots(supabase, conversationId, {
+              slots,
+              customer_email: email,
+              customer_name: name,
+              offered_at: new Date().toISOString(),
+            });
+
+            return {
+              status: 'success',
+              slots,
+              bot_message: formatSlotsForBot(slots),
+            };
+          } catch (err) {
+            console.error('[schedule_demo] failed', err);
+            const message = err instanceof Error ? err.message : 'unknown_error';
+            return {
+              status: 'error',
+              bot_message:
+                message.includes('not connected')
+                  ? 'El calendario aún no está conectado. Un asesor te contactará para agendar.'
+                  : 'Tuve un problema consultando disponibilidad. ¿Intentamos de nuevo en un momento?',
+            };
+          }
+        },
+        confirm_demo_slot: async (input: unknown) => {
+          const obj =
+            typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+          const slotNumber =
+            typeof obj.slot_number === 'number'
+              ? obj.slot_number
+              : parseInt(String(obj.slot_number ?? ''), 10);
+          const email = typeof obj.customer_email === 'string' ? obj.customer_email.trim() : '';
+          const name = typeof obj.customer_name === 'string' ? obj.customer_name.trim() : '';
+
+          if (!slotNumber || slotNumber < 1 || slotNumber > 3) {
+            return {
+              status: 'error',
+              bot_message: '¿Cuál horario prefieres? Responde con 1, 2 o 3.',
+            };
+          }
+
+          const supabase = createAdminClient();
+          const pending = await loadPendingDemoSlots(supabase, conversationId);
+          if (!pending?.slots?.length) {
+            return {
+              status: 'error',
+              bot_message:
+                'No tengo horarios pendientes. ¿Quieres que consulte disponibilidad de nuevo?',
+            };
+          }
+
+          const slot = pending.slots[slotNumber - 1];
+          if (!slot) {
+            return {
+              status: 'error',
+              bot_message: 'Ese número no corresponde a un horario válido. Elige 1, 2 o 3.',
+            };
+          }
+
+          const { data: conv } = await supabase
+            .from('conversations')
+            .select('pipeline_stage, lead_score, lead_intent, lead_signals, bot_id')
+            .eq('id', conversationId)
+            .maybeSingle();
+
+          try {
+            const scheduledAt = new Date(slot.start);
+            const result = await createDemoEvent({
+              customerEmail: email || pending.customer_email,
+              customerName: name || pending.customer_name,
+              customerPhone: senderFrom,
+              scheduledAt,
+              botContext: {
+                conversationId,
+                botId: conv?.bot_id ?? bot.id,
+                leadScore: conv?.lead_score,
+                leadIntent: conv?.lead_intent,
+                signals: Array.isArray(conv?.lead_signals)
+                  ? (conv.lead_signals as string[])
+                  : null,
+              },
+            });
+
+            await clearPendingDemoSlots(supabase, conversationId);
+
+            const current = normalizeStage(conv?.pipeline_stage ?? 'new');
+            if (current !== 'paid' && current !== 'lost' && STAGE_RANK.qualified > STAGE_RANK[current]) {
+              await movePipelineStage(supabase, conversationId, current, 'qualified', null, 'auto');
+            }
+
+            if (creds) {
+              await notifySalesTeam(
+                {
+                  name: name || pending.customer_name,
+                  email: email || pending.customer_email,
+                  phone: senderFrom,
+                  whatsapp_number: senderFrom,
+                  reason: 'demo_scheduled',
+                  preferred_time: slot.label_es,
+                  conversation_summary: `Demo agendada para ${slot.label_es}`,
+                  conversationId,
+                },
+                creds,
+              );
+            }
+
+            await recordOutcome(supabase, conversationId, 'demo_scheduled', {
+              demo_id: result.demoId,
+              scheduled_at: slot.start,
+            });
+
+            return {
+              status: 'success',
+              demo_id: result.demoId,
+              meet_link: result.meetLink,
+              bot_message: formatDemoConfirmationMessage(
+                scheduledAt,
+                email || pending.customer_email,
+              ),
+            };
+          } catch (err) {
+            console.error('[confirm_demo_slot] failed', err);
+            return {
+              status: 'error',
+              bot_message:
+                'No pude confirmar ese horario. ¿Probamos con otro slot o consulto disponibilidad de nuevo?',
+            };
+          }
         },
         notify_sales_team: async (input: unknown) => {
           console.log('[notify_sales_team] tool called', JSON.stringify(input));
