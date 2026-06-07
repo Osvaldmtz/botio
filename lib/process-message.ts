@@ -9,6 +9,7 @@ import {
   mapQuickReplySelection,
 } from '@/lib/kalyo-messages';
 import { isAdPrefillMessage, isKalyoBotId, touchConversation } from '@/lib/conversation-utils';
+import { enrichAndNotifyLead, type ConversationMessage } from '@/lib/lead-enrichment';
 import { checkCache } from '@/lib/response-cache';
 import { selectModel } from '@/lib/model-router';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -269,6 +270,29 @@ export async function processIncomingMessage(
       content: m.content,
     }));
 
+  const conversationMessages: ConversationMessage[] = (historyRows ?? [])
+    .slice()
+    .reverse()
+    .map((m) => ({
+      role: m.role,
+      content: m.content,
+      created_at: (m as { created_at: string }).created_at,
+    }));
+
+  if (isKalyoBotId(bot.id)) {
+    try {
+      await enrichAndNotifyLead(supabase, {
+        conversationId: conversation.id,
+        phone: conversation.customer_phone,
+        conversationMessages,
+        email: typeof metadata.email === 'string' ? metadata.email : undefined,
+        name: typeof metadata.name === 'string' ? metadata.name : undefined,
+      });
+    } catch (enrichErr) {
+      console.error('[lead-enrichment] failed during message processing', enrichErr);
+    }
+  }
+
   const leadCaptured = conversation.lead_captured;
 
   const { count: userMsgCount, error: countError } = await supabase
@@ -349,6 +373,7 @@ export async function processIncomingMessage(
     bot: bot as BotRow,
     senderFrom: conversation.customer_phone,
     conversationId: conversation.id,
+    conversationMessages,
   });
 
   let systemPrompt =

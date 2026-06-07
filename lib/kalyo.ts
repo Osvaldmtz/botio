@@ -1,23 +1,11 @@
 import 'server-only';
-import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { getKalyoClient } from '@/lib/kalyo-supabase';
+
+export { getKalyoClient };
 
 const TRIAL_DAYS = 15;
 const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
-
-let cached: SupabaseClient | null = null;
-
-export function getKalyoClient(): SupabaseClient {
-  if (cached) return cached;
-  const url = process.env.KALYO_SUPABASE_URL;
-  const key = process.env.KALYO_SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error('Missing KALYO_SUPABASE_URL or KALYO_SUPABASE_SERVICE_KEY');
-  }
-  cached = createSupabaseClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  return cached;
-}
 
 export type ActivateProTrialResult =
   | { status: 'success'; expires_at: string }

@@ -1,6 +1,6 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { enrichLead, type ConversationMessage } from '@/lib/lead-enrichment';
+import { enrichAndNotifyLead, type ConversationMessage } from '@/lib/lead-enrichment';
 import { isKalyoBotId } from '@/lib/conversation-utils';
 
 export async function maybeEnrichConversationOnHandoff(
@@ -19,25 +19,9 @@ export async function maybeEnrichConversationOnHandoff(
 
   if (error || !rows?.length) return;
 
-  const enriched = enrichLead({
+  await enrichAndNotifyLead(supabase, {
+    conversationId,
     phone,
     conversationMessages: rows as ConversationMessage[],
   });
-
-  const { error: updateError } = await supabase
-    .from('conversations')
-    .update({
-      lead_score: enriched.score,
-      lead_temperature: enriched.temperature,
-      lead_country: enriched.country,
-      lead_city: enriched.city ?? null,
-      lead_intent: enriched.intent,
-      lead_signals: enriched.signals,
-      enriched_at: new Date().toISOString(),
-    })
-    .eq('id', conversationId);
-
-  if (updateError) {
-    console.error('[handoff] lead enrichment update failed', updateError);
-  }
 }

@@ -184,6 +184,9 @@ function recommendedActionFromScore(score: number): string {
   return '❄️ Lead frío — descartar o nurturing';
 }
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { notifyHotLeadInstant } from '@/lib/notify-hot-lead';
+
 export function enrichLead(input: LeadEnrichmentInput): EnrichedLead {
   const text = allUserText(input.conversationMessages);
   const userMsgCount = userMessages(input.conversationMessages).length;
@@ -223,4 +226,67 @@ export function enrichLead(input: LeadEnrichmentInput): EnrichedLead {
     intent,
     recommendedAction: recommendedActionFromScore(score),
   };
+}
+
+export async function enrichAndNotifyLead(
+  supabase: SupabaseClient,
+  params: {
+    conversationId: string;
+    phone: string;
+    conversationMessages: ConversationMessage[];
+    email?: string;
+    name?: string;
+  },
+): Promise<EnrichedLead> {
+  const { data: convRow } = await supabase
+    .from('conversations')
+    .select('lead_signals, customer_phone')
+    .eq('id', params.conversationId)
+    .maybeSingle();
+
+  const enriched = enrichLead({
+    phone: params.phone,
+    conversationMessages: params.conversationMessages,
+    email: params.email,
+    name: params.name,
+  });
+
+  const existingSignals = Array.isArray(convRow?.lead_signals)
+    ? (convRow.lead_signals as string[])
+    : [];
+  const hotAlertSignals = existingSignals.filter((s) => s.startsWith('hot_alert:'));
+  const mergedSignals = [...enriched.signals, ...hotAlertSignals];
+
+  const { error: updateError } = await supabase
+    .from('conversations')
+    .update({
+      lead_score: enriched.score,
+      lead_temperature: enriched.temperature,
+      lead_country: enriched.country,
+      lead_city: enriched.city ?? null,
+      lead_intent: enriched.intent,
+      lead_signals: mergedSignals,
+      enriched_at: new Date().toISOString(),
+    })
+    .eq('id', params.conversationId);
+
+  if (updateError) {
+    console.error('[lead-enrichment] persist failed', updateError);
+  }
+
+  if (enriched.temperature === 'hot' && enriched.score >= 70) {
+    await notifyHotLeadInstant(
+      supabase,
+      {
+        id: params.conversationId,
+        customer_phone: params.phone,
+        lead_signals: mergedSignals,
+      },
+      enriched,
+      params.conversationMessages,
+      params.name,
+    );
+  }
+
+  return enriched;
 }

@@ -2,11 +2,17 @@ import 'server-only';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { GenerateReplyOptions } from '@/lib/claude';
 import { activateProTrial } from '@/lib/kalyo';
+import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
 import { setPipelineStageTrial } from '@/lib/pipeline-utils';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
 import { recordOutcome } from '@/lib/ab-testing';
+import { detectPsychologistProfile } from '@/lib/profile-detection';
+import { buildProfilePromptBlock } from '@/lib/profile-flows';
+import type { ConversationMessage } from '@/lib/lead-enrichment';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 // --------------------------------------------------------------------------
 // Kalyo-specific Claude wiring shared by both the Twilio and Meta webhooks.
@@ -28,6 +34,45 @@ import { recordOutcome } from '@/lib/ab-testing';
 
 const KALYO_TRIAL_DEEP_LINK =
   'https://wa.me/15559374917?text=Hola,%20quiero%20mi%20prueba%20gratis%20de%20Kalyo';
+
+const CALENDLY_URL =
+  process.env.CALENDLY_URL ?? 'https://calendly.com/osvaldo-21/demo-kalyo';
+
+const KALYO_PERSUASION_BLOCKS = `
+
+BLOQUE: SOCIAL PROOF
+Cuando el usuario muestra interés genuino o duda sobre invertir, menciona naturalmente (NO en cada mensaje, solo cuando fluye):
+- "María García, psicóloga privada en CDMX, lleva 3 meses con Kalyo y atiende 28 pacientes"
+- "Más de 50 psicólogos en LATAM ya usan Kalyo"
+Solo menciona casos cuando hay match (María para psicólogos privados de CDMX/MX, etc.)
+
+BLOQUE: COMPARACIÓN COMPETENCIA
+Si el usuario menciona AssessmentMind o Psiris, responde con honestidad y diferenciación:
+
+vs AssessmentMind:
+- Kalyo está hecho para LATAM (precios en USD pero contexto LATAM, evaluaciones en español validadas)
+- Kalyo incluye reportes IA con interpretación clínica (AssessmentMind no)
+- Kalyo es self-service, no requiere reunión de ventas
+
+vs Psiris:
+- Kalyo tiene +100 evaluaciones validadas vs ~30 de Psiris
+- Kalyo tiene Plan Max con SOAP IA y videollamadas (Psiris no)
+- Kalyo: $29 USD/mes vs Psiris precio variable por uso
+
+NO inventar features que Kalyo NO tiene. Si pregunta algo que no sabes con certeza, di "no tengo info exacta de eso, pero te puedo conectar con el equipo".
+
+BLOQUE: GARANTÍA Y NO-RIESGO
+Cuando el usuario muestra duda final sobre activar trial:
+- "15 días gratis sin tarjeta de crédito"
+- "Si no te encanta, simplemente no haces nada y la cuenta se queda en plan Starter gratis"
+- "No te vamos a cobrar nada automáticamente"
+
+BLOQUE: DEMO PERSONALIZADA
+Si el perfil es clinic_team, institution_decision_maker, O el usuario explícitamente pide "demo" / "llamada" / "ver en vivo" / "agendar":
+Ofrecer: "Te puedo agendar una demo en vivo de 15 minutos. Aquí mi calendario: ${CALENDLY_URL}"
+
+NO ofrecer demo proactivamente a perfiles private_practice o student (genera fricción innecesaria).
+`;
 
 const KALYO_INSTRUCTIONS_TWILIO = `
 
@@ -64,45 +109,55 @@ Max ($39 USD/mes): todo lo de Pro + notas SOAP con asistencia de IA, agenda de c
 
 ---
 
-REGLA SOBRE OFERTAS DE PRUEBA GRATUITA
+REGLA SOBRE OFERTAS DE PRUEBA GRATUITA — DOS CAMINOS
 
-Cuando ofrezcas la prueba gratuita de 15 días, SIEMPRE explica el flujo completo de 2 pasos:
+Antes de activar un trial, SIEMPRE pregunta: "¿Ya tienes cuenta en Kalyo o es tu primera vez?"
 
-PASO 1 — Registro: "Te registras en app.kalyo.io/login?mode=register (1-2 minutos: nombre, email, contraseña)."
+CAMINO 1 — Usuario YA tiene cuenta:
+- Pide solo su email.
+- Llama activate_pro_trial con ese email.
 
-PASO 2 — Activación: "Me escribes por aquí con el email que usaste y activo tu Pro de 15 días al instante."
+CAMINO 2 — Usuario NUEVO (primera vez):
+- Pide nombre completo + email.
+- Llama create_account_and_activate_trial con email y full_name.
+- El sistema crea la cuenta y activa el trial Pro de 15 días automáticamente (sin registro manual en la web).
 
-NUNCA digas frases como:
-- "Solo necesito tu email para activarte la prueba"
-- "Dame tu email y te activo el trial"
-- "Con tu email lo hago en segundos" (sin mencionar el paso de registro)
-
-Estas frases son engañosas porque la activación requiere que la cuenta exista primero en Kalyo. Si el usuario da un email sin haberse registrado, el flujo falla.
-
-SIEMPRE menciona los 2 pasos en cualquier oferta de prueba.
+NUNCA pidas al usuario nuevo que se registre manualmente en app.kalyo.io si ya te dio nombre y email — usa create_account_and_activate_trial.
 
 ---
 
 HERRAMIENTA 1: activate_pro_trial
 
-Activa una prueba gratuita de 15 días del plan Pro para una cuenta de Kalyo.
+Activa trial Pro 15 días para una cuenta Kalyo EXISTENTE (el usuario ya se registró antes).
 
 Cuándo llamarla:
-- Cuando el usuario pida un trial, una prueba, acceso gratuito al plan Pro, o algo equivalente, Y proporcione un email en la conversación.
-- Llama la herramienta inmediatamente con ese email — el sistema verifica si ya tiene cuenta y responderá con el status correspondiente.
-- Si el usuario pide el trial pero no ha dado un email todavía, recuérdale el flujo de 2 pasos (registro en app.kalyo.io/login?mode=register + enviarte el email) antes de pedirle el email.
-- No la llames si el usuario menciona un email en un contexto no relacionado con el trial.
+- El usuario confirmó que YA tiene cuenta en Kalyo.
+- Pidió trial y proporcionó su email.
 
 Qué responder según el resultado:
-- status "success": Confirma que su prueba Pro de 15 días está activa y que puede ingresar en app.kalyo.io con ese email.
-- status "already_active": Dile que su plan Pro ya está activo e incluye la fecha de vencimiento.
-- status "already_used": Responde con este texto exacto, sin cambiar una sola palabra: "Ya utilizaste tu prueba gratuita de 15 días. Para continuar disfrutando Kalyo Pro puedes suscribirte por $29/mes en kalyo.io 😊"
-- status "not_found": Responde con urgencia y guía al usuario al siguiente paso inmediato. Usa exactamente este texto: "Ese email aún no tiene cuenta en Kalyo. El registro es gratis y toma menos de 2 minutos 👉 app.kalyo.io/login?mode=register\n\nBásicamente: nombre, email y contraseña. Cuando termines, escríbeme de nuevo con tu email y activo tu prueba Pro de 15 días al instante — aquí estaré. ¿Lo haces ahorita?"
-- status "error": Discúlpate y pídele que lo intente de nuevo en un momento.
+- status "success": Confirma trial activo; puede entrar en https://app.kalyo.io/login
+- status "already_active": Plan Pro ya activo; incluye fecha de vencimiento.
+- status "already_used": Texto exacto: "Ya utilizaste tu prueba gratuita de 15 días. Para continuar disfrutando Kalyo Pro puedes suscribirte por $29/mes en kalyo.io 😊"
+- status "not_found": El email no existe — cambia al CAMINO 2: pide nombre completo y usa create_account_and_activate_trial.
+- status "error": Discúlpate y pide reintentar.
 
 ---
 
-HERRAMIENTA 2: notify_sales_team
+HERRAMIENTA 2: create_account_and_activate_trial
+
+Crea cuenta nueva en Kalyo + activa trial Pro 15 días. SOLO cuando el usuario pidió trial explícitamente y confirmó que es su primera vez (o activate_pro_trial devolvió not_found).
+
+Input requerido: email + full_name.
+
+Qué responder según el resultado:
+- success + password: Entrega credenciales, link de login, fecha de fin de trial, y recuerda cambiar password en Configuración → Seguridad.
+- success + reactivated (sin password): Cuenta existente con trial reactivado; puede entrar con su password habitual.
+- error "trial_already_used": "Veo que ya tienes cuenta en Kalyo. ¿Quieres que te ayude a hacer login? https://app.kalyo.io/login"
+- error genérico: Discúlpate; el equipo fue notificado.
+
+---
+
+HERRAMIENTA 3: notify_sales_team
 
 Notifica al equipo de Kalyo sobre un lead o evento relevante.
 
@@ -344,6 +399,7 @@ Cuando este prompt indique "usa el mensaje de despedida", envía EXACTAMENTE est
 INSTRUCCIÓN SOBRE AUDIOS:
 
 Si el usuario te manda un mensaje de voz, el sistema te lo entrega transcrito. Procesa el contenido normalmente como si fuera texto. NO comentes que recibiste audio — actúa naturalmente. Excepción: si el audio dura más de 15 segundos (te lo indica el sistema), puedes empezar tu respuesta con un breve "Te entendí, " o similar antes de responder al contenido.
+${KALYO_PERSUASION_BLOCKS}
 `;
 
 const KALYO_INSTRUCTIONS_META = `
@@ -374,6 +430,26 @@ const ACTIVATE_PRO_TRIAL_TOOL: Anthropic.Messages.Tool = {
       },
     },
     required: ['email'],
+  },
+};
+
+const CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL: Anthropic.Messages.Tool = {
+  name: 'create_account_and_activate_trial',
+  description:
+    'Create a new Kalyo account and activate a 15-day Pro trial. Only use when the user explicitly asked for a trial AND confirmed they are new to Kalyo (first time), with email and full name provided.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      email: {
+        type: 'string',
+        description: 'Psychologist email address.',
+      },
+      full_name: {
+        type: 'string',
+        description: 'Full name of the psychologist.',
+      },
+    },
+    required: ['email', 'full_name'],
   },
 };
 
@@ -427,13 +503,106 @@ export type KalyoMetaBotRow = {
 };
 
 export type BuildKalyoOptionsArgs =
-  | { channel: 'twilio'; bot: KalyoTwilioBotRow; senderFrom: string; conversationId: string }
-  | { channel: 'meta'; bot: KalyoMetaBotRow };
+  | {
+      channel: 'twilio';
+      bot: KalyoTwilioBotRow;
+      senderFrom: string;
+      conversationId: string;
+      conversationMessages?: ConversationMessage[];
+    }
+  | { channel: 'meta'; bot: KalyoMetaBotRow; conversationMessages?: ConversationMessage[] };
 
 export type BuildKalyoOptionsResult = {
   systemSuffix: string;
   options: GenerateReplyOptions;
 };
+
+function formatTrialEndDate(iso: string): string {
+  try {
+    return format(new Date(iso), "d MMM yyyy", { locale: es });
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
+function buildAccountCreationSuccessMessage(
+  email: string,
+  password: string | undefined,
+  trialEndsAt: string,
+  reactivated?: boolean,
+): string {
+  const trialDate = formatTrialEndDate(trialEndsAt);
+  if (reactivated || !password) {
+    return `✅ ¡Trial Pro reactivado!
+
+📧 Email: ${email}
+🔗 Login: https://app.kalyo.io/login
+
+Tu trial Pro de 15 días empezó hoy. Termina el ${trialDate}.
+
+¿Te ayudo con el setup inicial?`;
+  }
+
+  return `✅ ¡Cuenta creada y trial Pro activado!
+
+📧 Email: ${email}
+🔑 Password: ${password}
+🔗 Login: https://app.kalyo.io/login
+
+Cambia tu password al entrar (Configuración → Seguridad).
+
+Tu trial Pro de 15 días empezó hoy. Termina el ${trialDate}.
+
+Si no pediste este trial, ignora este mensaje 🙏
+
+¿Te ayudo con el setup inicial?`;
+}
+
+async function onTrialSuccessSideEffects(
+  conversationId: string,
+  email: string,
+  senderFrom: string,
+  creds: { accountSid: string; authToken: string; from: string } | null,
+  notifyReason: 'activate_trial' | 'trial_activated_via_botio',
+): Promise<void> {
+  if (creds) {
+    notifySalesTeam(
+      {
+        email,
+        phone: senderFrom,
+        whatsapp_number: senderFrom,
+        reason: notifyReason,
+        conversationId,
+      },
+      creds,
+    ).catch((err) => console.error('[kalyo] trial activation notify failed', err));
+  }
+
+  const supabase = createAdminClient();
+  const { data: convRow, error: fetchErr } = await supabase
+    .from('conversations')
+    .select('pipeline_stage')
+    .eq('id', conversationId)
+    .maybeSingle();
+  if (fetchErr) {
+    console.error('[trial] failed to load conversation', fetchErr);
+  }
+
+  const { error } = await supabase
+    .from('conversations')
+    .update({ lead_captured: true })
+    .eq('id', conversationId);
+  if (error) console.error('[trial] failed to mark lead_captured', error);
+
+  try {
+    await setPipelineStageTrial(supabase, conversationId, convRow?.pipeline_stage ?? null);
+  } catch (trialStageErr) {
+    console.error('[trial] pipeline stage update failed', trialStageErr);
+  }
+
+  await recordOutcome(supabase, conversationId, 'trial_activated', { email });
+  await recordOutcome(supabase, conversationId, 'lead_captured', { source: 'trial' });
+}
 
 function isKalyoBot(botId: string): boolean {
   const kalyoBotId = process.env.KALYO_BOT_ID;
@@ -463,7 +632,14 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
   }
 
   // Twilio channel: full tool set.
-  const { bot, senderFrom, conversationId } = args;
+  const { bot, senderFrom, conversationId, conversationMessages = [] } = args;
+
+  const profile = detectPsychologistProfile(conversationMessages);
+  console.log(`[profile-detection] conv=${conversationId} profile=${profile}`);
+  const profileBlock = buildProfilePromptBlock(profile);
+  const systemSuffix =
+    KALYO_INSTRUCTIONS_TWILIO + (profileBlock ? `\n\n${profileBlock}` : '');
+
   const creds =
     bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number
       ? {
@@ -474,9 +650,13 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
       : null;
 
   return {
-    systemSuffix: KALYO_INSTRUCTIONS_TWILIO,
+    systemSuffix,
     options: {
-      tools: [ACTIVATE_PRO_TRIAL_TOOL, NOTIFY_SALES_TEAM_TOOL],
+      tools: [
+        ACTIVATE_PRO_TRIAL_TOOL,
+        CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL,
+        NOTIFY_SALES_TEAM_TOOL,
+      ],
       toolHandlers: {
         activate_pro_trial: async (input: unknown) => {
           const email =
@@ -486,51 +666,82 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           const result = await activateProTrial(email);
 
           if (result.status === 'success') {
-            if (creds) {
-              notifySalesTeam(
-                {
-                  email,
-                  phone: senderFrom,
-                  whatsapp_number: senderFrom,
-                  reason: 'activate_trial',
-                  expires_at: result.expires_at,
-                  conversationId,
-                },
-                creds,
-              ).catch((err) => console.error('[kalyo] trial activation notify failed', err));
-            }
-
-            const supabase = createAdminClient();
-            const { data: convRow, error: fetchErr } = await supabase
-              .from('conversations')
-              .select('pipeline_stage')
-              .eq('id', conversationId)
-              .maybeSingle();
-            if (fetchErr) {
-              console.error('[activate_pro_trial] failed to load conversation', fetchErr);
-            }
-
-            const { error } = await supabase
-              .from('conversations')
-              .update({ lead_captured: true })
-              .eq('id', conversationId);
-            if (error) console.error('[activate_pro_trial] failed to mark lead_captured', error);
-
-            try {
-              await setPipelineStageTrial(
-                supabase,
-                conversationId,
-                convRow?.pipeline_stage ?? null,
-              );
-            } catch (trialStageErr) {
-              console.error('[activate_pro_trial] pipeline stage update failed', trialStageErr);
-            }
-
-            await recordOutcome(supabase, conversationId, 'trial_activated', { email });
-            await recordOutcome(supabase, conversationId, 'lead_captured', { source: 'trial' });
+            await onTrialSuccessSideEffects(
+              conversationId,
+              email,
+              senderFrom,
+              creds,
+              'activate_trial',
+            );
           }
 
           return result;
+        },
+        create_account_and_activate_trial: async (input: unknown) => {
+          const obj =
+            typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+          const email = typeof obj.email === 'string' ? obj.email : '';
+          const fullName = typeof obj.full_name === 'string' ? obj.full_name : '';
+
+          const result = await createKalyoTrialAccount({
+            email,
+            fullName,
+            phone: senderFrom,
+          });
+
+          if (result.success) {
+            await onTrialSuccessSideEffects(
+              conversationId,
+              result.email,
+              senderFrom,
+              creds,
+              'trial_activated_via_botio',
+            );
+
+            return {
+              status: 'success',
+              email: result.email,
+              password: result.password,
+              trial_ends_at: result.trial_ends_at,
+              reactivated: result.reactivated ?? false,
+              bot_message: buildAccountCreationSuccessMessage(
+                result.email,
+                result.password,
+                result.trial_ends_at,
+                result.reactivated,
+              ),
+            };
+          }
+
+          if (result.error === 'trial_already_used') {
+            return {
+              status: 'trial_already_used',
+              bot_message:
+                'Veo que ya tienes cuenta en Kalyo. ¿Quieres que te ayude a hacer login? https://app.kalyo.io/login',
+            };
+          }
+
+          if (creds) {
+            notifySalesTeam(
+              {
+                email: result.email,
+                phone: senderFrom,
+                whatsapp_number: senderFrom,
+                reason: 'escalation',
+                conversation_summary: `Falló create_account_and_activate_trial: ${result.error} — ${result.error_detail ?? ''}`,
+                conversationId,
+              },
+              creds,
+            ).catch((err) => console.error('[account-creator] notify failed', err));
+          }
+
+          return {
+            status: 'error',
+            error: result.error,
+            error_detail: result.error_detail,
+            bot_message:
+              'Tuve un problema creando la cuenta. El equipo ya fue notificado — ¿puedes intentar de nuevo en unos minutos?',
+          };
         },
         notify_sales_team: async (input: unknown) => {
           console.log('[notify_sales_team] tool called', JSON.stringify(input));
