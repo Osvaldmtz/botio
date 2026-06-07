@@ -47,16 +47,63 @@ export function hostLocalToDate(
   return fromZonedTime(localIso, HOST_TIMEZONE);
 }
 
-export function isWithinHostBusinessHours(slotStart: Date, durationMinutes: number): boolean {
-  const start = getHostTzParts(slotStart);
+function isWithinBusinessHoursInZone(
+  slotStart: Date,
+  durationMinutes: number,
+  timezone: string,
+): boolean {
+  const zoned = toZonedTime(slotStart, timezone);
+  const start = {
+    weekday: zoned.getDay(),
+    hour: zoned.getHours(),
+    minute: zoned.getMinutes(),
+  };
   if (!WORK_DAYS.has(start.weekday)) return false;
   if (start.hour < WORK_START_HOUR || start.hour >= WORK_END_HOUR) return false;
 
   const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
-  const end = getHostTzParts(slotEnd);
-  if (end.hour > WORK_END_HOUR) return false;
-  if (end.hour === WORK_END_HOUR && end.minute > 0) return false;
+  const endZoned = toZonedTime(slotEnd, timezone);
+  const endHour = endZoned.getHours();
+  const endMinute = endZoned.getMinutes();
+  if (endHour > WORK_END_HOUR) return false;
+  if (endHour === WORK_END_HOUR && endMinute > 0) return false;
   return true;
+}
+
+export function isWithinHostBusinessHours(slotStart: Date, durationMinutes: number): boolean {
+  return isWithinBusinessHoursInZone(slotStart, durationMinutes, HOST_TIMEZONE);
+}
+
+export function getCustomerTzParts(date: Date, customerTimezone: string): HostTzParts {
+  const zoned = toZonedTime(date, customerTimezone);
+  return {
+    year: zoned.getFullYear(),
+    month: zoned.getMonth() + 1,
+    day: zoned.getDate(),
+    hour: zoned.getHours(),
+    minute: zoned.getMinutes(),
+    weekday: zoned.getDay(),
+  };
+}
+
+export function isWithinCustomerBusinessHours(
+  slotStart: Date,
+  durationMinutes: number,
+  customerTimezone: string,
+): boolean {
+  return isWithinBusinessHoursInZone(slotStart, durationMinutes, customerTimezone);
+}
+
+/** Slot must fall within 9–20h Mon–Sat in both host (Cali) and customer timezones. */
+export function isWithinOverlapBusinessHours(
+  slotStart: Date,
+  durationMinutes: number,
+  customerTimezone: string,
+): boolean {
+  return (
+    isWithinHostBusinessHours(slotStart, durationMinutes) &&
+    isWithinCustomerBusinessHours(slotStart, durationMinutes, customerTimezone)
+  );
 }
 
 export function formatSlotForES(

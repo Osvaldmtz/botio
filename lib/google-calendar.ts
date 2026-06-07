@@ -11,7 +11,9 @@ import {
   getHostTzParts,
   hostLocalToDate,
   HOST_TIMEZONE,
+  isWithinCustomerBusinessHours,
   isWithinHostBusinessHours,
+  isWithinOverlapBusinessHours,
   MIN_ADVANCE_HOURS as CALENDAR_MIN_ADVANCE_HOURS,
   toGoogleHostDateTime,
 } from '@/lib/calendar-slots';
@@ -367,7 +369,47 @@ export type GetAvailableSlotsParams = {
   customerLabel?: string;
 };
 
-export async function getAvailableSlots(params: GetAvailableSlotsParams = {}): Promise<CalendarSlot[]> {
+export type AvailableSlotsResult = {
+  slots: CalendarSlot[];
+  overlap_limited?: boolean;
+};
+
+function resolveCustomerTimezone(
+  customerTimezone?: string,
+  customerPhone?: string,
+): string {
+  return customerTimezone ?? getCustomerTimezone(customerPhone);
+}
+
+function applyOverlapFilter(
+  candidates: Date[],
+  durationMinutes: number,
+  customerTimezone?: string,
+  customerPhone?: string,
+): { candidates: Date[]; overlap_limited: boolean } {
+  if (!customerTimezone && !customerPhone) {
+    return { candidates, overlap_limited: false };
+  }
+
+  const tz = resolveCustomerTimezone(customerTimezone, customerPhone);
+  const overlap = candidates.filter((slotStart) =>
+    isWithinOverlapBusinessHours(slotStart, durationMinutes, tz),
+  );
+
+  if (overlap.length > 0) {
+    return { candidates: overlap, overlap_limited: false };
+  }
+
+  if (candidates.length > 0) {
+    return { candidates, overlap_limited: true };
+  }
+
+  return { candidates: [], overlap_limited: false };
+}
+
+export async function getAvailableSlots(
+  params: GetAvailableSlotsParams = {},
+): Promise<AvailableSlotsResult> {
   const durationMinutes = params.durationMinutes ?? DEFAULT_DURATION_MINUTES;
   const now = new Date();
   const earliest = new Date(now.getTime() + CALENDAR_MIN_ADVANCE_HOURS * 60 * 60 * 1000);
@@ -408,18 +450,31 @@ export async function getAvailableSlots(params: GetAvailableSlotsParams = {}): P
     if (filtered.length > 0) candidates = filtered;
   }
 
-  const selected = pickDistributedSlots(candidates, 3);
-  console.log(`[calendar] found ${selected.length} slots`);
-
-  return selected.map((slotStart) =>
-    buildCalendarSlot(
-      slotStart,
-      durationMinutes,
-      params.customerPhone,
-      params.customerTimezone,
-      params.customerLabel,
-    ),
+  const { candidates: overlapCandidates, overlap_limited } = applyOverlapFilter(
+    candidates,
+    durationMinutes,
+    params.customerTimezone,
+    params.customerPhone,
   );
+  candidates = overlapCandidates;
+
+  const selected = pickDistributedSlots(candidates, 3);
+  console.log(
+    `[calendar] found ${selected.length} slots${overlap_limited ? ' (overlap_limited)' : ''}`,
+  );
+
+  return {
+    slots: selected.map((slotStart) =>
+      buildCalendarSlot(
+        slotStart,
+        durationMinutes,
+        params.customerPhone,
+        params.customerTimezone ?? resolveCustomerTimezone(undefined, params.customerPhone),
+        params.customerLabel,
+      ),
+    ),
+    overlap_limited: overlap_limited || undefined,
+  };
 }
 
 function formatAlternativesBotMessage(prefix: string, alternatives: CalendarSlot[]): string {
@@ -463,7 +518,7 @@ async function findAlternativesNear(
   const windowEnd = new Date(anchor.getTime() + 2 * 60 * 60 * 1000);
 
   const busy = await queryFreeBusyForRange(windowStart, windowEnd);
-  const candidates = generateHostCandidateSlots(windowStart, windowEnd, durationMinutes)
+  let candidates = generateHostCandidateSlots(windowStart, windowEnd, durationMinutes)
     .filter((slotStart) => isWithinHostBusinessHours(slotStart, durationMinutes))
     .filter((slotStart) => {
       const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
@@ -472,6 +527,8 @@ async function findAlternativesNear(
     .sort(
       (a, b) => Math.abs(a.getTime() - anchor.getTime()) - Math.abs(b.getTime() - anchor.getTime()),
     );
+
+  ({ candidates } = applyOverlapFilter(candidates, durationMinutes, customerTimezone, customerPhone));
 
   return candidates
     .slice(0, 3)
@@ -503,7 +560,7 @@ async function getFallbackAlternatives(
     preferredTime: 'any',
   });
   const merged = [...near];
-  for (const slot of general) {
+  for (const slot of general.slots) {
     if (merged.length >= 3) break;
     if (!merged.some((m) => m.start === slot.start)) merged.push(slot);
   }
@@ -520,7 +577,13 @@ export type CheckSpecificTimeParams = {
 };
 
 export type CheckSpecificTimeResult = {
-  status: 'available' | 'busy' | 'outside_hours' | 'too_soon' | 'invalid';
+  status:
+    | 'available'
+    | 'busy'
+    | 'outside_hours'
+    | 'outside_customer_hours'
+    | 'too_soon'
+    | 'invalid';
   slot?: CalendarSlot;
   alternatives?: CalendarSlot[];
   bot_message: string;
@@ -564,6 +627,24 @@ export async function checkSpecificTime(
     };
   }
 
+  if (!isWithinCustomerBusinessHours(slotStart, durationMinutes, tz)) {
+    const alternatives = await getFallbackAlternatives(
+      slotStart,
+      durationMinutes,
+      params.customerPhone,
+      tz,
+      label,
+    );
+    return {
+      status: 'outside_customer_hours',
+      alternatives,
+      bot_message: formatAlternativesBotMessage(
+        `Ese horario está fuera de tu horario laboral (9:00–20:00 ${label}). Te ofrezco:`,
+        alternatives,
+      ),
+    };
+  }
+
   if (!isWithinHostBusinessHours(slotStart, durationMinutes)) {
     const alternatives = await getFallbackAlternatives(
       slotStart,
@@ -576,7 +657,7 @@ export async function checkSpecificTime(
       status: 'outside_hours',
       alternatives,
       bot_message: formatAlternativesBotMessage(
-        'Ese horario está fuera del horario disponible (9:00–20:00 hora Cali). Te ofrezco:',
+        'Ese horario no está disponible (fuera del horario del equipo, 9:00–20:00 hora Cali). Te ofrezco:',
         alternatives,
       ),
     };
@@ -628,14 +709,21 @@ export async function checkSpecificTime(
   };
 }
 
-export function formatSlotsForBot(slots: CalendarSlot[]): string {
+export function formatSlotsForBot(
+  slots: CalendarSlot[],
+  options?: { overlap_limited?: boolean },
+): string {
   if (slots.length === 0) {
     return 'No encontré horarios disponibles en los próximos días. ¿Te funciona algún día de la próxima semana?';
   }
 
   const lines = slots.map((slot, i) => `${i + 1}️⃣ ${slot.label_es}`);
+  const prefix = options?.overlap_limited
+    ? 'Tu zona horaria tiene poco overlap con nuestro horario laboral. Te ofrezco los horarios disponibles incluso fuera de tu rango ideal:\n'
+    : 'Aquí tienes horarios disponibles:\n';
+
   return (
-    'Aquí tienes horarios disponibles:\n' +
+    prefix +
     lines.join('\n') +
     '\n\n¿Cuál te viene mejor? Responde con 1, 2 o 3.'
   );

@@ -29,7 +29,7 @@ async function main() {
   console.log('\n=== 2. Consultar disponibilidad (próximos 3 días) ===');
   const start = new Date(Date.now() + 12 * 60 * 60 * 1000);
   const end = new Date(start.getTime() + 3 * 24 * 60 * 60 * 1000);
-  const slots = await getAvailableSlots({ startDate: start, endDate: end });
+  const { slots } = await getAvailableSlots({ startDate: start, endDate: end });
   console.log(formatSlotsForBot(slots));
 
   if (slots.length === 0) {

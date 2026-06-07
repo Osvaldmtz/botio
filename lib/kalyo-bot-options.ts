@@ -974,15 +974,15 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           }
 
           try {
-            let slots = await getAvailableSlots({
+            let result = await getAvailableSlots({
               preferredDay,
               preferredTime,
               customerPhone: senderFrom,
               customerTimezone: tzMatch.timezone,
               customerLabel: tzMatch.label,
             });
-            if (slots.length === 0) {
-              slots = await getAvailableSlots({
+            if (result.slots.length === 0) {
+              result = await getAvailableSlots({
                 preferredDay: 'any',
                 preferredTime: 'any',
                 customerPhone: senderFrom,
@@ -990,14 +990,15 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
                 customerLabel: tzMatch.label,
               });
             }
-            if (slots.length === 0) {
+            if (result.slots.length === 0) {
               return {
-                status: 'error',
+                status: 'no_overlap_with_business_hours',
                 bot_message:
-                  'No encontré horarios en los próximos días. ¿Te funciona algún día de la próxima semana?',
+                  'No encontré horarios que coincidan con tu zona horaria y nuestro horario laboral. ¿Te funciona algún día de la próxima semana en otro horario?',
               };
             }
 
+            const { slots, overlap_limited } = result;
             const supabase = createAdminClient();
             await savePendingDemoSlots(supabase, conversationId, {
               slots,
@@ -1013,11 +1014,11 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             });
 
             return {
-              status: 'success',
+              status: overlap_limited ? 'no_overlap_with_business_hours' : 'success',
               slots,
               city: tzMatch.city_normalized,
               timezone: tzMatch.timezone,
-              bot_message: formatSlotsForBot(slots),
+              bot_message: formatSlotsForBot(slots, { overlap_limited }),
             };
           } catch (err) {
             console.error('[schedule_demo] failed', err);

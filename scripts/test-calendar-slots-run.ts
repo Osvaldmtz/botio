@@ -3,9 +3,11 @@ import {
   customerLocalToUtcDate,
   formatSlotForES,
   generateHostCandidateSlots,
+  getCustomerTzParts,
   getHostTzParts,
   hostLocalToDate,
   isWithinHostBusinessHours,
+  isWithinOverlapBusinessHours,
   parseRelativeDate,
   parseTimeFromText,
 } from '../lib/calendar-slots';
@@ -70,4 +72,56 @@ assert(
 );
 
 console.log('✓ parseRelativeDate + customer timezone conversion OK');
+
+function assertCustomerHourRange(
+  timezone: string,
+  minHour: number,
+  maxStartHour: number,
+  label: string,
+): void {
+  const rangeStart = hostLocalToDate(2026, 6, 9, 0, 0);
+  const rangeEnd = hostLocalToDate(2026, 6, 16, 0, 0);
+  const all = generateHostCandidateSlots(rangeStart, rangeEnd, 15);
+  const overlap = all.filter((s) => isWithinOverlapBusinessHours(s, 15, timezone));
+
+  assert(overlap.length > 0, `Expected overlap slots for ${label}`);
+
+  for (const slot of overlap) {
+    const parts = getCustomerTzParts(slot, timezone);
+    assert(
+      parts.hour >= minHour,
+      `${label}: slot ${parts.hour}:${parts.minute} before ${minHour}:00 local`,
+    );
+    assert(
+      parts.hour < maxStartHour,
+      `${label}: slot ${parts.hour}:${parts.minute} at or after ${maxStartHour}:00 local`,
+    );
+  }
+
+  const earlyExcluded = all.some((s) => {
+    const p = getCustomerTzParts(s, timezone);
+    return p.hour === minHour - 1 && isWithinHostBusinessHours(s, 15);
+  });
+  if (minHour > 0) {
+    assert(
+      !overlap.some((s) => getCustomerTzParts(s, timezone).hour < minHour),
+      `${label}: early slots should be excluded`,
+    );
+  }
+  void earlyExcluded;
+
+  console.log(`✓ ${label}: ${overlap.length} overlap slots within ${minHour}:00–${maxStartHour}:00 local`);
+}
+
+assertCustomerHourRange('America/Monterrey', 9, 19, 'Monterrey');
+assertCustomerHourRange('America/Mexico_City', 9, 19, 'CDMX');
+assertCustomerHourRange('America/Tijuana', 9, 18, 'Mexicali/Tijuana');
+assertCustomerHourRange('Europe/Madrid', 16, 20, 'Madrid');
+
+const monterreyBad = hostLocalToDate(2026, 6, 9, 9, 0);
+assert(
+  !isWithinOverlapBusinessHours(monterreyBad, 15, 'America/Monterrey'),
+  '9:00 Cali (=8:00 Monterrey) must be excluded for Monterrey client',
+);
+
 console.log('✓ All calendar slot timezone tests passed');
