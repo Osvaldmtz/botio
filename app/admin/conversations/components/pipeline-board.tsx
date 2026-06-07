@@ -5,7 +5,7 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
-  closestCorners,
+  pointerWithin,
   useSensor,
   useSensors,
   useDroppable,
@@ -19,11 +19,34 @@ import { cn } from '@/lib/cn';
 
 type Grouped = Record<PipelineStage, PipelineLead[]>;
 
+function resolveTargetStage(
+  overId: string | number | undefined,
+  collisions: DragEndEvent['collisions'],
+): PipelineStage | null {
+  const overKey = String(overId ?? '');
+  if (PIPELINE_STAGES.includes(overKey as PipelineStage)) {
+    return overKey as PipelineStage;
+  }
+
+  for (const collision of collisions ?? []) {
+    const id = String(collision.id);
+    if (PIPELINE_STAGES.includes(id as PipelineStage)) {
+      return id as PipelineStage;
+    }
+  }
+
+  return null;
+}
+
 type Props = {
   grouped: Grouped;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onMove: (conversationId: string, toStage: PipelineStage) => Promise<void>;
+  onMove: (
+    conversationId: string,
+    toStage: PipelineStage,
+    fromStage: PipelineStage | null,
+  ) => Promise<boolean>;
   activeDragId: string | null;
   setActiveDragId: (id: string | null) => void;
 };
@@ -96,23 +119,22 @@ export function PipelineBoard({
 
   async function handleDragEnd(event: DragEndEvent) {
     setActiveDragId(null);
-    const { active, over } = event;
-    if (!over) return;
+    const { active, over, collisions } = event;
+
+    const toStage = resolveTargetStage(over?.id, collisions);
+    if (!toStage) return;
 
     const conversationId = String(active.id);
-    const toStage = String(over.id) as PipelineStage;
-    if (!PIPELINE_STAGES.includes(toStage)) return;
-
     const fromStage = (active.data.current?.stage as PipelineStage) ?? null;
     if (fromStage === toStage) return;
 
-    await onMove(conversationId, toStage);
+    await onMove(conversationId, toStage, fromStage);
   }
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={pointerWithin}
       onDragStart={(e) => setActiveDragId(String(e.active.id))}
       onDragEnd={(e) => void handleDragEnd(e)}
       onDragCancel={() => setActiveDragId(null)}

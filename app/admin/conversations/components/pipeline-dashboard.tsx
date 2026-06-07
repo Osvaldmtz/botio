@@ -22,6 +22,53 @@ type InitialData = {
 const POLL_MS = 10_000;
 const ADMIN_NAME_KEY = 'botio_handoff_name';
 
+function cloneGrouped(grouped: Grouped): Grouped {
+  return PIPELINE_STAGES.reduce((acc, stage) => {
+    acc[stage] = [...grouped[stage]];
+    return acc;
+  }, {} as Grouped);
+}
+
+function findLeadStage(
+  grouped: Grouped,
+  conversationId: string,
+  hint: PipelineStage | null,
+): { lead: PipelineLead; fromStage: PipelineStage } | null {
+  if (hint) {
+    const idx = grouped[hint].findIndex((l) => l.id === conversationId);
+    if (idx >= 0) {
+      return { lead: grouped[hint][idx], fromStage: hint };
+    }
+  }
+
+  for (const stage of PIPELINE_STAGES) {
+    const idx = grouped[stage].findIndex((l) => l.id === conversationId);
+    if (idx >= 0) {
+      return { lead: grouped[stage][idx], fromStage: stage };
+    }
+  }
+
+  return null;
+}
+
+function applyOptimisticMove(
+  grouped: Grouped,
+  conversationId: string,
+  toStage: PipelineStage,
+  fromStage: PipelineStage | null,
+): Grouped | null {
+  const found = findLeadStage(grouped, conversationId, fromStage);
+  if (!found || found.fromStage === toStage) return null;
+
+  const next = cloneGrouped(grouped);
+  next[found.fromStage] = next[found.fromStage].filter((l) => l.id !== conversationId);
+  next[toStage] = [
+    { ...found.lead, pipeline_stage: toStage, pipeline_stage_updated_at: new Date().toISOString() },
+    ...next[toStage],
+  ];
+  return next;
+}
+
 function buildQuery(filters: PipelineFilterState): string {
   const params = new URLSearchParams();
   if (filters.temperature) params.set('temperature', filters.temperature);
@@ -39,6 +86,7 @@ export function PipelineDashboard({ initial }: { initial: InitialData }) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
   const [filters, setFilters] = useState<PipelineFilterState>({
     temperature: '',
     dateRange: 'all',
@@ -75,25 +123,45 @@ export function PipelineDashboard({ initial }: { initial: InitialData }) {
     return () => clearInterval(interval);
   }, [loadData]);
 
-  async function handleMove(conversationId: string, toStage: PipelineStage) {
+  async function handleMove(
+    conversationId: string,
+    toStage: PipelineStage,
+    fromStage: PipelineStage | null,
+  ): Promise<boolean> {
+    const previousGrouped = grouped;
+    const optimistic = applyOptimisticMove(grouped, conversationId, toStage, fromStage);
+    if (optimistic) {
+      setGrouped(optimistic);
+    }
+    setMoveError(null);
+
     const movedBy =
       typeof window !== 'undefined'
         ? window.localStorage.getItem(ADMIN_NAME_KEY) ?? 'Admin'
         : 'Admin';
 
-    const res = await fetch(`/api/admin/conversations/${conversationId}/pipeline`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to_stage: toStage, moved_by: movedBy }),
-    });
+    try {
+      const res = await fetch(`/api/admin/conversations/${conversationId}/pipeline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to_stage: toStage, moved_by: movedBy }),
+      });
 
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      console.error('[pipeline] move failed', body.error);
-      return;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(typeof body.error === 'string' ? body.error : `HTTP ${res.status}`);
+      }
+
+      void loadData();
+      return true;
+    } catch (error) {
+      setGrouped(previousGrouped);
+      const message =
+        error instanceof Error ? error.message : 'No se pudo mover la tarjeta. Intenta de nuevo.';
+      setMoveError(message);
+      console.error('[pipeline] move failed', error);
+      return false;
     }
-
-    await loadData();
   }
 
   return (
@@ -119,6 +187,21 @@ export function PipelineDashboard({ initial }: { initial: InitialData }) {
         onRefresh={() => void loadData()}
         refreshing={refreshing}
       />
+      {moveError ? (
+        <div
+          role="alert"
+          className="mb-3 flex items-center justify-between rounded-card border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800"
+        >
+          <span>{moveError}</span>
+          <button
+            type="button"
+            onClick={() => setMoveError(null)}
+            className="ml-4 text-red-600 hover:text-red-800"
+          >
+            Cerrar
+          </button>
+        </div>
+      ) : null}
       <div className="min-h-[480px] flex-1">
         <PipelineBoard
           grouped={grouped}

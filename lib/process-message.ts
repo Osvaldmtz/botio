@@ -13,7 +13,7 @@ import { checkCache } from '@/lib/response-cache';
 import { selectModel } from '@/lib/model-router';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { maybeEnrichConversationOnHandoff } from '@/lib/handoff-enrichment';
-import { maybeAutoAdvancePipeline } from '@/lib/pipeline-utils';
+import { clearManualPipelineOverride, maybeAutoAdvancePipeline } from '@/lib/pipeline-utils';
 import {
   buildAbSystemPromptSuffix,
   ensureConversationAssignments,
@@ -79,6 +79,7 @@ type ConversationRow = {
   lead_captured: boolean;
   handoff_active: boolean;
   pipeline_stage: string | null;
+  pipeline_stage_updated_by: string | null;
   customer_phone: string;
   last_message_at: string | null;
 };
@@ -136,7 +137,7 @@ async function upsertConversation(
       { onConflict: 'bot_id,customer_phone' },
     )
     .select(
-      'id, is_closed, lead_captured, handoff_active, pipeline_stage, customer_phone, last_message_at',
+      'id, is_closed, lead_captured, handoff_active, pipeline_stage, pipeline_stage_updated_by, customer_phone, last_message_at',
     )
     .single();
 
@@ -230,6 +231,7 @@ export async function processIncomingMessage(
       conversation.id,
       conversation.customer_phone,
     );
+    await clearManualPipelineOverride(supabase, conversation.id);
     await maybeAutoAdvancePipeline(
       supabase,
       {
@@ -238,6 +240,7 @@ export async function processIncomingMessage(
         lead_captured: conversation.lead_captured,
         customer_phone: conversation.customer_phone,
         last_message_at: nowIso,
+        pipeline_stage_updated_by: null,
       },
       handoffUserCount ?? 1,
     );
@@ -445,7 +448,9 @@ export async function processIncomingMessage(
 
   const { data: freshConv } = await supabase
     .from('conversations')
-    .select('pipeline_stage, lead_captured, customer_phone, last_message_at')
+    .select(
+      'pipeline_stage, pipeline_stage_updated_by, lead_captured, customer_phone, last_message_at',
+    )
     .eq('id', conversation.id)
     .maybeSingle();
 
@@ -454,6 +459,7 @@ export async function processIncomingMessage(
   }
 
   if (freshConv) {
+    await clearManualPipelineOverride(supabase, conversation.id);
     await maybeAutoAdvancePipeline(
       supabase,
       {
@@ -462,6 +468,7 @@ export async function processIncomingMessage(
         lead_captured: freshConv.lead_captured,
         customer_phone: freshConv.customer_phone,
         last_message_at: freshConv.last_message_at,
+        pipeline_stage_updated_by: null,
       },
       totalUserMsgs,
     );

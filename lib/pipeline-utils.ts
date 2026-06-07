@@ -59,12 +59,27 @@ export async function movePipelineStage(
   return true;
 }
 
+export async function clearManualPipelineOverride(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<void> {
+  await supabase
+    .from('conversations')
+    .update({ pipeline_stage_updated_by: null })
+    .eq('id', conversationId)
+    .not('pipeline_stage_updated_by', 'is', null);
+}
+
 export async function maybeAutoAdvancePipeline(
   supabase: SupabaseClient,
   conversation: PipelineConversation,
   userMessageCount: number,
   messages?: PipelineMessage[],
 ): Promise<void> {
+  if (conversation.pipeline_stage_updated_by) {
+    return;
+  }
+
   let msgs: PipelineMessage[] = messages ?? [];
   if (!messages) {
     const { data } = await supabase

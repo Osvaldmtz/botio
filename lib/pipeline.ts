@@ -26,6 +26,7 @@ export type PipelineConversation = {
   lead_captured: boolean;
   customer_phone: string;
   last_message_at: string | null;
+  pipeline_stage_updated_by?: string | null;
 };
 
 export type PipelineMessage = {
