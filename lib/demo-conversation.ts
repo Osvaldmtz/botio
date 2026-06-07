@@ -5,6 +5,7 @@ import type { CustomerTimezone, CustomerTimezoneLabel } from '@/lib/timezone-fro
 
 export type PendingDemoSlots = {
   slots: CalendarSlot[];
+  custom?: CalendarSlot;
   customer_email: string;
   customer_name: string;
   customer_phone?: string;
@@ -52,6 +53,21 @@ export async function loadPendingDemoSlots(
   const pending = metadata.pending_demo_slots;
   if (!pending || typeof pending !== 'object') return null;
   return pending as PendingDemoSlots;
+}
+
+export async function savePendingCustomSlot(
+  supabase: SupabaseClient,
+  conversationId: string,
+  custom: CalendarSlot,
+): Promise<void> {
+  const pending = await loadPendingDemoSlots(supabase, conversationId);
+  if (!pending) {
+    throw new Error('No pending demo slots to attach custom slot');
+  }
+  await savePendingDemoSlots(supabase, conversationId, {
+    ...pending,
+    custom,
+  });
 }
 
 export async function clearPendingDemoSlots(

@@ -1,10 +1,13 @@
 import { fromZonedTime } from 'date-fns-tz';
 import {
+  customerLocalToUtcDate,
   formatSlotForES,
   generateHostCandidateSlots,
   getHostTzParts,
   hostLocalToDate,
   isWithinHostBusinessHours,
+  parseRelativeDate,
+  parseTimeFromText,
 } from '../lib/calendar-slots';
 
 function assert(condition: boolean, message: string): void {
@@ -53,4 +56,18 @@ assert(
 );
 
 console.log(`✓ ${candidates.length} host slots validated (9–20h Bogotá)`);
+
+const mondayDate = parseRelativeDate('el lunes', new Date('2026-06-07T15:00:00Z'));
+assert(mondayDate !== null, 'parseRelativeDate failed for el lunes');
+assert(parseTimeFromText('a las 12:30') === '12:30', 'parseTimeFromText failed');
+
+const mxSlot = customerLocalToUtcDate(mondayDate!, '12:30', 'America/Mexico_City');
+const hostHour = getHostTzParts(mxSlot).hour;
+assert(hostHour === 13, `Expected 13:30 Bogota host hour, got ${hostHour}:30`);
+assert(
+  formatSlotForES(mxSlot, 'America/Mexico_City', 'CDMX').includes('12:30'),
+  'MX display should show 12:30',
+);
+
+console.log('✓ parseRelativeDate + customer timezone conversion OK');
 console.log('✓ All calendar slot timezone tests passed');

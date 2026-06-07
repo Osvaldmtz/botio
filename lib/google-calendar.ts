@@ -5,13 +5,15 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { es } from 'date-fns/locale';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
+  buildCalendarSlot,
+  customerLocalToUtcDate,
   formatSlotForES,
-  formatSlotLabelsForPhone,
   generateHostCandidateSlots,
   getHostTzParts,
   hostLocalToDate,
   HOST_TIMEZONE,
   isWithinHostBusinessHours,
+  MIN_ADVANCE_HOURS as CALENDAR_MIN_ADVANCE_HOURS,
   toGoogleHostDateTime,
 } from '@/lib/calendar-slots';
 import {
@@ -32,6 +34,8 @@ export {
   getHostTzParts,
   hostLocalToDate,
   isWithinHostBusinessHours,
+  parseRelativeDate,
+  parseTimeFromText,
 } from '@/lib/calendar-slots';
 
 const SCOPES = [
@@ -39,8 +43,6 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
 ];
 
-const WORK_START_HOUR = 9;
-const WORK_END_HOUR = 20;
 const DEFAULT_DURATION_MINUTES = 15;
 const MIN_ADVANCE_HOURS = 24;
 
@@ -411,19 +413,199 @@ export async function getAvailableSlots(params: GetAvailableSlotsParams = {}): P
   const selected = pickDistributedSlots(candidates, 3);
   console.log(`[calendar] found ${selected.length} slots`);
 
-  return selected.map((slotStart) => {
-    const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
-    const hostHour = getHostTzParts(slotStart).hour;
-    if (hostHour < WORK_START_HOUR || hostHour >= WORK_END_HOUR) {
-      console.warn(`[calendar] slot outside host hours skipped | host_hour=${hostHour}`);
-    }
-    const labels = formatSlotLabelsForPhone(slotStart, params.customerPhone);
-    return {
-      start: slotStart.toISOString(),
-      end: slotEnd.toISOString(),
-      ...labels,
-    };
+  return selected.map((slotStart) =>
+    buildCalendarSlot(slotStart, durationMinutes, params.customerPhone),
+  );
+}
+
+function formatAlternativesBotMessage(prefix: string, alternatives: CalendarSlot[]): string {
+  if (alternatives.length === 0) {
+    return `${prefix} ¿Quieres que consulte otros días?`;
+  }
+  const lines = alternatives.map((slot, i) => `${i + 1}️⃣ ${slot.label_es}`);
+  return `${prefix}\n${lines.join('\n')}\n\n¿Cuál te viene mejor? Responde con 1, 2 o 3.`;
+}
+
+async function queryFreeBusyForRange(
+  start: Date,
+  end: Date,
+): Promise<{ start?: string | null; end?: string | null }[]> {
+  const calendar = await getCalendarClient();
+  const freebusy = await calendar.freebusy.query({
+    requestBody: {
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+      timeZone: DEMO_TIMEZONE,
+      items: [{ id: DEMO_HOST_EMAIL }],
+    },
   });
+  return freebusy.data.calendars?.[DEMO_HOST_EMAIL]?.busy ?? [];
+}
+
+async function findAlternativesNear(
+  anchor: Date,
+  durationMinutes: number,
+  customerPhone?: string,
+  customerTimezone?: CustomerTimezone,
+): Promise<CalendarSlot[]> {
+  const tz = customerTimezone ?? getCustomerTimezone(customerPhone);
+  const label =
+    customerTimezone === 'America/Bogota'
+      ? 'Bogotá'
+      : customerTimezone === 'America/Mexico_City'
+        ? 'CDMX'
+        : getCustomerTimezoneLabel(customerPhone);
+
+  const now = new Date();
+  const earliest = new Date(now.getTime() + CALENDAR_MIN_ADVANCE_HOURS * 60 * 60 * 1000);
+  const windowStart = new Date(Math.max(anchor.getTime() - 2 * 60 * 60 * 1000, earliest.getTime()));
+  const windowEnd = new Date(anchor.getTime() + 2 * 60 * 60 * 1000);
+
+  const busy = await queryFreeBusyForRange(windowStart, windowEnd);
+  const candidates = generateHostCandidateSlots(windowStart, windowEnd, durationMinutes)
+    .filter((slotStart) => isWithinHostBusinessHours(slotStart, durationMinutes))
+    .filter((slotStart) => {
+      const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
+      return !slotOverlapsBusy(slotStart, slotEnd, busy);
+    })
+    .sort(
+      (a, b) => Math.abs(a.getTime() - anchor.getTime()) - Math.abs(b.getTime() - anchor.getTime()),
+    );
+
+  return candidates
+    .slice(0, 3)
+    .map((slotStart) => buildCalendarSlot(slotStart, durationMinutes, customerPhone, tz, label));
+}
+
+async function getFallbackAlternatives(
+  anchor: Date,
+  durationMinutes: number,
+  customerPhone?: string,
+  customerTimezone?: CustomerTimezone,
+): Promise<CalendarSlot[]> {
+  const near = await findAlternativesNear(anchor, durationMinutes, customerPhone, customerTimezone);
+  if (near.length >= 3) return near;
+
+  const general = await getAvailableSlots({
+    customerPhone,
+    durationMinutes,
+    preferredDay: 'any',
+    preferredTime: 'any',
+  });
+  const merged = [...near];
+  for (const slot of general) {
+    if (merged.length >= 3) break;
+    if (!merged.some((m) => m.start === slot.start)) merged.push(slot);
+  }
+  return merged.slice(0, 3);
+}
+
+export type CheckSpecificTimeParams = {
+  requestedDate: string;
+  requestedTime: string;
+  customerTimezone: CustomerTimezone;
+  customerPhone?: string;
+  durationMinutes?: number;
+};
+
+export type CheckSpecificTimeResult = {
+  status: 'available' | 'busy' | 'outside_hours' | 'too_soon' | 'invalid';
+  slot?: CalendarSlot;
+  alternatives?: CalendarSlot[];
+  bot_message: string;
+};
+
+export async function checkSpecificTime(
+  params: CheckSpecificTimeParams,
+): Promise<CheckSpecificTimeResult> {
+  const durationMinutes = params.durationMinutes ?? DEFAULT_DURATION_MINUTES;
+  const tz = params.customerTimezone;
+  const label = tz === 'America/Bogota' ? 'Bogotá' : 'CDMX';
+
+  let slotStart: Date;
+  try {
+    slotStart = customerLocalToUtcDate(params.requestedDate, params.requestedTime, tz);
+  } catch {
+    return {
+      status: 'invalid',
+      bot_message: 'No pude entender esa fecha u hora. ¿Me la repites? (ej: lunes 12:30)',
+    };
+  }
+
+  const now = new Date();
+  const earliest = new Date(now.getTime() + CALENDAR_MIN_ADVANCE_HOURS * 60 * 60 * 1000);
+
+  if (slotStart.getTime() < earliest.getTime()) {
+    const alternatives = await getFallbackAlternatives(
+      earliest,
+      durationMinutes,
+      params.customerPhone,
+      tz,
+    );
+    return {
+      status: 'too_soon',
+      alternatives,
+      bot_message: formatAlternativesBotMessage(
+        'Necesito al menos 24 horas de anticipación para agendar. Te ofrezco estas opciones:',
+        alternatives,
+      ),
+    };
+  }
+
+  if (!isWithinHostBusinessHours(slotStart, durationMinutes)) {
+    const alternatives = await getFallbackAlternatives(
+      slotStart,
+      durationMinutes,
+      params.customerPhone,
+      tz,
+    );
+    return {
+      status: 'outside_hours',
+      alternatives,
+      bot_message: formatAlternativesBotMessage(
+        'Ese horario está fuera del horario disponible (9:00–20:00 hora Cali). Te ofrezco:',
+        alternatives,
+      ),
+    };
+  }
+
+  const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
+  const busy = await queryFreeBusyForRange(
+    new Date(slotStart.getTime() - 60_000),
+    new Date(slotEnd.getTime() + 60_000),
+  );
+
+  console.log(
+    `[calendar] checking specific time | requested=${params.requestedDate} ${params.requestedTime} ${tz} | utc=${slotStart.toISOString()}`,
+  );
+
+  if (slotOverlapsBusy(slotStart, slotEnd, busy)) {
+    const alternatives = await findAlternativesNear(
+      slotStart,
+      durationMinutes,
+      params.customerPhone,
+      tz,
+    );
+    const fallback =
+      alternatives.length > 0
+        ? alternatives
+        : await getFallbackAlternatives(slotStart, durationMinutes, params.customerPhone, tz);
+    return {
+      status: 'busy',
+      alternatives: fallback,
+      bot_message: formatAlternativesBotMessage(
+        'Ese horario está ocupado, pero te ofrezco alternativas cercanas:',
+        fallback,
+      ),
+    };
+  }
+
+  const slot = buildCalendarSlot(slotStart, durationMinutes, params.customerPhone, tz, label);
+  return {
+    status: 'available',
+    slot,
+    bot_message: `¡Sí! ${slot.label_es} está disponible. ¿Confirmamos?`,
+  };
 }
 
 export function formatSlotsForBot(slots: CalendarSlot[]): string {

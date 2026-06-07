@@ -9,15 +9,18 @@ import { notifySalesTeam } from '@/lib/kalyo-notify';
 import {
   clearPendingDemoSlots,
   loadPendingDemoSlots,
+  savePendingCustomSlot,
   savePendingDemoSlots,
 } from '@/lib/demo-conversation';
 import {
+  checkSpecificTime,
   createDemoEvent,
   formatDemoConfirmationMessage,
   formatSlotsForBot,
   getAvailableSlots,
   isValidEmail,
 } from '@/lib/google-calendar';
+import { getCustomerTimezone } from '@/lib/timezone-from-phone';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
 import { recordOutcome } from '@/lib/ab-testing';
@@ -291,11 +294,18 @@ Paso 4 — Llamar tool schedule_demo con email + nombre + preferencias detectada
 
 Paso 5 — Mostrar los 3 slots y esperar elección del cliente (1, 2 o 3)
 
-Paso 6 — Cuando elija un slot, llamar tool confirm_demo_slot
+Paso 6 — Cuando elija un slot (1, 2 o 3), llamar tool confirm_demo_slot
+
+Si el cliente pide una hora ESPECÍFICA diferente a los 3 slots que ofreciste:
+- Llama check_specific_time con la fecha (YYYY-MM-DD) y hora (HH:MM) en la timezone del cliente
+- Si está disponible → confirma con el cliente y luego llama confirm_demo_slot con slot_number: "custom"
+- Si no está disponible → la tool devuelve alternativas cercanas; ofrécelas al cliente
+
+NUNCA digas "no está disponible" sin haber llamado check_specific_time primero.
 
 IMPORTANTE:
 - NUNCA dar link de Calendly ni links externos de agendamiento
-- NUNCA inventar fechas/horas — siempre usar las tools schedule_demo y confirm_demo_slot
+- NUNCA inventar fechas/horas — siempre usar schedule_demo, check_specific_time y confirm_demo_slot
 - Si la tool retorna error de disponibilidad, ofrecer próxima semana
 - Validar que el email tenga formato correcto antes de llamar schedule_demo
 
@@ -533,16 +543,40 @@ const SCHEDULE_DEMO_TOOL: Anthropic.Messages.Tool = {
   },
 };
 
+const CHECK_SPECIFIC_TIME_TOOL: Anthropic.Messages.Tool = {
+  name: 'check_specific_time',
+  description:
+    'Verifica si una hora específica que pidió el cliente está disponible en Google Calendar. Usar cuando el cliente pide una hora exacta diferente a los 3 slots ofrecidos.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      requested_date: {
+        type: 'string',
+        description: 'Fecha en formato YYYY-MM-DD (ej: 2026-06-08).',
+      },
+      requested_time: {
+        type: 'string',
+        description: 'Hora en formato HH:MM 24h (ej: 12:30).',
+      },
+      customer_timezone: {
+        type: 'string',
+        description: 'Timezone del cliente: America/Mexico_City o America/Bogota.',
+      },
+    },
+    required: ['requested_date', 'requested_time', 'customer_timezone'],
+  },
+};
+
 const CONFIRM_DEMO_SLOT_TOOL: Anthropic.Messages.Tool = {
   name: 'confirm_demo_slot',
   description:
-    'Confirma un slot de demo (1, 2 o 3) y crea el evento en Google Calendar con Google Meet. Usar cuando el cliente eligió uno de los slots ofrecidos previamente.',
+    'Confirma un slot de demo y crea el evento en Google Calendar con Google Meet. Usar cuando el cliente eligió 1/2/3 de los slots ofrecidos, o "custom" tras verificar con check_specific_time.',
   input_schema: {
     type: 'object',
     properties: {
       slot_number: {
-        type: 'number',
-        description: '1, 2 o 3 según lo que eligió el cliente.',
+        type: 'string',
+        description: "1, 2, 3 según lo que eligió el cliente, o 'custom' si confirmó un horario verificado con check_specific_time.",
       },
       customer_email: { type: 'string' },
       customer_name: { type: 'string' },
@@ -754,6 +788,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
         ACTIVATE_PRO_TRIAL_TOOL,
         CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL,
         SCHEDULE_DEMO_TOOL,
+        CHECK_SPECIFIC_TIME_TOOL,
         CONFIRM_DEMO_SLOT_TOOL,
         NOTIFY_SALES_TEAM_TOOL,
       ],
@@ -919,26 +954,71 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             };
           }
         },
-        confirm_demo_slot: async (input: unknown) => {
+        check_specific_time: async (input: unknown) => {
           const obj =
             typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
-          const slotNumber =
-            typeof obj.slot_number === 'number'
-              ? obj.slot_number
-              : parseInt(String(obj.slot_number ?? ''), 10);
-          const email = typeof obj.customer_email === 'string' ? obj.customer_email.trim() : '';
-          const name = typeof obj.customer_name === 'string' ? obj.customer_name.trim() : '';
+          const requestedDate =
+            typeof obj.requested_date === 'string' ? obj.requested_date.trim() : '';
+          const requestedTime =
+            typeof obj.requested_time === 'string' ? obj.requested_time.trim() : '';
+          const tzInput = typeof obj.customer_timezone === 'string' ? obj.customer_timezone.trim() : '';
+          const customerTimezone =
+            tzInput === 'America/Bogota' || tzInput === 'America/Mexico_City'
+              ? tzInput
+              : getCustomerTimezone(senderFrom);
 
-          if (!slotNumber || slotNumber < 1 || slotNumber > 3) {
+          if (!requestedDate || !requestedTime) {
             return {
               status: 'error',
-              bot_message: '¿Cuál horario prefieres? Responde con 1, 2 o 3.',
+              bot_message: '¿Qué día y hora te gustaría? (ej: lunes 12:30)',
             };
           }
 
+          try {
+            const result = await checkSpecificTime({
+              requestedDate,
+              requestedTime,
+              customerTimezone,
+              customerPhone: senderFrom,
+            });
+
+            const supabase = createAdminClient();
+            const pending = await loadPendingDemoSlots(supabase, conversationId);
+
+            if (result.status === 'available' && result.slot) {
+              if (pending) {
+                await savePendingCustomSlot(supabase, conversationId, result.slot);
+              }
+            } else if (result.alternatives?.length && pending) {
+              await savePendingDemoSlots(supabase, conversationId, {
+                ...pending,
+                slots: result.alternatives,
+                custom: undefined,
+              });
+            }
+
+            return result;
+          } catch (err) {
+            console.error('[check_specific_time] failed', err);
+            return {
+              status: 'error',
+              bot_message:
+                'Tuve un problema consultando ese horario. ¿Lo intentamos de nuevo?',
+            };
+          }
+        },
+        confirm_demo_slot: async (input: unknown) => {
+          const obj =
+            typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+          const slotRaw = obj.slot_number;
+          const isCustom =
+            typeof slotRaw === 'string' && slotRaw.toLowerCase() === 'custom';
+          const email = typeof obj.customer_email === 'string' ? obj.customer_email.trim() : '';
+          const name = typeof obj.customer_name === 'string' ? obj.customer_name.trim() : '';
+
           const supabase = createAdminClient();
           const pending = await loadPendingDemoSlots(supabase, conversationId);
-          if (!pending?.slots?.length) {
+          if (!pending) {
             return {
               status: 'error',
               bot_message:
@@ -946,12 +1026,39 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             };
           }
 
-          const slot = pending.slots[slotNumber - 1];
-          if (!slot) {
-            return {
-              status: 'error',
-              bot_message: 'Ese número no corresponde a un horario válido. Elige 1, 2 o 3.',
-            };
+          let slot;
+          if (isCustom) {
+            slot = pending.custom;
+            if (!slot) {
+              return {
+                status: 'error',
+                bot_message:
+                  'Primero verifico ese horario con check_specific_time. ¿Me confirmas el día y la hora?',
+              };
+            }
+          } else {
+            const slotNumber =
+              typeof slotRaw === 'number' ? slotRaw : parseInt(String(slotRaw ?? ''), 10);
+            if (!slotNumber || slotNumber < 1 || slotNumber > 3) {
+              return {
+                status: 'error',
+                bot_message: '¿Cuál horario prefieres? Responde con 1, 2 o 3.',
+              };
+            }
+            if (!pending.slots?.length) {
+              return {
+                status: 'error',
+                bot_message:
+                  'No tengo horarios pendientes. ¿Quieres que consulte disponibilidad de nuevo?',
+              };
+            }
+            slot = pending.slots[slotNumber - 1];
+            if (!slot) {
+              return {
+                status: 'error',
+                bot_message: 'Ese número no corresponde a un horario válido. Elige 1, 2 o 3.',
+              };
+            }
           }
 
           const { data: conv } = await supabase
