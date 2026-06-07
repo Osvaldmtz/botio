@@ -28,13 +28,43 @@ export async function touchConversation(
   }
 }
 
-export async function getFirstUserMessage(
+export type FirstUserMessage = {
+  content: string;
+  created_at: string;
+};
+
+export function getLeadTimezone(phone: string): string {
+  const normalized = phone.trim();
+  if (normalized.startsWith('+52')) return 'America/Mexico_City';
+  if (normalized.startsWith('+57')) return 'America/Bogota';
+  if (normalized.startsWith('+54')) return 'America/Argentina/Buenos_Aires';
+  if (normalized.startsWith('+56')) return 'America/Santiago';
+  if (normalized.startsWith('+51')) return 'America/Lima';
+  return 'America/Mexico_City';
+}
+
+export function getLocalHour(timeZone: string, at: Date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    hour12: false,
+  }).formatToParts(at);
+  return parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
+}
+
+/** True when local time is between 9:00 and 20:00 (inclusive of the 8 PM hour). */
+export function isLeadBusinessHours(phone: string, at: Date = new Date()): boolean {
+  const hour = getLocalHour(getLeadTimezone(phone), at);
+  return hour >= 9 && hour < 20;
+}
+
+export async function getFirstUserMessageWithTimestamp(
   supabase: SupabaseClient,
   conversationId: string,
-): Promise<string | null> {
+): Promise<FirstUserMessage | null> {
   const { data, error } = await supabase
     .from('messages')
-    .select('content')
+    .select('content, created_at')
     .eq('conversation_id', conversationId)
     .eq('role', 'user')
     .order('created_at', { ascending: true })
@@ -44,7 +74,16 @@ export async function getFirstUserMessage(
     console.error('[conversation] failed to load first user message', { conversationId, error });
     return null;
   }
-  return data?.content ?? null;
+  if (!data?.content || !data.created_at) return null;
+  return { content: data.content, created_at: data.created_at };
+}
+
+export async function getFirstUserMessage(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<string | null> {
+  const row = await getFirstUserMessageWithTimestamp(supabase, conversationId);
+  return row?.content ?? null;
 }
 
 export function buildFollowupMessage(firstUserMessage: string | null): string {
