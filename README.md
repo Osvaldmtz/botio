@@ -175,6 +175,30 @@ Requires migration `0005_conversation_followup.sql` (`last_message_at` on `conve
 curl -H "Authorization: Bearer $CRON_SECRET" https://<your-host>/api/cron/lead-followup
 ```
 
+## Sprint 1.2 — Audio/Voice
+
+WhatsApp voice notes are transcribed automatically before the bot processes them.
+
+**Flow:** Twilio webhook (`NumMedia` + `MediaUrl0`) → download audio with Twilio Basic auth → Groq Whisper (`whisper-large-v3-turbo`) → transcribed text flows through the normal Claude pipeline.
+
+**Env var:** `GROQ_API_KEY` (server-only, required for voice messages).
+
+**Local test:**
+
+```bash
+node scripts/test-audio-transcription.mjs
+```
+
+Requires `GROQ_API_KEY` in `.env.local`. The script downloads a public OGG sample and runs the Groq transcription path.
+
+**Limitations:**
+
+- Max audio size: 25 MB (Groq limit)
+- Total timeout: 30 seconds (download + transcription)
+- Default language: Spanish (`es`)
+- Non-audio media (images, video) receives a friendly fallback — not processed yet
+- Requires migration `0007_message_metadata.sql` to persist `source` and `metadata` on `messages`
+
 ## Conversation funnel metrics
 
 `/admin/conversations` shows a 20-day funnel summary: ghost rate (2-message threads), engagement (3+ messages), lead capture rate, follow-ups sent, and guard closures.

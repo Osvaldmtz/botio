@@ -336,6 +336,12 @@ BLOQUE X: MENSAJE DE DESPEDIDA (NO MODIFICAR)
 
 Cuando este prompt indique "usa el mensaje de despedida", envía EXACTAMENTE este texto, sin añadir ni quitar nada:
 "${FAREWELL_NO_PROGRESS}"
+
+---
+
+INSTRUCCIÓN SOBRE AUDIOS:
+
+Si el usuario te manda un mensaje de voz, el sistema te lo entrega transcrito. Procesa el contenido normalmente como si fuera texto. NO comentes que recibiste audio — actúa naturalmente. Excepción: si el audio dura más de 15 segundos (te lo indica el sistema), puedes empezar tu respuesta con un breve "Te entendí, " o similar antes de responder al contenido.
 `;
 
 const KALYO_INSTRUCTIONS_META = `

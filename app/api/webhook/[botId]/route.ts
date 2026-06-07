@@ -4,6 +4,7 @@ import { generateReply, type ChatMessage } from '@/lib/claude';
 import { sendWhatsApp, emptyTwimlResponse } from '@/lib/twilio';
 import { buildKalyoClaudeOptions } from '@/lib/kalyo-bot-options';
 import { normalizePhone } from '@/lib/phone';
+import { transcribeAudio } from '@/lib/audio-transcription';
 import {
   FAREWELL_NO_PROGRESS,
   QUICK_REPLY_OPTIONS,
@@ -27,14 +28,27 @@ const FALLBACK_MESSAGE = "Sorry, I'm having trouble right now. Please try again 
 const USER_MSG_LIMIT = 15;
 const BOT_STDDEV_THRESHOLD_MS = 500;
 const BOT_MIN_SAMPLES = 5;
+const TRANSCRIPTION_FAIL_MESSAGE =
+  'No pude transcribir tu audio, ¿podrías escribírmelo o intentarlo de nuevo? 🙏';
+const UNSUPPORTED_MEDIA_MESSAGE =
+  'Por ahora solo puedo procesar audio o texto. ¿Me lo escribes o me mandas audio? 🙏';
 
 const PROFESSION_RE =
   /pacientes?|consulta|sesi[oó]n|psic[oó]log|terapeuta|cl[ií]nica|ansiedad|depresi[oó]n|terapia/i;
 
 type BotCredentials = {
+  id: string;
+  system_prompt: string | null;
   twilio_account_sid: string | null;
   twilio_auth_token: string | null;
   twilio_whatsapp_number: string | null;
+  is_active: boolean;
+};
+
+type UserMessageMeta = {
+  source: 'text' | 'audio';
+  metadata: Record<string, unknown>;
+  audioDurationSeconds?: number;
 };
 
 async function sendFarewellAndClose(
@@ -58,6 +72,7 @@ async function sendFarewellAndClose(
       conversation_id: conversationId,
       role: 'assistant',
       content: FAREWELL_NO_PROGRESS,
+      source: 'text',
     }),
     supabase
       .from('conversations')
@@ -72,22 +87,106 @@ async function sendFarewellAndClose(
   console.log('[webhook] conversation closed', { conversationId, closeReason });
 }
 
+async function sendDirectReply(bot: BotCredentials, to: string, body: string): Promise<Response> {
+  if (bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number) {
+    try {
+      await sendWhatsApp({
+        accountSid: bot.twilio_account_sid,
+        authToken: bot.twilio_auth_token,
+        from: bot.twilio_whatsapp_number,
+        to,
+        body,
+      });
+    } catch (error) {
+      console.error('[webhook] Twilio send failed', error);
+    }
+  }
+  return emptyTwimlResponse();
+}
+
+async function resolveIncomingMessage(
+  bot: BotCredentials,
+  rawBody: string,
+  numMedia: number,
+  mediaUrl0: string,
+  mediaContentType0: string,
+): Promise<{ ok: true; body: string; meta: UserMessageMeta } | { ok: false; reply: string }> {
+  if (numMedia >= 1) {
+    const isAudio = mediaContentType0.startsWith('audio/');
+
+    if (!isAudio) {
+      return { ok: false, reply: UNSUPPORTED_MEDIA_MESSAGE };
+    }
+
+    if (!bot.twilio_account_sid || !bot.twilio_auth_token) {
+      console.error('[webhook] audio received but bot missing Twilio credentials');
+      return { ok: false, reply: TRANSCRIPTION_FAIL_MESSAGE };
+    }
+
+    const transcription = await transcribeAudio(
+      mediaUrl0,
+      bot.twilio_account_sid,
+      bot.twilio_auth_token,
+    );
+
+    if (!transcription.success || !transcription.text) {
+      const reply =
+        transcription.error === 'audio too large'
+          ? 'Tu audio es muy largo para procesarlo. ¿Podrías mandar uno más corto o escribirme el mensaje? 🙏'
+          : TRANSCRIPTION_FAIL_MESSAGE;
+      return { ok: false, reply };
+    }
+
+    return {
+      ok: true,
+      body: transcription.text,
+      meta: {
+        source: 'audio',
+        audioDurationSeconds: transcription.durationSeconds,
+        metadata: {
+          source: 'audio',
+          original_audio_url: mediaUrl0,
+          duration_seconds: transcription.durationSeconds ?? null,
+          transcription_latency_ms: transcription.transcriptionLatencyMs ?? null,
+        },
+      },
+    };
+  }
+
+  const body = rawBody.trim();
+  if (!body) {
+    return { ok: false, reply: UNSUPPORTED_MEDIA_MESSAGE };
+  }
+
+  return {
+    ok: true,
+    body,
+    meta: { source: 'text', metadata: {} },
+  };
+}
+
 type Params = { params: { botId: string } };
 
 export async function POST(request: Request, { params }: Params) {
   const { botId } = params;
 
   let from: string;
-  let messageBody: string;
+  let rawBody: string;
+  let numMedia = 0;
+  let mediaUrl0 = '';
+  let mediaContentType0 = '';
+
   try {
     const form = await request.formData();
     const rawFrom = String(form.get('From') ?? '');
-    // Normalize to E.164 without the `whatsapp:` prefix and without the
-    // post-dial `1` that old Twilio numbers carry for Mexican mobiles.
     from = normalizePhone(rawFrom) ?? rawFrom;
-    messageBody = String(form.get('Body') ?? '');
-    if (!from || !messageBody) {
-      return new Response('Missing From or Body', { status: 400 });
+    rawBody = String(form.get('Body') ?? '');
+    numMedia = parseInt(String(form.get('NumMedia') ?? '0'), 10) || 0;
+    mediaUrl0 = String(form.get('MediaUrl0') ?? '');
+    mediaContentType0 = String(form.get('MediaContentType0') ?? '');
+
+    if (!from) {
+      return new Response('Missing From', { status: 400 });
     }
   } catch {
     return new Response('Invalid form body', { status: 400 });
@@ -110,7 +209,6 @@ export async function POST(request: Request, { params }: Params) {
     return new Response('Bot inactive', { status: 403 });
   }
 
-  // Upsert conversation on (bot_id, customer_phone) unique constraint.
   const { data: conversation, error: convError } = await supabase
     .from('conversations')
     .upsert({ bot_id: bot.id, customer_phone: from }, { onConflict: 'bot_id,customer_phone' })
@@ -122,19 +220,35 @@ export async function POST(request: Request, { params }: Params) {
     return new Response('Internal error', { status: 500 });
   }
 
-  // Guard 0 — Conversation already closed by a previous guard.
   if ((conversation as { is_closed: boolean }).is_closed) {
-    console.log('[webhook] conversation already closed, ignoring message', { conversationId: conversation.id });
+    console.log('[webhook] conversation already closed, ignoring message', {
+      conversationId: conversation.id,
+    });
     return emptyTwimlResponse();
   }
 
+  const incoming = await resolveIncomingMessage(
+    bot as BotCredentials,
+    rawBody,
+    numMedia,
+    mediaUrl0,
+    mediaContentType0,
+  );
+
+  if (!incoming.ok) {
+    return sendDirectReply(bot as BotCredentials, from, incoming.reply);
+  }
+
+  const messageBody = incoming.body;
+  const userMeta = incoming.meta;
   const nowIso = new Date().toISOString();
 
-  // Persist the incoming user message.
   const { error: userMsgError } = await supabase.from('messages').insert({
     conversation_id: conversation.id,
     role: 'user',
     content: messageBody,
+    source: userMeta.source,
+    metadata: userMeta.metadata,
   });
   if (userMsgError) {
     console.error('[webhook] failed to insert user message', userMsgError);
@@ -142,7 +256,6 @@ export async function POST(request: Request, { params }: Params) {
   }
   await touchConversation(supabase, conversation.id, nowIso);
 
-  // Load recent history (oldest → newest), including the message we just wrote.
   const { data: historyRows, error: historyError } = await supabase
     .from('messages')
     .select('role, content, created_at')
@@ -165,7 +278,6 @@ export async function POST(request: Request, { params }: Params) {
 
   const leadCaptured = (conversation as { lead_captured: boolean }).lead_captured;
 
-  // Count total user messages in this conversation (separate query; historyRows is capped at 20).
   const { count: userMsgCount, error: countError } = await supabase
     .from('messages')
     .select('id', { count: 'exact', head: true })
@@ -177,7 +289,6 @@ export async function POST(request: Request, { params }: Params) {
   }
   const totalUserMsgs = userMsgCount ?? 0;
 
-  // Guard 2 — Bot timing heuristic: std dev of inter-message deltas < 500ms in 5+ user messages.
   const userTimestamps = (historyRows ?? [])
     .filter((m) => m.role === 'user')
     .map((m) => new Date((m as { created_at: string }).created_at).getTime())
@@ -203,16 +314,12 @@ export async function POST(request: Request, { params }: Params) {
     }
   }
 
-  // Guard 1 — Message limit: more than 15 user messages without a captured lead.
   if (totalUserMsgs > USER_MSG_LIMIT && !leadCaptured) {
     console.warn('[webhook] no_lead_limit — closing conversation', { from, totalUserMsgs });
     await sendFarewellAndClose(supabase, bot, from, conversation.id, 'no_lead_limit');
     return emptyTwimlResponse();
   }
 
-  // Generate the assistant reply. For the Kalyo bot on the Twilio channel,
-  // this exposes the activate_pro_trial + notify_sales_team tools; all other
-  // bots see no suffix and no tools.
   const { systemSuffix, options: claudeOptions } = buildKalyoClaudeOptions({
     channel: 'twilio',
     bot,
@@ -220,6 +327,16 @@ export async function POST(request: Request, { params }: Params) {
     conversationId: conversation.id,
   });
   let systemPrompt = (bot.system_prompt ?? '') + systemSuffix;
+
+  if (
+    userMeta.source === 'audio' &&
+    userMeta.audioDurationSeconds !== undefined &&
+    userMeta.audioDurationSeconds > 15
+  ) {
+    systemPrompt +=
+      `\n\n[INSTRUCCIÓN INMEDIATA] El último mensaje del usuario fue un audio largo (${userMeta.audioDurationSeconds}s). ` +
+      'Puedes empezar tu respuesta con un breve acuse de recibo natural.';
+  }
 
   const quickReplyHint = mapQuickReplySelection(messageBody);
   if (quickReplyHint) {
@@ -234,8 +351,6 @@ export async function POST(request: Request, { params }: Params) {
       'NO menciones trial, precios ni planes en este mensaje.';
   }
 
-  // Guard 3 — Profession injection: if this is the 3rd user message and no profession keywords
-  // have appeared yet, force Sofía to ask the profession filter question in this turn.
   if (totalUserMsgs === 3 && !leadCaptured) {
     const userContents = (historyRows ?? [])
       .filter((m) => m.role === 'user')
@@ -250,7 +365,14 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const escalationDetected = detectHumanEscalation(messageBody);
-  console.log('[webhook] last_message:', messageBody.slice(0, 120), '| escalation_detected:', escalationDetected);
+  console.log(
+    '[webhook] last_message:',
+    messageBody.slice(0, 120),
+    '| source:',
+    userMeta.source,
+    '| escalation_detected:',
+    escalationDetected,
+  );
 
   let replyText: string;
   let hadToolUse = false;
@@ -275,12 +397,12 @@ export async function POST(request: Request, { params }: Params) {
   const outboundBody = isFirstKalyoReply ? appendQuickReplyPrompt(replyText) : replyText;
   const storedReply = isFirstKalyoReply ? outboundBody : replyText;
 
-  // Persist the assistant reply (best effort — don't abort on failure).
   const assistantNow = new Date().toISOString();
   const { error: assistantMsgError } = await supabase.from('messages').insert({
     conversation_id: conversation.id,
     role: 'assistant',
     content: storedReply,
+    source: 'text',
   });
   if (assistantMsgError) {
     console.error('[webhook] failed to insert assistant message', assistantMsgError);
@@ -288,7 +410,6 @@ export async function POST(request: Request, { params }: Params) {
     await touchConversation(supabase, conversation.id, assistantNow);
   }
 
-  // Send the reply via Twilio REST using the bot's stored credentials.
   if (bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number) {
     try {
       await sendWhatsApp({
