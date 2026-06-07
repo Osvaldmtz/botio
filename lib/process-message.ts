@@ -38,6 +38,8 @@ import {
   notifyDemoFlowWarning,
 } from '@/lib/demo-response-guard';
 import { handleTrialOnboardingMessage } from '@/lib/trial-onboarding-interceptor';
+import { handleObjectionMessage } from '@/lib/objection-interceptor';
+import { trackObjectionOutcome } from '@/lib/objection-outcome-tracker';
 
 const HISTORY_LIMIT = 20;
 const FALLBACK_MESSAGE =
@@ -63,7 +65,8 @@ export type ProcessMessageSource =
   | 'auto_demo_confirm'
   | 'auto_demo_check'
   | 'auto_demo_reminder'
-  | 'trial_onboarding';
+  | 'trial_onboarding'
+  | 'objection_handler';
 
 export type ProcessIncomingMessageInput = {
   supabase: SupabaseClient;
@@ -259,6 +262,42 @@ export async function processIncomingMessage(
             from: bot.twilio_whatsapp_number,
           }
         : null;
+
+    await trackObjectionOutcome(supabase, conversation.id, messageBody);
+
+    const objection = await handleObjectionMessage({
+      supabase,
+      conversationId: conversation.id,
+      customerPhone: conversation.customer_phone,
+      messageBody,
+      metadata,
+    });
+    if (objection) {
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: objection.replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: objection.source,
+          objection_type: objection.objectionType,
+          objection_is_repeat: objection.isRepeat,
+        },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      console.log(
+        `[process-message] channel=${channel} | source=${objection.source} | type=${objection.objectionType} | conv=${conversation.id}`,
+      );
+
+      return {
+        replyText: objection.replyText,
+        storedReply: objection.replyText,
+        conversationId: conversation.id,
+        source: objection.source,
+      };
+    }
 
     const trialOnboarding = await handleTrialOnboardingMessage({
       supabase,
