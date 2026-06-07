@@ -4,9 +4,11 @@ import type {
   ConversationStatusFilter,
   DateRangeFilter,
 } from '../lib/conversation-queries';
+import type { ChannelFilter } from '@/lib/channel-utils';
 
 export type FilterState = {
   status: ConversationStatusFilter;
+  channel: ChannelFilter;
   search: string;
   dateRange: DateRangeFilter;
   botId: string;
@@ -32,6 +34,13 @@ const STATUS_CHIPS: Array<{ id: ConversationStatusFilter; label: string }> = [
   { id: 'unanswered', label: 'Sin responder' },
   { id: 'handoff', label: 'En handoff 🙋' },
   { id: 'closed', label: 'Cerradas' },
+];
+
+const CHANNEL_CHIPS: Array<{ id: ChannelFilter; label: string }> = [
+  { id: 'all', label: 'Todos' },
+  { id: 'whatsapp', label: '📱 WhatsApp' },
+  { id: 'webchat', label: '💬 Web' },
+  { id: 'telegram', label: '📨 Telegram' },
 ];
 
 const DATE_CHIPS: Array<{ id: DateRangeFilter; label: string }> = [
@@ -74,6 +83,23 @@ export function ConversationFilters({
             {refreshing ? 'Actualizando…' : '↻ Refresh'}
           </button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {CHANNEL_CHIPS.map((chip) => (
+          <button
+            key={chip.id}
+            type="button"
+            onClick={() => onChange({ channel: chip.id })}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              filters.channel === chip.id
+                ? 'border-violet-500/50 bg-violet-500/10 text-violet-300'
+                : 'border-bg-border text-fg-muted hover:text-fg'
+            }`}
+          >
+            {chip.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-wrap gap-2">

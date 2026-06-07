@@ -4,6 +4,8 @@ import { isAdmin } from '@/lib/admin-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendWhatsApp } from '@/lib/twilio';
 import { touchConversation } from '@/lib/conversation-utils';
+import { normalizeChannel } from '@/lib/channel-utils';
+import { sendTelegramPublicMessage } from '@/lib/telegram-public';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +39,7 @@ export async function POST(request: Request, { params }: Params) {
 
   const { data: conversation, error: convError } = await supabase
     .from('conversations')
-    .select('id, customer_phone, bot_id, handoff_active, handoff_taken_by')
+    .select('id, customer_phone, bot_id, handoff_active, handoff_taken_by, channel')
     .eq('id', conversationId)
     .maybeSingle();
 
@@ -54,32 +56,50 @@ export async function POST(request: Request, { params }: Params) {
     );
   }
 
-  const { data: bot, error: botError } = await supabase
-    .from('bots')
-    .select('twilio_account_sid, twilio_auth_token, twilio_whatsapp_number')
-    .eq('id', conversation.bot_id)
-    .maybeSingle();
+  const channel = normalizeChannel(conversation.channel);
 
-  if (botError || !bot) {
-    return NextResponse.json({ error: 'Bot not found' }, { status: 500 });
-  }
+  if (channel === 'whatsapp') {
+    const { data: bot, error: botError } = await supabase
+      .from('bots')
+      .select('twilio_account_sid, twilio_auth_token, twilio_whatsapp_number')
+      .eq('id', conversation.bot_id)
+      .maybeSingle();
 
-  if (!bot.twilio_account_sid || !bot.twilio_auth_token || !bot.twilio_whatsapp_number) {
-    return NextResponse.json({ error: 'Bot missing Twilio credentials' }, { status: 500 });
-  }
+    if (botError || !bot) {
+      return NextResponse.json({ error: 'Bot not found' }, { status: 500 });
+    }
 
-  try {
-    await sendWhatsApp({
-      accountSid: bot.twilio_account_sid,
-      authToken: bot.twilio_auth_token,
-      from: bot.twilio_whatsapp_number,
-      to: conversation.customer_phone,
-      body: text,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('[handoff-send] Twilio failed', error);
-    return NextResponse.json({ error: `Twilio send failed: ${message}` }, { status: 502 });
+    if (!bot.twilio_account_sid || !bot.twilio_auth_token || !bot.twilio_whatsapp_number) {
+      return NextResponse.json({ error: 'Bot missing Twilio credentials' }, { status: 500 });
+    }
+
+    try {
+      await sendWhatsApp({
+        accountSid: bot.twilio_account_sid,
+        authToken: bot.twilio_auth_token,
+        from: bot.twilio_whatsapp_number,
+        to: conversation.customer_phone,
+        body: text,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[handoff-send] Twilio failed', error);
+      return NextResponse.json({ error: `Twilio send failed: ${message}` }, { status: 502 });
+    }
+  } else if (channel === 'telegram') {
+    const tgId = conversation.customer_phone.startsWith('tg:')
+      ? conversation.customer_phone.slice(3)
+      : conversation.customer_phone;
+
+    const sent = await sendTelegramPublicMessage(tgId, text);
+    if (!sent.ok) {
+      return NextResponse.json(
+        { error: sent.error ?? 'Telegram send failed' },
+        { status: 502 },
+      );
+    }
+  } else {
+    console.log(`[widget-handoff] message sent | conv=${conversationId}`);
   }
 
   const nowIso = new Date().toISOString();
@@ -91,7 +111,7 @@ export async function POST(request: Request, { params }: Params) {
       content: text,
       source: 'text',
       source_type: 'human',
-      metadata: { sent_by: sentBy },
+      metadata: { sent_by: sentBy, channel },
     })
     .select('id, role, content, created_at, source, source_type, metadata')
     .single();
@@ -104,7 +124,7 @@ export async function POST(request: Request, { params }: Params) {
   await touchConversation(supabase, conversationId, nowIso);
 
   console.log(
-    `[handoff-send] sent message | conv=${conversationId} | to=${conversation.customer_phone} | text_preview="${text.slice(0, 80)}"`,
+    `[handoff-send] sent message | conv=${conversationId} | channel=${channel} | text_preview="${text.slice(0, 80)}"`,
   );
 
   return NextResponse.json({ ok: true, message });

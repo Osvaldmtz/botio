@@ -1,5 +1,6 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ChannelFilter } from '@/lib/channel-utils';
 
 const MEXICO_TZ = 'America/Mexico_City';
 
@@ -14,6 +15,7 @@ export type DateRangeFilter = 'today' | 'yesterday' | '7d' | 'custom' | 'all';
 
 export type ConversationFilters = {
   botId?: string;
+  channel?: ChannelFilter;
   search?: string;
   status?: ConversationStatusFilter;
   dateRange?: DateRangeFilter;
@@ -24,6 +26,8 @@ export type ConversationFilters = {
 export type ConversationSummary = {
   id: string;
   customer_phone: string;
+  channel: string | null;
+  session_id: string | null;
   bot_id: string;
   bot_name: string;
   created_at: string;
@@ -144,6 +148,11 @@ export async function fetchConversations(
 
   if (filters.botId) {
     q = q.eq('bot_id', filters.botId);
+  }
+
+  const channel = filters.channel ?? 'all';
+  if (channel !== 'all') {
+    q = q.eq('channel', channel);
   }
 
   const status = filters.status ?? 'all';

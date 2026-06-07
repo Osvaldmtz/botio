@@ -1,6 +1,7 @@
 'use client';
 
 import type { ConversationSummary } from '../lib/conversation-queries';
+import { channelBadge } from '@/lib/channel-utils';
 import {
   avatarLabel,
   conversationStatus,
@@ -19,6 +20,7 @@ type Props = {
 export function ConversationCard({ conversation, selected, onSelect }: Props) {
   const status = conversationStatus(conversation);
   const temp = temperatureBadge(conversation.lead_temperature);
+  const channel = channelBadge(conversation.channel);
   const title = extractLeadName(conversation.customer_phone, conversation.lead_signals);
   const showPhoneSubtitle = title !== conversation.customer_phone;
 
@@ -53,6 +55,12 @@ export function ConversationCard({ conversation, selected, onSelect }: Props) {
           ) : null}
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${channel.className}`}
+            >
+              {channel.emoji} {channel.label}
+            </span>
+
             {temp ? (
               <span
                 className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${temp.className}`}

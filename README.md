@@ -57,6 +57,52 @@ Real auth is coming in a later sub-project. Until then, `/admin` is protected by
 
 The login sets an httpOnly cookie valid for 7 days. Use the "Log out" button to clear it.
 
+## Multi-channel (Sprint 5.2)
+
+Kalyo supports three inbound channels sharing the same bot logic via `lib/process-message.ts`:
+
+| Channel | Transport | Identifier |
+|---------|-----------|------------|
+| WhatsApp | Twilio `/api/webhook/[botId]` | E.164 phone |
+| Webchat | Widget `/api/widget/[botId]` | `session_id` (stored as `webchat:<uuid>`) |
+| Telegram | `/api/telegram-webhook/[botId]` | `tg:<user_id>` |
+
+### Webchat widget
+
+Embed on kalyo.io:
+
+```html
+<script
+  src="https://botio.dgx.agency/widget-loader.js"
+  data-bot-id="64f6eed2-1522-48fe-a2c6-f858b767df06"
+></script>
+```
+
+- Widget UI: `/widget/[botId]` (iframe-friendly, Kalyo purple `#6B4EFF`)
+- API: `POST /api/widget/[botId]` with `{ session_id, message }` → `{ reply, conversation_id }`
+- History polling: `GET /api/widget/[botId]?session_id=xxx` every 3s (bot + handoff replies)
+
+### Telegram public bot
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) and set `KALYO_PUBLIC_BOT_TOKEN` in Vercel.
+2. Register the webhook:
+
+   ```bash
+   KALYO_PUBLIC_BOT_TOKEN=xxx node scripts/setup-telegram-public-bot.mjs
+   ```
+
+3. Users message the bot → Botio processes via `processIncomingMessage` and replies with `sendMessage`.
+
+If `KALYO_PUBLIC_BOT_TOKEN` is unset, `/api/telegram-webhook/[botId]` returns **503** `telegram bot not configured`.
+
+### Handoff per channel
+
+When an admin sends a message during handoff:
+
+- **WhatsApp** → Twilio `sendWhatsApp`
+- **Webchat** → persisted to DB only; widget picks it up on polling
+- **Telegram** → Telegram Bot API `sendMessage`
+
 ## Webhook — `/api/webhook/[botId]`
 
 Each bot has its own Twilio WhatsApp webhook URL:

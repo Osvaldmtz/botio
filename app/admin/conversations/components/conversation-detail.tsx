@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConversationDetail } from '../lib/conversation-queries';
+import { channelBadge, formatCustomerIdentifier } from '@/lib/channel-utils';
 import {
   conversationStatus,
   extractLeadName,
@@ -79,6 +80,7 @@ export function ConversationDetailPanel({
 
   const status = detail ? conversationStatus(detail) : null;
   const temp = detail ? temperatureBadge(detail.lead_temperature) : null;
+  const channel = detail ? channelBadge(detail.channel) : null;
 
   async function copyPhone() {
     if (!detail?.customer_phone) return;
@@ -140,8 +142,24 @@ export function ConversationDetailPanel({
                     </dd>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <dt className="text-fg-muted">Teléfono</dt>
-                    <dd className="font-mono text-fg">{detail.customer_phone}</dd>
+                    <dt className="text-fg-muted">Canal</dt>
+                    <dd>
+                      {channel ? (
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-xs ${channel.className}`}
+                        >
+                          {channel.emoji} {channel.label}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-fg-muted">Identificador</dt>
+                    <dd className="font-mono text-fg">
+                      {formatCustomerIdentifier(detail.customer_phone, detail.channel)}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-4">
                     <dt className="text-fg-muted">Bot</dt>
@@ -215,14 +233,16 @@ export function ConversationDetailPanel({
                   >
                     {copied ? '✓ Copiado' : 'Copiar teléfono'}
                   </button>
-                  <a
-                    href={whatsAppUrl(detail.customer_phone)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs text-accent hover:bg-accent/20"
-                  >
-                    Abrir WhatsApp
-                  </a>
+                  {(detail.channel ?? 'whatsapp') === 'whatsapp' ? (
+                    <a
+                      href={whatsAppUrl(detail.customer_phone)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs text-accent hover:bg-accent/20"
+                    >
+                      Abrir WhatsApp
+                    </a>
+                  ) : null}
                 </div>
               </section>
 

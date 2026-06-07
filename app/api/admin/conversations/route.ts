@@ -17,8 +17,15 @@ function parseFilters(searchParams: URLSearchParams): ConversationFilters {
   const status = searchParams.get('status') as ConversationStatusFilter | null;
   const dateRange = searchParams.get('dateRange') as DateRangeFilter | null;
 
+  const channel = searchParams.get('channel');
+  const validChannel =
+    channel === 'whatsapp' || channel === 'webchat' || channel === 'telegram'
+      ? channel
+      : 'all';
+
   return {
     botId: searchParams.get('botId') ?? undefined,
+    channel: validChannel,
     search: searchParams.get('search') ?? undefined,
     status: status && status !== 'all' ? status : 'all',
     dateRange: dateRange ?? 'all',
