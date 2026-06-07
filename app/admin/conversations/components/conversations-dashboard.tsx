@@ -10,6 +10,7 @@ import { ConversationFilters, type FilterState } from './conversation-filters';
 import { ConversationStats } from './conversation-stats';
 import { ConversationList } from './conversation-list';
 import { ConversationDetailPanel } from './conversation-detail';
+import { ConversationsNav } from './conversations-nav';
 
 type Bot = { id: string; name: string };
 
@@ -110,12 +111,15 @@ export function ConversationsDashboard({ initial }: Props) {
                 {conversations.length} resultado(s) · polling cada 10s
               </p>
             </div>
-            <Link
-              href="/admin"
-              className="shrink-0 rounded-lg border border-bg-border px-3 py-2 text-sm text-fg-muted hover:text-fg"
-            >
-              ← Admin
-            </Link>
+            <div className="flex items-center gap-3">
+              <ConversationsNav />
+              <Link
+                href="/admin"
+                className="shrink-0 rounded-lg border border-bg-border px-3 py-2 text-sm text-fg-muted hover:text-fg"
+              >
+                ← Admin
+              </Link>
+            </div>
           </div>
         </header>
 

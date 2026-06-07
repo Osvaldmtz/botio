@@ -46,6 +46,9 @@ export type ConversationSummary = {
   handoff_active: boolean;
   handoff_taken_by: string | null;
   handoff_started_at: string | null;
+  pipeline_stage: string | null;
+  pipeline_stage_updated_at: string | null;
+  pipeline_stage_updated_by: string | null;
 };
 
 export type DashboardStats = {

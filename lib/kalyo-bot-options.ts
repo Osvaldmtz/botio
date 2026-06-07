@@ -2,6 +2,7 @@ import 'server-only';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { GenerateReplyOptions } from '@/lib/claude';
 import { activateProTrial } from '@/lib/kalyo';
+import { setPipelineStageTrial } from '@/lib/pipeline-utils';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
@@ -499,11 +500,30 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             }
 
             const supabase = createAdminClient();
+            const { data: convRow, error: fetchErr } = await supabase
+              .from('conversations')
+              .select('pipeline_stage')
+              .eq('id', conversationId)
+              .maybeSingle();
+            if (fetchErr) {
+              console.error('[activate_pro_trial] failed to load conversation', fetchErr);
+            }
+
             const { error } = await supabase
               .from('conversations')
               .update({ lead_captured: true })
               .eq('id', conversationId);
             if (error) console.error('[activate_pro_trial] failed to mark lead_captured', error);
+
+            try {
+              await setPipelineStageTrial(
+                supabase,
+                conversationId,
+                convRow?.pipeline_stage ?? null,
+              );
+            } catch (trialStageErr) {
+              console.error('[activate_pro_trial] pipeline stage update failed', trialStageErr);
+            }
           }
 
           return result;

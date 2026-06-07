@@ -16,6 +16,7 @@ import { checkCache } from '@/lib/response-cache';
 import { selectModel } from '@/lib/model-router';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { maybeEnrichConversationOnHandoff } from '@/lib/handoff-enrichment';
+import { maybeAutoAdvancePipeline } from '@/lib/pipeline-utils';
 
 const HUMAN_ESCALATION_RE =
   /human[oa]|asesor[a]?|(?:hablar|habla|quiero)\s+con\s+(?:alguien|una?\s+persona)|persona\b|agente\b|equipo\s+de\s+ventas|\bventas\b|soporte\b|contactar|contacto\s+directo/i;
@@ -223,7 +224,9 @@ export async function POST(request: Request, { params }: Params) {
   const { data: conversation, error: convError } = await supabase
     .from('conversations')
     .upsert({ bot_id: bot.id, customer_phone: from }, { onConflict: 'bot_id,customer_phone' })
-    .select('id, is_closed, lead_captured, handoff_active')
+    .select(
+      'id, is_closed, lead_captured, handoff_active, pipeline_stage, customer_phone, last_message_at',
+    )
     .single();
 
   if (convError || !conversation) {
@@ -272,12 +275,29 @@ export async function POST(request: Request, { params }: Params) {
   }
   await touchConversation(supabase, conversation.id, nowIso);
 
+  const { count: handoffUserCount } = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversation.id)
+    .eq('role', 'user');
+
   if (handoffActive) {
     await maybeEnrichConversationOnHandoff(
       supabase,
       bot.id,
       conversation.id,
       from,
+    );
+    await maybeAutoAdvancePipeline(
+      supabase,
+      {
+        id: conversation.id,
+        pipeline_stage: (conversation as { pipeline_stage?: string }).pipeline_stage ?? 'new',
+        lead_captured: (conversation as { lead_captured: boolean }).lead_captured,
+        customer_phone: from,
+        last_message_at: nowIso,
+      },
+      handoffUserCount ?? 1,
     );
     console.log(
       `[webhook] conversation in handoff, bot skipped | conv=${conversation.id}`,
@@ -481,6 +501,26 @@ export async function POST(request: Request, { params }: Params) {
     }
   } else {
     console.warn('[webhook] bot missing Twilio credentials — skipping outbound send');
+  }
+
+  const { data: freshConv } = await supabase
+    .from('conversations')
+    .select('pipeline_stage, lead_captured, customer_phone, last_message_at')
+    .eq('id', conversation.id)
+    .maybeSingle();
+
+  if (freshConv) {
+    await maybeAutoAdvancePipeline(
+      supabase,
+      {
+        id: conversation.id,
+        pipeline_stage: freshConv.pipeline_stage,
+        lead_captured: freshConv.lead_captured,
+        customer_phone: freshConv.customer_phone,
+        last_message_at: freshConv.last_message_at,
+      },
+      totalUserMsgs,
+    );
   }
 
   const totalLatencyMs = Date.now() - webhookStartedAt;
