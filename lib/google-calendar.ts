@@ -44,7 +44,6 @@ const SCOPES = [
 ];
 
 const DEFAULT_DURATION_MINUTES = 15;
-const MIN_ADVANCE_HOURS = 24;
 
 export type CalendarSlot = {
   start: string;
@@ -372,7 +371,7 @@ export type GetAvailableSlotsParams = {
 export async function getAvailableSlots(params: GetAvailableSlotsParams = {}): Promise<CalendarSlot[]> {
   const durationMinutes = params.durationMinutes ?? DEFAULT_DURATION_MINUTES;
   const now = new Date();
-  const earliest = new Date(now.getTime() + MIN_ADVANCE_HOURS * 60 * 60 * 1000);
+  const earliest = new Date(now.getTime() + CALENDAR_MIN_ADVANCE_HOURS * 60 * 60 * 1000);
 
   const startDate = params.startDate ?? earliest;
   const endDate = params.endDate ?? new Date(earliest.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -546,7 +545,7 @@ export async function checkSpecificTime(
       status: 'too_soon',
       alternatives,
       bot_message: formatAlternativesBotMessage(
-        'Necesito al menos 24 horas de anticipación para agendar. Te ofrezco estas opciones:',
+        'Necesito al menos 12 horas de anticipación para agendar. Te ofrezco estas opciones:',
         alternatives,
       ),
     };

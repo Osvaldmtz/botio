@@ -266,5 +266,5 @@ export function buildCalendarSlot(
   };
 }
 
-export const MIN_ADVANCE_HOURS = 24;
+export const MIN_ADVANCE_HOURS = 12;
 export const DEFAULT_DEMO_DURATION_MINUTES = 15;
