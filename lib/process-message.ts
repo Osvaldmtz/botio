@@ -24,6 +24,17 @@ import {
   type AbAssignmentContext,
 } from '@/lib/ab-testing';
 import { buildCustomerPhone, type ConversationChannel } from '@/lib/channel-utils';
+import {
+  handleDemoConfirmInterception,
+  handleDemoTimeCheckInterception,
+  loadConversationPending,
+  shouldInterceptDemoConfirm,
+  shouldInterceptDemoTimeCheck,
+} from '@/lib/demo-flow-interceptor';
+import {
+  applyDemoConfirmationGuard,
+  notifyDemoFlowWarning,
+} from '@/lib/demo-response-guard';
 
 const HISTORY_LIMIT = 20;
 const FALLBACK_MESSAGE =
@@ -40,7 +51,14 @@ const HUMAN_ESCALATION_RE =
 
 export type MessageChannel = ConversationChannel;
 
-export type ProcessMessageSource = 'cache' | 'claude' | 'human' | 'ab-test' | 'closed';
+export type ProcessMessageSource =
+  | 'cache'
+  | 'claude'
+  | 'human'
+  | 'ab-test'
+  | 'closed'
+  | 'auto_demo_confirm'
+  | 'auto_demo_check';
 
 export type ProcessIncomingMessageInput = {
   supabase: SupabaseClient;
@@ -225,6 +243,92 @@ export async function processIncomingMessage(
     .select('id', { count: 'exact', head: true })
     .eq('conversation_id', conversation.id)
     .eq('role', 'user');
+
+  if (isKalyoBotId(bot.id)) {
+    const pending = await loadConversationPending(supabase, conversation.id);
+    const kalyoCreds =
+      bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number
+        ? {
+            accountSid: bot.twilio_account_sid,
+            authToken: bot.twilio_auth_token,
+            from: bot.twilio_whatsapp_number,
+          }
+        : null;
+
+    if (pending && shouldInterceptDemoConfirm(pending, messageBody)) {
+      const intercept = await handleDemoConfirmInterception({
+        supabase,
+        conversationId: conversation.id,
+        messageBody,
+        senderFrom: conversation.customer_phone,
+        botId: bot.id,
+        creds: kalyoCreds,
+        pending,
+      });
+
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: intercept.replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: intercept.source,
+          tools_called: intercept.toolsCalled,
+          tool_results: { confirm_demo_slot: intercept.toolResult },
+        },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      console.log(
+        `[process-message] channel=${channel} | source=${intercept.source} | conv=${conversation.id}`,
+      );
+
+      return {
+        replyText: intercept.replyText,
+        storedReply: intercept.replyText,
+        conversationId: conversation.id,
+        source: intercept.source,
+      };
+    }
+
+    if (pending && shouldInterceptDemoTimeCheck(pending, messageBody)) {
+      const intercept = await handleDemoTimeCheckInterception({
+        supabase,
+        conversationId: conversation.id,
+        messageBody,
+        senderFrom: conversation.customer_phone,
+        pending,
+      });
+
+      if (intercept) {
+        const assistantNow = new Date().toISOString();
+        await supabase.from('messages').insert({
+          conversation_id: conversation.id,
+          role: 'assistant',
+          content: intercept.replyText,
+          source: 'text',
+          source_type: 'claude',
+          metadata: {
+            source: intercept.source,
+            tools_called: intercept.toolsCalled,
+            tool_results: { check_specific_time: intercept.toolResult },
+          },
+        });
+        await touchConversation(supabase, conversation.id, assistantNow);
+        console.log(
+          `[process-message] channel=${channel} | source=${intercept.source} | conv=${conversation.id}`,
+        );
+
+        return {
+          replyText: intercept.replyText,
+          storedReply: intercept.replyText,
+          conversationId: conversation.id,
+          source: intercept.source,
+        };
+      }
+    }
+  }
 
   if (handoffActive) {
     await maybeEnrichConversationOnHandoff(
@@ -422,6 +526,8 @@ export async function processIncomingMessage(
 
   let replyText: string;
   let hadToolUse = false;
+  let toolsCalled: string[] = [];
+  let toolResults: Record<string, unknown> = {};
   let source: ProcessMessageSource = 'claude';
 
   const cached =
@@ -444,6 +550,8 @@ export async function processIncomingMessage(
       });
       replyText = result.text;
       hadToolUse = result.hadToolUse;
+      toolsCalled = result.toolsCalled;
+      toolResults = result.toolResults;
     } catch (error) {
       console.error('[process-message] Claude call failed', error);
       replyText = FALLBACK_MESSAGE;
@@ -455,6 +563,16 @@ export async function processIncomingMessage(
       identifier,
       channel,
     });
+  }
+
+  const guardResult = applyDemoConfirmationGuard({
+    replyText,
+    toolsCalled,
+    conversationId: conversation.id,
+  });
+  if (guardResult.guarded) {
+    await notifyDemoFlowWarning(conversation.id);
+    replyText = guardResult.replyText;
   }
 
   const useQuickReplies = shouldAttachQuickReplies({
@@ -469,12 +587,21 @@ export async function processIncomingMessage(
   const storedReply = useQuickReplies ? appendQuickReplyPrompt(replyText) : replyText;
 
   const assistantNow = new Date().toISOString();
+  const assistantMetadata =
+    toolsCalled.length > 0
+      ? {
+          tools_called: toolsCalled,
+          tool_results: toolResults,
+        }
+      : {};
+
   const { error: assistantMsgError } = await supabase.from('messages').insert({
     conversation_id: conversation.id,
     role: 'assistant',
     content: storedReply,
     source: 'text',
     source_type: source === 'cache' ? 'cache' : source === 'ab-test' ? 'claude' : 'claude',
+    metadata: assistantMetadata,
   });
   if (assistantMsgError) {
     console.error('[process-message] failed to insert assistant message', assistantMsgError);

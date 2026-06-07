@@ -3,23 +3,18 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { GenerateReplyOptions } from '@/lib/claude';
 import { activateProTrial } from '@/lib/kalyo';
 import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
-import { movePipelineStage, setPipelineStageTrial } from '@/lib/pipeline-utils';
-import { normalizeStage, STAGE_RANK } from '@/lib/pipeline';
+import { setPipelineStageTrial } from '@/lib/pipeline-utils';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
+import { savePendingDemoSlots } from '@/lib/demo-conversation';
 import {
-  clearPendingDemoSlots,
-  loadPendingDemoSlots,
-  savePendingCustomSlot,
-  savePendingDemoSlots,
-} from '@/lib/demo-conversation';
-import {
-  checkSpecificTime,
-  createDemoEvent,
-  formatDemoConfirmationMessage,
   formatSlotsForBot,
   getAvailableSlots,
   isValidEmail,
 } from '@/lib/google-calendar';
+import {
+  executeCheckSpecificTime,
+  executeConfirmDemoSlot,
+} from '@/lib/demo-slot-actions';
 import { cityToTimezone } from '@/lib/city-to-timezone';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
@@ -344,6 +339,21 @@ Si el cliente pide una hora ESPECÍFICA diferente a los 3 slots que ofreciste:
 - Si no está disponible → la tool devuelve alternativas cercanas; ofrécelas al cliente
 
 NUNCA digas "no está disponible" sin haber llamado check_specific_time primero.
+
+REGLAS CRÍTICAS DEL FLUJO DEMO:
+
+1. NUNCA digas "confirmado", "agendado", "te enviaremos invitación", "demo agendada" sin haber recibido confirmación exitosa de la tool confirm_demo_slot.
+
+2. Cuando el usuario elija un slot (responde 1, 2, 3 o hora específica):
+   - PRIMERA acción obligatoria: invocar confirm_demo_slot (o check_specific_time si pidió hora distinta)
+   - PROHIBIDO responder con texto de confirmación sin haber llamado la tool
+   - USA EXACTAMENTE el bot_message que retorna la tool, no inventes tu propio texto
+
+3. Si la tool retorna error o no hay disponibilidad:
+   - Comunica el error tal como viene en la respuesta
+   - Ofrece alternativas que retorna la tool
+
+4. Solo después de ver status success de confirm_demo_slot, puedes saludar al cliente y despedirte.
 
 IMPORTANTE:
 - NUNCA muestres slots sin haber preguntado la ciudad primero
@@ -1044,55 +1054,14 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           const tzInput = typeof obj.customer_timezone === 'string' ? obj.customer_timezone.trim() : '';
 
           const supabase = createAdminClient();
-          const pending = await loadPendingDemoSlots(supabase, conversationId);
-          const customerTimezone = tzInput || pending?.customer_timezone;
-          const customerLabel = pending?.customer_city_label ?? pending?.display_label;
-
-          if (!customerTimezone) {
-            return {
-              status: 'error',
-              bot_message:
-                'Primero necesito saber tu ciudad para verificar horarios. ¿Desde qué ciudad nos escribes?',
-            };
-          }
-
-          if (!requestedDate || !requestedTime) {
-            return {
-              status: 'error',
-              bot_message: '¿Qué día y hora te gustaría? (ej: lunes 12:30)',
-            };
-          }
-
-          try {
-            const result = await checkSpecificTime({
-              requestedDate,
-              requestedTime,
-              customerTimezone,
-              customerLabel,
-              customerPhone: senderFrom,
-            });
-
-            if (result.status === 'available' && result.slot) {
-              if (pending) {
-                await savePendingCustomSlot(supabase, conversationId, result.slot);
-              }
-            } else if (result.alternatives?.length && pending) {
-              await savePendingDemoSlots(supabase, conversationId, {
-                ...pending,
-                slots: result.alternatives,
-                custom: undefined,
-              });
-            }
-
-            return result;
-          } catch (err) {
-            console.error('[check_specific_time] failed', err);
-            return {
-              status: 'error',
-              bot_message:
-                'Tuve un problema consultando ese horario. ¿Lo intentamos de nuevo?',
-            };
-          }
+          return executeCheckSpecificTime({
+            supabase,
+            conversationId,
+            requestedDate,
+            requestedTime,
+            customerTimezone: tzInput || undefined,
+            senderFrom,
+          });
         },
         confirm_demo_slot: async (input: unknown) => {
           const obj =
@@ -1103,122 +1072,31 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           const email = typeof obj.customer_email === 'string' ? obj.customer_email.trim() : '';
           const name = typeof obj.customer_name === 'string' ? obj.customer_name.trim() : '';
 
-          const supabase = createAdminClient();
-          const pending = await loadPendingDemoSlots(supabase, conversationId);
-          if (!pending) {
-            return {
-              status: 'error',
-              bot_message:
-                'No tengo horarios pendientes. ¿Quieres que consulte disponibilidad de nuevo?',
-            };
-          }
-
-          let slot;
+          let slotNumber: 1 | 2 | 3 | 'custom';
           if (isCustom) {
-            slot = pending.custom;
-            if (!slot) {
-              return {
-                status: 'error',
-                bot_message:
-                  'Primero verifico ese horario con check_specific_time. ¿Me confirmas el día y la hora?',
-              };
-            }
+            slotNumber = 'custom';
           } else {
-            const slotNumber =
-              typeof slotRaw === 'number' ? slotRaw : parseInt(String(slotRaw ?? ''), 10);
-            if (!slotNumber || slotNumber < 1 || slotNumber > 3) {
+            const n = typeof slotRaw === 'number' ? slotRaw : parseInt(String(slotRaw ?? ''), 10);
+            if (!n || n < 1 || n > 3) {
               return {
                 status: 'error',
                 bot_message: '¿Cuál horario prefieres? Responde con 1, 2 o 3.',
               };
             }
-            if (!pending.slots?.length) {
-              return {
-                status: 'error',
-                bot_message:
-                  'No tengo horarios pendientes. ¿Quieres que consulte disponibilidad de nuevo?',
-              };
-            }
-            slot = pending.slots[slotNumber - 1];
-            if (!slot) {
-              return {
-                status: 'error',
-                bot_message: 'Ese número no corresponde a un horario válido. Elige 1, 2 o 3.',
-              };
-            }
+            slotNumber = n as 1 | 2 | 3;
           }
 
-          const { data: conv } = await supabase
-            .from('conversations')
-            .select('pipeline_stage, lead_score, lead_intent, lead_signals, bot_id')
-            .eq('id', conversationId)
-            .maybeSingle();
-
-          try {
-            const scheduledAt = new Date(slot.start);
-            const result = await createDemoEvent({
-              customerEmail: email || pending.customer_email,
-              customerName: name || pending.customer_name,
-              customerPhone: senderFrom,
-              scheduledAt,
-              botContext: {
-                conversationId,
-                botId: conv?.bot_id ?? bot.id,
-                leadScore: conv?.lead_score,
-                leadIntent: conv?.lead_intent,
-                signals: Array.isArray(conv?.lead_signals)
-                  ? (conv.lead_signals as string[])
-                  : null,
-              },
-            });
-
-            await clearPendingDemoSlots(supabase, conversationId);
-
-            const current = normalizeStage(conv?.pipeline_stage ?? 'new');
-            if (current !== 'paid' && current !== 'lost' && STAGE_RANK.qualified > STAGE_RANK[current]) {
-              await movePipelineStage(supabase, conversationId, current, 'qualified', null, 'auto');
-            }
-
-            if (creds) {
-              await notifySalesTeam(
-                {
-                  name: name || pending.customer_name,
-                  email: email || pending.customer_email,
-                  phone: senderFrom,
-                  whatsapp_number: senderFrom,
-                  reason: 'demo_scheduled',
-                  preferred_time: slot.label_es,
-                  conversation_summary: `Demo agendada para ${slot.label_es}`,
-                  conversationId,
-                },
-                creds,
-              );
-            }
-
-            await recordOutcome(supabase, conversationId, 'demo_scheduled', {
-              demo_id: result.demoId,
-              scheduled_at: slot.start,
-            });
-
-            return {
-              status: 'success',
-              demo_id: result.demoId,
-              meet_link: result.meetLink,
-              bot_message: formatDemoConfirmationMessage(
-                scheduledAt,
-                email || pending.customer_email,
-                pending.customer_timezone ?? pending.display_timezone,
-                pending.customer_city_label ?? pending.display_label,
-              ),
-            };
-          } catch (err) {
-            console.error('[confirm_demo_slot] failed', err);
-            return {
-              status: 'error',
-              bot_message:
-                'No pude confirmar ese horario. ¿Probamos con otro slot o consulto disponibilidad de nuevo?',
-            };
-          }
+          const supabase = createAdminClient();
+          return executeConfirmDemoSlot({
+            supabase,
+            conversationId,
+            slotNumber,
+            customerEmail: email,
+            customerName: name,
+            senderFrom,
+            botId: bot.id,
+            creds,
+          });
         },
         notify_sales_team: async (input: unknown) => {
           console.log('[notify_sales_team] tool called', JSON.stringify(input));
