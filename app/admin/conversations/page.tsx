@@ -5,6 +5,8 @@ import { isAdmin } from '@/lib/admin-auth';
 import { LoginForm } from '@/components/admin/login-form';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ConversationsFilter } from '@/components/admin/conversations-filter';
+import { ConversationMetrics } from '@/components/admin/conversation-metrics';
+import { loadConversationFunnelStats } from '@/lib/conversation-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +41,10 @@ export default async function ConversationsPage({ searchParams }: Props) {
   const supabase = createAdminClient();
   const { bot = '', phone = '', from = '', to = '' } = searchParams;
 
-  const [botsResult, convsResult] = await Promise.all([
+  const metricsDays = from || to ? 0 : 20;
+  const metricsBot = bot || undefined;
+
+  const [botsResult, convsResult, funnelStats] = await Promise.all([
     supabase.from('bots').select('id, name').order('name'),
     (async () => {
       let q = supabase
@@ -56,6 +61,9 @@ export default async function ConversationsPage({ searchParams }: Props) {
 
       return q;
     })(),
+    metricsDays > 0
+      ? loadConversationFunnelStats(supabase, metricsDays, metricsBot)
+      : Promise.resolve(null),
   ]);
 
   const bots = botsResult.data ?? [];
@@ -75,6 +83,8 @@ export default async function ConversationsPage({ searchParams }: Props) {
           ← Admin
         </Link>
       </header>
+
+      {funnelStats ? <ConversationMetrics stats={funnelStats} /> : null}
 
       <Suspense>
         <ConversationsFilter

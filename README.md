@@ -156,6 +156,37 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://<your-host>/api/cron/trial-
 - Phones are lightly normalized (`+` prefix added if missing) before being prefixed with `whatsapp:`. Severely malformed numbers will fail at Twilio and be logged; the batch continues.
 - A user who subscribes to a paid plan but still has their original `trial_ends_at` set may receive one final reminder if that date matches today or 3 days from now.
 
+## Lead follow-up cron — `/api/cron/lead-followup`
+
+Hourly cron (10:00, 12:00, 14:00 Bogotá) that re-engages WhatsApp users who sent one message, got a reply, and never came back.
+
+The route:
+
+1. Validates `Authorization: Bearer <CRON_SECRET>` (same as trial-followup).
+2. Finds Kalyo conversations where `message_count = 2`, `followup_sent = false`, `lead_captured = false`, `is_closed = false`, and `last_message_at` is between 2 and 48 hours ago.
+3. Personalizes the follow-up from the user's first message (ad prefill, pricing interest, trial interest, or generic).
+4. Sends via Twilio, persists the outbound message, and sets `followup_sent = true`.
+
+Requires migration `0005_conversation_followup.sql` (`last_message_at` on `conversations`).
+
+**Manual invocation:**
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://<your-host>/api/cron/lead-followup
+```
+
+## Conversation funnel metrics
+
+`/admin/conversations` shows a 20-day funnel summary: ghost rate (2-message threads), engagement (3+ messages), lead capture rate, follow-ups sent, and guard closures.
+
+## Meta ads checklist (manual)
+
+Code changes improve bot conversion, but ad volume still needs periodic review:
+
+- Compare spend and CTR week over week; refresh creatives if CTR drops.
+- Keep the ad prefill aligned with the bot opener ("me interesa conocer Kalyo para psicólogos").
+- Schedule ads for peak hours (7–8 AM and 1–4 PM Mexico City).
+
 ## Project layout
 
 ```

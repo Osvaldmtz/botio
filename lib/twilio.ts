@@ -1,5 +1,10 @@
 import 'server-only';
 
+type QuickReplyButton = {
+  id: string;
+  title: string;
+};
+
 type SendWhatsAppArgs = {
   accountSid: string;
   authToken: string;
@@ -8,6 +13,7 @@ type SendWhatsAppArgs = {
   body?: string;
   contentSid?: string;
   contentVariables?: Record<string, string>;
+  quickReplies?: QuickReplyButton[];
 };
 
 export async function sendWhatsApp({
@@ -18,6 +24,7 @@ export async function sendWhatsApp({
   body,
   contentSid,
   contentVariables,
+  quickReplies,
 }: SendWhatsAppArgs): Promise<void> {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
@@ -25,7 +32,16 @@ export async function sendWhatsApp({
   const form = new URLSearchParams();
   form.set('From', toWhatsAppAddress(from));
   form.set('To', toWhatsAppAddress(to));
-  if (contentSid) {
+
+  const quickReplyContentSid = process.env.KALYO_QUICK_REPLY_CONTENT_SID;
+  if (quickReplies?.length && quickReplyContentSid) {
+    const vars: Record<string, string> = { body: body ?? '' };
+    quickReplies.slice(0, 3).forEach((btn, i) => {
+      vars[String(i + 1)] = btn.title;
+    });
+    form.set('ContentSid', quickReplyContentSid);
+    form.set('ContentVariables', JSON.stringify(vars));
+  } else if (contentSid) {
     form.set('ContentSid', contentSid);
     form.set('ContentVariables', JSON.stringify(contentVariables ?? {}));
   } else if (body) {

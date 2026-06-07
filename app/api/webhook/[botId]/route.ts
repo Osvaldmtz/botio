@@ -4,7 +4,13 @@ import { generateReply, type ChatMessage } from '@/lib/claude';
 import { sendWhatsApp, emptyTwimlResponse } from '@/lib/twilio';
 import { buildKalyoClaudeOptions } from '@/lib/kalyo-bot-options';
 import { normalizePhone } from '@/lib/phone';
-import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
+import {
+  FAREWELL_NO_PROGRESS,
+  QUICK_REPLY_OPTIONS,
+  appendQuickReplyPrompt,
+  mapQuickReplySelection,
+} from '@/lib/kalyo-messages';
+import { isAdPrefillMessage, isKalyoBotId, touchConversation } from '@/lib/conversation-utils';
 
 const HUMAN_ESCALATION_RE =
   /human[oa]|asesor[a]?|(?:hablar|habla|quiero)\s+con\s+(?:alguien|una?\s+persona)|persona\b|agente\b|equipo\s+de\s+ventas|\bventas\b|soporte\b|contactar|contacto\s+directo/i;
@@ -55,7 +61,12 @@ async function sendFarewellAndClose(
     }),
     supabase
       .from('conversations')
-      .update({ is_closed: true, close_reason: closeReason, closed_at: new Date().toISOString() })
+      .update({
+        is_closed: true,
+        close_reason: closeReason,
+        closed_at: new Date().toISOString(),
+        last_message_at: new Date().toISOString(),
+      })
       .eq('id', conversationId),
   ]);
   console.log('[webhook] conversation closed', { conversationId, closeReason });
@@ -117,6 +128,8 @@ export async function POST(request: Request, { params }: Params) {
     return emptyTwimlResponse();
   }
 
+  const nowIso = new Date().toISOString();
+
   // Persist the incoming user message.
   const { error: userMsgError } = await supabase.from('messages').insert({
     conversation_id: conversation.id,
@@ -127,6 +140,7 @@ export async function POST(request: Request, { params }: Params) {
     console.error('[webhook] failed to insert user message', userMsgError);
     return new Response('Internal error', { status: 500 });
   }
+  await touchConversation(supabase, conversation.id, nowIso);
 
   // Load recent history (oldest → newest), including the message we just wrote.
   const { data: historyRows, error: historyError } = await supabase
@@ -207,6 +221,19 @@ export async function POST(request: Request, { params }: Params) {
   });
   let systemPrompt = (bot.system_prompt ?? '') + systemSuffix;
 
+  const quickReplyHint = mapQuickReplySelection(messageBody);
+  if (quickReplyHint) {
+    systemPrompt += `\n\n[INSTRUCCIÓN INMEDIATA — ESTE TURNO ÚNICAMENTE] ${quickReplyHint}`;
+  }
+
+  if (totalUserMsgs === 1 && isKalyoBotId(bot.id) && isAdPrefillMessage(messageBody)) {
+    systemPrompt +=
+      '\n\n[INSTRUCCIÓN INMEDIATA — PRIMER MENSAJE DE CAMPAÑA] ' +
+      'El usuario llegó desde un anuncio. Responde en máximo 3 oraciones. ' +
+      'Confirma que Kalyo es para psicólogos y pregunta: "¿Ya evalúas pacientes de forma digital o todavía en papel?" ' +
+      'NO menciones trial, precios ni planes en este mensaje.';
+  }
+
   // Guard 3 — Profession injection: if this is the 3rd user message and no profession keywords
   // have appeared yet, force Sofía to ask the profession filter question in this turn.
   if (totalUserMsgs === 3 && !leadCaptured) {
@@ -244,14 +271,21 @@ export async function POST(request: Request, { params }: Params) {
     });
   }
 
+  const isFirstKalyoReply = totalUserMsgs === 1 && isKalyoBotId(bot.id);
+  const outboundBody = isFirstKalyoReply ? appendQuickReplyPrompt(replyText) : replyText;
+  const storedReply = isFirstKalyoReply ? outboundBody : replyText;
+
   // Persist the assistant reply (best effort — don't abort on failure).
+  const assistantNow = new Date().toISOString();
   const { error: assistantMsgError } = await supabase.from('messages').insert({
     conversation_id: conversation.id,
     role: 'assistant',
-    content: replyText,
+    content: storedReply,
   });
   if (assistantMsgError) {
     console.error('[webhook] failed to insert assistant message', assistantMsgError);
+  } else {
+    await touchConversation(supabase, conversation.id, assistantNow);
   }
 
   // Send the reply via Twilio REST using the bot's stored credentials.
@@ -262,7 +296,8 @@ export async function POST(request: Request, { params }: Params) {
         authToken: bot.twilio_auth_token,
         from: bot.twilio_whatsapp_number,
         to: from,
-        body: replyText,
+        body: outboundBody,
+        quickReplies: isFirstKalyoReply ? [...QUICK_REPLY_OPTIONS] : undefined,
       });
     } catch (error) {
       console.error('[webhook] Twilio send failed', error);

@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { generateReply, type ChatMessage } from '@/lib/claude';
 import { sendMessengerMessage } from '@/lib/meta';
 import { buildKalyoClaudeOptions } from '@/lib/kalyo-bot-options';
+import { touchConversation } from '@/lib/conversation-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -179,6 +180,7 @@ async function handleMessage({
   if (userMsgError) {
     throw new Error(`insert user message failed: ${userMsgError.message}`);
   }
+  await touchConversation(supabase, conversation.id);
 
   // Load recent history (oldest → newest), including the message just written.
   const { data: historyRows, error: historyError } = await supabase
@@ -225,6 +227,8 @@ async function handleMessage({
   });
   if (assistantMsgError) {
     console.error('[meta-webhook] failed to insert assistant message', assistantMsgError);
+  } else {
+    await touchConversation(supabase, conversation.id);
   }
 
   // Send the reply via Meta Graph API.

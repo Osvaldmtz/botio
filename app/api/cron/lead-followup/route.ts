@@ -1,18 +1,10 @@
 import 'server-only';
-import { Receiver } from '@upstash/qstash';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendWhatsApp } from '@/lib/twilio';
+import { buildFollowupMessage, getFirstUserMessage } from '@/lib/conversation-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const FOLLOWUP_MESSAGE =
-  'Hola 👋 ¿Pudiste revisar la información sobre Kalyo? Si quieres, puedo activarte tu prueba gratuita de 15 días ahora mismo — sin tarjeta de crédito. ¿Te interesa?';
-
-const receiver = new Receiver({
-  currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY!,
-  nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY!,
-});
 
 type TwilioCreds = {
   accountSid: string;
@@ -52,17 +44,14 @@ function getBogotaHour(): number {
   return parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
 }
 
-export async function POST(request: Request) {
-  const bodyText = await request.text();
-  const signature = request.headers.get('upstash-signature') ?? '';
+function authorizeCron(request: Request): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const authHeader = request.headers.get('authorization');
+  return authHeader === `Bearer ${secret}`;
+}
 
-  try {
-    await receiver.verify({ signature, body: bodyText });
-  } catch {
-    return new Response('Invalid signature', { status: 401 });
-  }
-
-  // Only send follow-ups between 10:00 and 20:00 Bogota time.
+async function runLeadFollowup(): Promise<Response> {
   const bogotaHour = getBogotaHour();
   if (bogotaHour < 10 || bogotaHour >= 20) {
     return Response.json({ skipped: true, reason: 'Outside business hours (10am–8pm Bogota)' });
@@ -87,10 +76,13 @@ export async function POST(request: Request) {
   const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
   const { data: conversations, error: queryError } = await supabase
-    .from('conversations')
-    .select('id, customer_phone')
+    .from('conversation_summary')
+    .select('id, customer_phone, message_count, followup_sent, lead_captured, is_closed')
     .eq('bot_id', botId)
     .eq('followup_sent', false)
+    .eq('lead_captured', false)
+    .eq('is_closed', false)
+    .eq('message_count', 2)
     .lt('last_message_at', twoHoursAgo)
     .gt('last_message_at', fortyEightHoursAgo);
 
@@ -104,17 +96,29 @@ export async function POST(request: Request) {
 
   for (const conv of conversations ?? []) {
     try {
+      const firstUserMessage = await getFirstUserMessage(supabase, conv.id);
+      const body = buildFollowupMessage(firstUserMessage);
+
       await sendWhatsApp({
         accountSid: creds.accountSid,
         authToken: creds.authToken,
         from: creds.from,
         to: conv.customer_phone,
-        body: FOLLOWUP_MESSAGE,
+        body,
       });
+
+      await supabase.from('messages').insert({
+        conversation_id: conv.id,
+        role: 'assistant',
+        content: body,
+      });
+
+      const followupAt = new Date().toISOString();
       await supabase
         .from('conversations')
-        .update({ followup_sent: true })
+        .update({ followup_sent: true, last_message_at: followupAt })
         .eq('id', conv.id);
+
       sent++;
     } catch (error) {
       failed++;
@@ -126,4 +130,11 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ found: (conversations ?? []).length, sent, failed });
+}
+
+export async function GET(request: Request) {
+  if (!authorizeCron(request)) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+  return runLeadFollowup();
 }
