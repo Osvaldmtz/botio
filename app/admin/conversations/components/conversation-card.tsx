@@ -66,17 +66,26 @@ export function ConversationCard({ conversation, selected, onSelect }: Props) {
               </span>
             ) : null}
 
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                status.tone === 'unanswered'
-                  ? 'bg-red-500/15 text-red-300'
-                  : status.tone === 'closed'
-                    ? 'bg-bg-border text-fg-muted'
-                    : 'bg-accent/10 text-accent'
-              }`}
-            >
-              {status.label}
-            </span>
+            {conversation.handoff_active ? (
+              <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-medium text-orange-300">
+                🙋 Handoff
+                {conversation.handoff_taken_by
+                  ? ` · ${conversation.handoff_taken_by}`
+                  : ''}
+              </span>
+            ) : (
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  status.tone === 'unanswered'
+                    ? 'bg-red-500/15 text-red-300'
+                    : status.tone === 'closed'
+                      ? 'bg-bg-border text-fg-muted'
+                      : 'bg-accent/10 text-accent'
+                }`}
+              >
+                {status.label}
+              </span>
+            )}
 
             <span className="text-[10px] text-fg-muted">
               {conversation.message_count} msgs · {formatRelativeTime(conversation.last_message_at)}

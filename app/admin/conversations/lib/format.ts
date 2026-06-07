@@ -35,8 +35,10 @@ export function whatsAppUrl(phone: string): string {
 export function conversationStatus(conv: {
   is_closed: boolean;
   needs_reply: boolean;
-}): { label: string; tone: 'active' | 'unanswered' | 'closed' } {
+  handoff_active?: boolean;
+}): { label: string; tone: 'active' | 'unanswered' | 'closed' | 'handoff' } {
   if (conv.is_closed) return { label: 'Cerrada', tone: 'closed' };
+  if (conv.handoff_active) return { label: 'En handoff', tone: 'handoff' };
   if (conv.needs_reply) return { label: 'Sin responder', tone: 'unanswered' };
   return { label: 'Activa', tone: 'active' };
 }

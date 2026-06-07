@@ -15,6 +15,7 @@ import { isAdPrefillMessage, isKalyoBotId, touchConversation } from '@/lib/conve
 import { checkCache } from '@/lib/response-cache';
 import { selectModel } from '@/lib/model-router';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { maybeEnrichConversationOnHandoff } from '@/lib/handoff-enrichment';
 
 const HUMAN_ESCALATION_RE =
   /human[oa]|asesor[a]?|(?:hablar|habla|quiero)\s+con\s+(?:alguien|una?\s+persona)|persona\b|agente\b|equipo\s+de\s+ventas|\bventas\b|soporte\b|contactar|contacto\s+directo/i;
@@ -222,7 +223,7 @@ export async function POST(request: Request, { params }: Params) {
   const { data: conversation, error: convError } = await supabase
     .from('conversations')
     .upsert({ bot_id: bot.id, customer_phone: from }, { onConflict: 'bot_id,customer_phone' })
-    .select('id, is_closed, lead_captured')
+    .select('id, is_closed, lead_captured, handoff_active')
     .single();
 
   if (convError || !conversation) {
@@ -253,11 +254,16 @@ export async function POST(request: Request, { params }: Params) {
   const userMeta = incoming.meta;
   const nowIso = new Date().toISOString();
 
+  const handoffActive = Boolean(
+    (conversation as { handoff_active?: boolean }).handoff_active,
+  );
+
   const { error: userMsgError } = await supabase.from('messages').insert({
     conversation_id: conversation.id,
     role: 'user',
     content: messageBody,
     source: userMeta.source,
+    ...(handoffActive ? { source_type: 'user' } : {}),
     metadata: userMeta.metadata,
   });
   if (userMsgError) {
@@ -265,6 +271,19 @@ export async function POST(request: Request, { params }: Params) {
     return new Response('Internal error', { status: 500 });
   }
   await touchConversation(supabase, conversation.id, nowIso);
+
+  if (handoffActive) {
+    await maybeEnrichConversationOnHandoff(
+      supabase,
+      bot.id,
+      conversation.id,
+      from,
+    );
+    console.log(
+      `[webhook] conversation in handoff, bot skipped | conv=${conversation.id}`,
+    );
+    return emptyTwimlResponse();
+  }
 
   const { data: historyRows, error: historyError } = await supabase
     .from('messages')

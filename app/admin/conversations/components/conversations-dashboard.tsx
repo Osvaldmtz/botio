@@ -141,6 +141,7 @@ export function ConversationsDashboard({ initial }: Props) {
         <ConversationDetailPanel
           conversationId={selectedId}
           onClose={() => setSelectedId(null)}
+          onHandoffChange={() => void loadData()}
         />
       ) : null}
     </div>

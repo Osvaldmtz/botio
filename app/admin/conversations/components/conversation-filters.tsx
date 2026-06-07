@@ -30,6 +30,7 @@ const STATUS_CHIPS: Array<{ id: ConversationStatusFilter; label: string }> = [
   { id: 'hot', label: 'Hot Leads 🔥' },
   { id: 'warm', label: 'Warm Leads 🟡' },
   { id: 'unanswered', label: 'Sin responder' },
+  { id: 'handoff', label: 'En handoff 🙋' },
   { id: 'closed', label: 'Cerradas' },
 ];
 

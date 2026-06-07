@@ -3,7 +3,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const MEXICO_TZ = 'America/Mexico_City';
 
-export type ConversationStatusFilter = 'all' | 'hot' | 'warm' | 'unanswered' | 'closed';
+export type ConversationStatusFilter =
+  | 'all'
+  | 'hot'
+  | 'warm'
+  | 'unanswered'
+  | 'closed'
+  | 'handoff';
 export type DateRangeFilter = 'today' | 'yesterday' | '7d' | 'custom' | 'all';
 
 export type ConversationFilters = {
@@ -37,6 +43,9 @@ export type ConversationSummary = {
   lead_intent: string | null;
   lead_signals: string[] | null;
   enriched_at: string | null;
+  handoff_active: boolean;
+  handoff_taken_by: string | null;
+  handoff_started_at: string | null;
 };
 
 export type DashboardStats = {
@@ -139,6 +148,7 @@ export async function fetchConversations(
   if (status === 'warm') q = q.eq('lead_temperature', 'warm');
   if (status === 'unanswered') q = q.eq('needs_reply', true);
   if (status === 'closed') q = q.eq('is_closed', true);
+  if (status === 'handoff') q = q.eq('handoff_active', true);
 
   const { start, end } = resolveDateBounds(filters);
   if (start) q = q.gte('last_message_at', start);

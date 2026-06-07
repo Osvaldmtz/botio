@@ -1,4 +1,16 @@
--- Enriched conversation_summary for Sprint 2 dashboard (filters, lead badges, reply status).
+-- Human handoff: admin takes control and bot stops auto-replying.
+
+ALTER TABLE public.conversations
+  ADD COLUMN IF NOT EXISTS handoff_active boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS handoff_taken_by text,
+  ADD COLUMN IF NOT EXISTS handoff_started_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS conversations_handoff_idx
+  ON public.conversations (handoff_active)
+  WHERE handoff_active = true;
+
+COMMENT ON COLUMN public.messages.source_type IS
+  'Origin: claude, cache, human, user, fallback';
 
 DROP VIEW IF EXISTS public.conversation_summary;
 

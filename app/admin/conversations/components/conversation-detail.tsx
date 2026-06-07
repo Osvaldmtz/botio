@@ -1,58 +1,78 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConversationDetail } from '../lib/conversation-queries';
 import {
   conversationStatus,
+  extractLeadName,
   formatRelativeTime,
   temperatureBadge,
   whatsAppUrl,
 } from '../lib/format';
 import { MessageBubble } from './message-bubble';
+import { HandoffControls, getHandoffAdminName } from './handoff-controls';
+import { HandoffChatBox } from './handoff-chat-box';
 
 type Props = {
   conversationId: string | null;
   onClose: () => void;
+  onHandoffChange?: () => void;
 };
 
-export function ConversationDetailPanel({ conversationId, onClose }: Props) {
+export function ConversationDetailPanel({
+  conversationId,
+  onClose,
+  onHandoffChange,
+}: Props) {
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const loadDetail = useCallback(async (id: string) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/admin/conversations/${id}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setDetail(data.conversation);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!conversationId) {
       setDetail(null);
       return;
     }
+    void loadDetail(conversationId);
+  }, [conversationId, loadDetail]);
 
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
+    if (!conversationId || !detail?.handoff_active) return;
+    const interval = setInterval(() => {
+      void loadDetail(conversationId);
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [conversationId, detail?.handoff_active, loadDetail]);
 
-    fetch(`/api/admin/conversations/${conversationId}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `HTTP ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (!cancelled) setDetail(data.conversation);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [detail?.messages.length]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [conversationId]);
+  function handleUpdated() {
+    if (conversationId) void loadDetail(conversationId);
+    onHandoffChange?.();
+  }
 
   if (!conversationId) return null;
 
@@ -91,17 +111,25 @@ export function ConversationDetailPanel({ conversationId, onClose }: Props) {
         </header>
 
         <div className="flex-1 overflow-y-auto">
-          {loading ? (
+          {loading && !detail ? (
             <p className="p-4 text-sm text-fg-muted">Cargando conversación…</p>
           ) : error ? (
             <p className="p-4 text-sm text-red-300">{error}</p>
           ) : detail ? (
             <div className="space-y-4 p-4">
+              <HandoffControls detail={detail} onUpdated={handleUpdated} />
+
               <section className="rounded-xl border border-bg-border bg-bg-elevated p-4">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
                   Lead
                 </h3>
                 <dl className="mt-3 space-y-2 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-fg-muted">Contacto</dt>
+                    <dd className="text-right text-fg">
+                      {extractLeadName(detail.customer_phone, detail.lead_signals)}
+                    </dd>
+                  </div>
                   <div className="flex justify-between gap-4">
                     <dt className="text-fg-muted">Teléfono</dt>
                     <dd className="font-mono text-fg">{detail.customer_phone}</dd>
@@ -197,11 +225,20 @@ export function ConversationDetailPanel({ conversationId, onClose }: Props) {
                   {detail.messages.map((msg) => (
                     <MessageBubble key={msg.id} message={msg} />
                   ))}
+                  <div ref={messagesEndRef} />
                 </div>
               </section>
             </div>
           ) : null}
         </div>
+
+        {detail?.handoff_active ? (
+          <HandoffChatBox
+            detail={detail}
+            adminName={getHandoffAdminName()}
+            onSent={handleUpdated}
+          />
+        ) : null}
       </aside>
     </>
   );
