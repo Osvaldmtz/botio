@@ -14,6 +14,7 @@ import {
 import { isAdPrefillMessage, isKalyoBotId, touchConversation } from '@/lib/conversation-utils';
 import { checkCache } from '@/lib/response-cache';
 import { selectModel } from '@/lib/model-router';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const HUMAN_ESCALATION_RE =
   /human[oa]|asesor[a]?|(?:hablar|habla|quiero)\s+con\s+(?:alguien|una?\s+persona)|persona\b|agente\b|equipo\s+de\s+ventas|\bventas\b|soporte\b|contactar|contacto\s+directo/i;
@@ -196,6 +197,12 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const supabase = createAdminClient();
+
+  const rateLimitCheck = await checkRateLimit(supabase, from, botId, null);
+  if (!rateLimitCheck.allowed) {
+    console.log(`[rate-limit] BLOCKING webhook | phone=${from}`);
+    return new Response(null, { status: 200 });
+  }
 
   const { data: bot, error: botError } = await supabase
     .from('bots')
