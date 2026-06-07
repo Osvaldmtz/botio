@@ -3,8 +3,6 @@ import { es } from 'date-fns/locale';
 import {
   getCustomerTimezone,
   getCustomerTimezoneLabel,
-  type CustomerTimezone,
-  type CustomerTimezoneLabel,
 } from '@/lib/timezone-from-phone';
 
 export const HOST_TIMEZONE = process.env.DEMO_HOST_TIMEZONE ?? 'America/Bogota';
@@ -63,12 +61,12 @@ export function isWithinHostBusinessHours(slotStart: Date, durationMinutes: numb
 
 export function formatSlotForES(
   slotStart: Date,
-  displayTimezone: CustomerTimezone = 'America/Bogota',
-  displayLabel: CustomerTimezoneLabel = 'Bogotá',
+  displayTimezone: string = 'America/Bogota',
+  displayLabel: string = 'hora Bogotá',
 ): string {
   const label = formatInTimeZone(slotStart, displayTimezone, 'EEEE d MMM, HH:mm', { locale: es });
   const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
-  return `${capitalized} hora ${displayLabel}`;
+  return `${capitalized} ${displayLabel}`;
 }
 
 function addDaysHost(base: Date, days: number): Date {
@@ -116,11 +114,13 @@ export function toGoogleHostDateTime(date: Date): string {
 export function formatSlotLabelsForPhone(
   slotStart: Date,
   customerPhone?: string,
-  displayTimezoneOverride?: CustomerTimezone,
-  displayLabelOverride?: CustomerTimezoneLabel,
-): { label_es: string; display_timezone: CustomerTimezone; display_label: CustomerTimezoneLabel } {
+  displayTimezoneOverride?: string,
+  displayLabelOverride?: string,
+): { label_es: string; display_timezone: string; display_label: string } {
   const displayTimezone = displayTimezoneOverride ?? getCustomerTimezone(customerPhone);
-  const displayLabel = displayLabelOverride ?? getCustomerTimezoneLabel(customerPhone);
+  const displayLabel =
+    displayLabelOverride ??
+    `hora ${getCustomerTimezoneLabel(customerPhone)}`;
   return {
     label_es: formatSlotForES(slotStart, displayTimezone, displayLabel),
     display_timezone: displayTimezone,
@@ -131,7 +131,7 @@ export function formatSlotLabelsForPhone(
 export function customerLocalToUtcDate(
   dateStr: string,
   timeStr: string,
-  customerTimezone: CustomerTimezone,
+  customerTimezone: string,
 ): Date {
   const [hourStr, minuteStr] = timeStr.split(':');
   const hour = parseInt(hourStr, 10);
@@ -243,14 +243,14 @@ export function buildCalendarSlot(
   slotStart: Date,
   durationMinutes: number,
   customerPhone?: string,
-  displayTimezone?: CustomerTimezone,
-  displayLabel?: CustomerTimezoneLabel,
+  displayTimezone?: string,
+  displayLabel?: string,
 ): {
   start: string;
   end: string;
   label_es: string;
-  display_timezone: CustomerTimezone;
-  display_label: CustomerTimezoneLabel;
+  display_timezone: string;
+  display_label: string;
 } {
   const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
   const labels = formatSlotLabelsForPhone(

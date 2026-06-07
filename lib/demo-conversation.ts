@@ -1,16 +1,17 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CalendarSlot } from '@/lib/google-calendar';
-import type { CustomerTimezone, CustomerTimezoneLabel } from '@/lib/timezone-from-phone';
-
 export type PendingDemoSlots = {
   slots: CalendarSlot[];
   custom?: CalendarSlot;
   customer_email: string;
   customer_name: string;
   customer_phone?: string;
-  display_timezone: CustomerTimezone;
-  display_label: CustomerTimezoneLabel;
+  customer_city?: string;
+  customer_timezone: string;
+  customer_city_label: string;
+  display_timezone: string;
+  display_label: string;
   offered_at: string;
 };
 

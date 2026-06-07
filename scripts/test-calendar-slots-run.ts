@@ -19,11 +19,11 @@ process.env.TZ = 'UTC';
 console.log('Running calendar slot tests (server TZ=%s)', process.env.TZ);
 
 const bogotaSlot = hostLocalToDate(2026, 6, 8, 16, 30);
-const bogotaLabel = formatSlotForES(bogotaSlot, 'America/Bogota', 'Bogotá');
+const bogotaLabel = formatSlotForES(bogotaSlot, 'America/Bogota', 'hora Bogotá');
 assert(bogotaLabel.includes('16:30'), `Expected 16:30 Bogotá, got: ${bogotaLabel}`);
 assert(!bogotaLabel.includes('21:30'), `UTC leak in label: ${bogotaLabel}`);
 
-const cdmxLabel = formatSlotForES(bogotaSlot, 'America/Mexico_City', 'CDMX');
+const cdmxLabel = formatSlotForES(bogotaSlot, 'America/Mexico_City', 'hora CDMX');
 assert(cdmxLabel.includes('15:30'), `Expected 15:30 CDMX, got: ${cdmxLabel}`);
 
 const start = new Date();
@@ -47,11 +47,11 @@ assert(hostParts.hour === 14, `Expected 14:00 host hour, got ${hostParts.hour}`)
 
 const fromLocal = fromZonedTime('2026-06-09T14:00:00', 'America/Bogota');
 assert(
-  formatSlotForES(fromLocal, 'America/Bogota', 'Bogotá').includes('14:00'),
+  formatSlotForES(fromLocal, 'America/Bogota', 'hora Bogotá').includes('14:00'),
   '14:00 Bogota formatting failed',
 );
 assert(
-  formatSlotForES(fromLocal, 'America/Mexico_City', 'CDMX').includes('13:00'),
+  formatSlotForES(fromLocal, 'America/Mexico_City', 'hora CDMX').includes('13:00'),
   '13:00 CDMX formatting failed',
 );
 
@@ -65,7 +65,7 @@ const mxSlot = customerLocalToUtcDate(mondayDate!, '12:30', 'America/Mexico_City
 const hostHour = getHostTzParts(mxSlot).hour;
 assert(hostHour === 13, `Expected 13:30 Bogota host hour, got ${hostHour}:30`);
 assert(
-  formatSlotForES(mxSlot, 'America/Mexico_City', 'CDMX').includes('12:30'),
+  formatSlotForES(mxSlot, 'America/Mexico_City', 'hora CDMX').includes('12:30'),
   'MX display should show 12:30',
 );
 

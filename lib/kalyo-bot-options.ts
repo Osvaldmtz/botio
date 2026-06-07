@@ -20,7 +20,7 @@ import {
   getAvailableSlots,
   isValidEmail,
 } from '@/lib/google-calendar';
-import { getCustomerTimezone } from '@/lib/timezone-from-phone';
+import { cityToTimezone } from '@/lib/city-to-timezone';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
 import { recordOutcome } from '@/lib/ab-testing';
@@ -272,29 +272,29 @@ REGLAS:
 
 ---
 
-BLOQUE DEMO — AGENDADO AUTOMÁTICO
+BLOQUE DEMO — FLUJO PASO A PASO
 
 Cuándo ofrecer demo:
 - Perfil clinic_team o institution_decision_maker
 - Usuario explícitamente pide: "demo", "llamada", "ver en vivo", "reunión", "agendar"
 
-FLUJO:
+Paso 1 — Ofrecer demo:
+"Te puedo agendar una demo de 15 minutos con Osvaldo del equipo de Kalyo. ¿Te animas?"
 
-Paso 1 — Ofrecer:
-"Te puedo agendar una demo personalizada de 15 minutos con Osvaldo del equipo de Kalyo. ¿Te animas?"
-
-Paso 2 — Si acepta, pedir datos:
+Paso 2 — Pedir datos básicos:
 "Genial. Necesito tu nombre completo y email para enviarte la invitación."
 
-Paso 3 — Cuando tengas nombre + email, opcionalmente preguntar preferencia:
-"¿Hay algún día u horario que te venga mejor? (ej: mañana en la tarde, jueves por la mañana)"
-Si no responde con preferencia clara, usar any.
+Paso 3 — Preguntar ciudad (NUEVO):
+DESPUÉS de tener nombre + email, ANTES de mostrar horarios:
+"Para mostrarte los horarios en tu hora local, ¿desde qué ciudad nos escribes?"
 
-Paso 4 — Llamar tool schedule_demo con email + nombre + preferencias detectadas
+Paso 4 — Llamar schedule_demo:
+Cuando tengas ciudad, llama schedule_demo con customer_email + customer_name + customer_city
 
-Paso 5 — Mostrar los 3 slots y esperar elección del cliente (1, 2 o 3)
+Paso 5 — Si el cliente pide hora específica:
+Llamar check_specific_time con la fecha, hora y la ciudad ya conocida
 
-Paso 6 — Cuando elija un slot (1, 2 o 3), llamar tool confirm_demo_slot
+Paso 6 — Cuando confirme, llamar confirm_demo_slot
 
 Si el cliente pide una hora ESPECÍFICA diferente a los 3 slots que ofreciste:
 - Llama check_specific_time con la fecha (YYYY-MM-DD) y hora (HH:MM) en la timezone del cliente
@@ -304,6 +304,10 @@ Si el cliente pide una hora ESPECÍFICA diferente a los 3 slots que ofreciste:
 NUNCA digas "no está disponible" sin haber llamado check_specific_time primero.
 
 IMPORTANTE:
+- NUNCA muestres slots sin haber preguntado la ciudad primero
+- Si schedule_demo retorna 'city_not_recognized', pregunta de nuevo:
+  "¿Podrías decirme una ciudad principal cercana o el país?"
+- Una vez tengas la ciudad, NO vuelvas a preguntar
 - NUNCA dar link de Calendly ni links externos de agendamiento
 - NUNCA inventar fechas/horas — siempre usar schedule_demo, check_specific_time y confirm_demo_slot
 - Si la tool retorna error de disponibilidad, ofrecer próxima semana
@@ -529,6 +533,10 @@ const SCHEDULE_DEMO_TOOL: Anthropic.Messages.Tool = {
         type: 'string',
         description: 'Nombre completo del cliente.',
       },
+      customer_city: {
+        type: 'string',
+        description: 'Ciudad donde está el cliente para calcular timezone.',
+      },
       preferred_day: {
         type: 'string',
         description:
@@ -539,7 +547,7 @@ const SCHEDULE_DEMO_TOOL: Anthropic.Messages.Tool = {
         description: 'Hora preferida (opcional): mañana, tarde, X PM. Si no especificó, usar "any".',
       },
     },
-    required: ['customer_email', 'customer_name'],
+    required: ['customer_email', 'customer_name', 'customer_city'],
   },
 };
 
@@ -560,10 +568,11 @@ const CHECK_SPECIFIC_TIME_TOOL: Anthropic.Messages.Tool = {
       },
       customer_timezone: {
         type: 'string',
-        description: 'Timezone del cliente: America/Mexico_City o America/Bogota.',
+        description:
+          'Timezone IANA del cliente (ej: America/Tijuana). Opcional si ya se guardó en schedule_demo.',
       },
     },
-    required: ['requested_date', 'requested_time', 'customer_timezone'],
+    required: ['requested_date', 'requested_time'],
   },
 };
 
@@ -883,6 +892,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
           const email = typeof obj.customer_email === 'string' ? obj.customer_email.trim() : '';
           const name = typeof obj.customer_name === 'string' ? obj.customer_name.trim() : '';
+          const city = typeof obj.customer_city === 'string' ? obj.customer_city.trim() : '';
           const preferredDay =
             typeof obj.preferred_day === 'string' && obj.preferred_day.trim()
               ? obj.preferred_day.trim()
@@ -904,18 +914,38 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               bot_message: 'Necesito tu nombre completo para agendar la demo.',
             };
           }
+          if (!city) {
+            return {
+              status: 'error',
+              bot_message:
+                'Para mostrarte los horarios en tu hora local, ¿desde qué ciudad nos escribes?',
+            };
+          }
+
+          const tzMatch = cityToTimezone(city);
+          if (!tzMatch) {
+            return {
+              status: 'city_not_recognized',
+              bot_message:
+                'city_not_recognized: No reconocí la ciudad. Pídele al usuario una ciudad más reconocible o el país.',
+            };
+          }
 
           try {
             let slots = await getAvailableSlots({
               preferredDay,
               preferredTime,
               customerPhone: senderFrom,
+              customerTimezone: tzMatch.timezone,
+              customerLabel: tzMatch.label,
             });
             if (slots.length === 0) {
               slots = await getAvailableSlots({
                 preferredDay: 'any',
                 preferredTime: 'any',
                 customerPhone: senderFrom,
+                customerTimezone: tzMatch.timezone,
+                customerLabel: tzMatch.label,
               });
             }
             if (slots.length === 0) {
@@ -932,14 +962,19 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               customer_email: email,
               customer_name: name,
               customer_phone: senderFrom,
-              display_timezone: slots[0]?.display_timezone ?? 'America/Mexico_City',
-              display_label: slots[0]?.display_label ?? 'CDMX',
+              customer_city: tzMatch.city_normalized,
+              customer_timezone: tzMatch.timezone,
+              customer_city_label: tzMatch.label,
+              display_timezone: tzMatch.timezone,
+              display_label: tzMatch.label,
               offered_at: new Date().toISOString(),
             });
 
             return {
               status: 'success',
               slots,
+              city: tzMatch.city_normalized,
+              timezone: tzMatch.timezone,
               bot_message: formatSlotsForBot(slots),
             };
           } catch (err) {
@@ -962,10 +997,19 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           const requestedTime =
             typeof obj.requested_time === 'string' ? obj.requested_time.trim() : '';
           const tzInput = typeof obj.customer_timezone === 'string' ? obj.customer_timezone.trim() : '';
-          const customerTimezone =
-            tzInput === 'America/Bogota' || tzInput === 'America/Mexico_City'
-              ? tzInput
-              : getCustomerTimezone(senderFrom);
+
+          const supabase = createAdminClient();
+          const pending = await loadPendingDemoSlots(supabase, conversationId);
+          const customerTimezone = tzInput || pending?.customer_timezone;
+          const customerLabel = pending?.customer_city_label ?? pending?.display_label;
+
+          if (!customerTimezone) {
+            return {
+              status: 'error',
+              bot_message:
+                'Primero necesito saber tu ciudad para verificar horarios. ¿Desde qué ciudad nos escribes?',
+            };
+          }
 
           if (!requestedDate || !requestedTime) {
             return {
@@ -979,11 +1023,9 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               requestedDate,
               requestedTime,
               customerTimezone,
+              customerLabel,
               customerPhone: senderFrom,
             });
-
-            const supabase = createAdminClient();
-            const pending = await loadPendingDemoSlots(supabase, conversationId);
 
             if (result.status === 'available' && result.slot) {
               if (pending) {
@@ -1120,7 +1162,8 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               bot_message: formatDemoConfirmationMessage(
                 scheduledAt,
                 email || pending.customer_email,
-                senderFrom || pending.customer_phone,
+                pending.customer_timezone ?? pending.display_timezone,
+                pending.customer_city_label ?? pending.display_label,
               ),
             };
           } catch (err) {

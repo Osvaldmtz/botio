@@ -7,7 +7,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   buildCalendarSlot,
   customerLocalToUtcDate,
-  formatSlotForES,
   generateHostCandidateSlots,
   getHostTzParts,
   hostLocalToDate,
@@ -19,8 +18,6 @@ import {
 import {
   getCustomerTimezone,
   getCustomerTimezoneLabel,
-  type CustomerTimezone,
-  type CustomerTimezoneLabel,
 } from '@/lib/timezone-from-phone';
 
 export const DEMO_TIMEZONE = HOST_TIMEZONE;
@@ -49,8 +46,8 @@ export type CalendarSlot = {
   start: string;
   end: string;
   label_es: string;
-  display_timezone: CustomerTimezone;
-  display_label: CustomerTimezoneLabel;
+  display_timezone: string;
+  display_label: string;
 };
 
 export type ParsedDateTimeIntent = {
@@ -366,6 +363,8 @@ export type GetAvailableSlotsParams = {
   preferredDay?: string;
   preferredTime?: string;
   customerPhone?: string;
+  customerTimezone?: string;
+  customerLabel?: string;
 };
 
 export async function getAvailableSlots(params: GetAvailableSlotsParams = {}): Promise<CalendarSlot[]> {
@@ -413,7 +412,13 @@ export async function getAvailableSlots(params: GetAvailableSlotsParams = {}): P
   console.log(`[calendar] found ${selected.length} slots`);
 
   return selected.map((slotStart) =>
-    buildCalendarSlot(slotStart, durationMinutes, params.customerPhone),
+    buildCalendarSlot(
+      slotStart,
+      durationMinutes,
+      params.customerPhone,
+      params.customerTimezone,
+      params.customerLabel,
+    ),
   );
 }
 
@@ -445,15 +450,12 @@ async function findAlternativesNear(
   anchor: Date,
   durationMinutes: number,
   customerPhone?: string,
-  customerTimezone?: CustomerTimezone,
+  customerTimezone?: string,
+  customerLabel?: string,
 ): Promise<CalendarSlot[]> {
   const tz = customerTimezone ?? getCustomerTimezone(customerPhone);
   const label =
-    customerTimezone === 'America/Bogota'
-      ? 'Bogotá'
-      : customerTimezone === 'America/Mexico_City'
-        ? 'CDMX'
-        : getCustomerTimezoneLabel(customerPhone);
+    customerLabel ?? `hora ${getCustomerTimezoneLabel(customerPhone)}`;
 
   const now = new Date();
   const earliest = new Date(now.getTime() + CALENDAR_MIN_ADVANCE_HOURS * 60 * 60 * 1000);
@@ -480,13 +482,22 @@ async function getFallbackAlternatives(
   anchor: Date,
   durationMinutes: number,
   customerPhone?: string,
-  customerTimezone?: CustomerTimezone,
+  customerTimezone?: string,
+  customerLabel?: string,
 ): Promise<CalendarSlot[]> {
-  const near = await findAlternativesNear(anchor, durationMinutes, customerPhone, customerTimezone);
+  const near = await findAlternativesNear(
+    anchor,
+    durationMinutes,
+    customerPhone,
+    customerTimezone,
+    customerLabel,
+  );
   if (near.length >= 3) return near;
 
   const general = await getAvailableSlots({
     customerPhone,
+    customerTimezone,
+    customerLabel,
     durationMinutes,
     preferredDay: 'any',
     preferredTime: 'any',
@@ -502,7 +513,8 @@ async function getFallbackAlternatives(
 export type CheckSpecificTimeParams = {
   requestedDate: string;
   requestedTime: string;
-  customerTimezone: CustomerTimezone;
+  customerTimezone: string;
+  customerLabel?: string;
   customerPhone?: string;
   durationMinutes?: number;
 };
@@ -519,7 +531,7 @@ export async function checkSpecificTime(
 ): Promise<CheckSpecificTimeResult> {
   const durationMinutes = params.durationMinutes ?? DEFAULT_DURATION_MINUTES;
   const tz = params.customerTimezone;
-  const label = tz === 'America/Bogota' ? 'Bogotá' : 'CDMX';
+  const label = params.customerLabel ?? 'hora local';
 
   let slotStart: Date;
   try {
@@ -540,6 +552,7 @@ export async function checkSpecificTime(
       durationMinutes,
       params.customerPhone,
       tz,
+      label,
     );
     return {
       status: 'too_soon',
@@ -557,6 +570,7 @@ export async function checkSpecificTime(
       durationMinutes,
       params.customerPhone,
       tz,
+      label,
     );
     return {
       status: 'outside_hours',
@@ -584,11 +598,18 @@ export async function checkSpecificTime(
       durationMinutes,
       params.customerPhone,
       tz,
+      label,
     );
     const fallback =
       alternatives.length > 0
         ? alternatives
-        : await getFallbackAlternatives(slotStart, durationMinutes, params.customerPhone, tz);
+        : await getFallbackAlternatives(
+            slotStart,
+            durationMinutes,
+            params.customerPhone,
+            tz,
+            label,
+          );
     return {
       status: 'busy',
       alternatives: fallback,
@@ -749,19 +770,19 @@ export async function cancelDemoEvent(demoId: string, reason: string): Promise<v
 export function formatDemoConfirmationMessage(
   scheduledAt: Date,
   customerEmail: string,
-  customerPhone?: string,
+  displayTimezone: string,
+  displayLabel: string,
 ): string {
-  const displayTimezone = getCustomerTimezone(customerPhone);
-  const displayLabel = getCustomerTimezoneLabel(customerPhone);
-  const dateLabel = formatSlotForES(scheduledAt, displayTimezone, displayLabel);
+  const dateLabel = formatInTimeZone(scheduledAt, displayTimezone, 'EEEE d MMM', { locale: es });
+  const capitalizedDate = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
   const timeLabel = formatInTimeZone(scheduledAt, displayTimezone, 'HH:mm', { locale: es });
 
   return (
     '✅ ¡Demo agendada!\n\n' +
-    `📅 ${dateLabel}\n` +
-    `⏰ ${timeLabel} hora ${displayLabel}\n` +
+    `📅 ${capitalizedDate}\n` +
+    `⏰ ${timeLabel} ${displayLabel}\n` +
     `👤 Con ${DEMO_HOST_TEAM_LABEL}\n` +
-    '🎥 Te llegará el link de Google Meet por email\n' +
+    '🎥 Te llegará Google Meet link por email\n' +
     `📨 Invitación enviada a ${customerEmail}\n\n` +
     'Te llegará un recordatorio 1 hora antes. ¿Algo más en lo que te pueda ayudar?'
   );
