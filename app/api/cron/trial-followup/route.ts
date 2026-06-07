@@ -72,7 +72,7 @@ async function findTrialUsersExpiring(daysFromNow: number): Promise<TrialUser[]>
   const { data, error } = await supabase
     .from('psychologists')
     .select('id, email, phone, trial_ends_at')
-    .eq('plan', 'professional')
+    .eq('plan', 'starter')
     .not('phone', 'is', null)
     .gte('trial_ends_at', start)
     .lt('trial_ends_at', end);
@@ -80,6 +80,9 @@ async function findTrialUsersExpiring(daysFromNow: number): Promise<TrialUser[]>
     console.error(`[cron] failed to load users expiring in ${daysFromNow}d`, error);
     return [];
   }
+  console.log(
+    `[trial-followup-fix] now matching plan=starter trials | daysFromNow=${daysFromNow} | range=${start}..${end} | found=${data?.length ?? 0}`,
+  );
   return (data ?? []).filter(
     (u): u is TrialUser => typeof u.phone === 'string' && u.phone.trim().length > 0,
   );
