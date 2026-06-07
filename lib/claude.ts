@@ -1,7 +1,7 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 
-const MODEL = 'claude-haiku-4-5-20251001';
+const DEFAULT_MODEL = 'claude-haiku-4-5';
 const MAX_TOKENS = 1024;
 const MAX_TOOL_ITERATIONS = 5;
 
@@ -15,6 +15,7 @@ export type ToolHandler = (input: unknown) => Promise<unknown>;
 export type GenerateReplyOptions = {
   tools?: Anthropic.Messages.Tool[];
   toolHandlers?: Record<string, ToolHandler>;
+  model?: string;
 };
 
 let client: Anthropic | null = null;
@@ -84,7 +85,7 @@ export async function generateReply(
   history: ChatMessage[],
   options: GenerateReplyOptions = {},
 ): Promise<GenerateReplyResult> {
-  const { tools, toolHandlers } = options;
+  const { tools, toolHandlers, model = DEFAULT_MODEL } = options;
   const anthropic = getClient();
   let hadToolUse = false;
 
@@ -107,7 +108,7 @@ export async function generateReply(
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     const response = await anthropic.messages.create({
-      model: MODEL,
+      model,
       max_tokens: MAX_TOKENS,
       system,
       messages,

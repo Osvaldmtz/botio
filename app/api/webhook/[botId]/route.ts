@@ -12,6 +12,8 @@ import {
   mapQuickReplySelection,
 } from '@/lib/kalyo-messages';
 import { isAdPrefillMessage, isKalyoBotId, touchConversation } from '@/lib/conversation-utils';
+import { checkCache } from '@/lib/response-cache';
+import { selectModel } from '@/lib/model-router';
 
 const HUMAN_ESCALATION_RE =
   /human[oa]|asesor[a]?|(?:hablar|habla|quiero)\s+con\s+(?:alguien|una?\s+persona)|persona\b|agente\b|equipo\s+de\s+ventas|\bventas\b|soporte\b|contactar|contacto\s+directo/i;
@@ -168,6 +170,7 @@ async function resolveIncomingMessage(
 type Params = { params: { botId: string } };
 
 export async function POST(request: Request, { params }: Params) {
+  const webhookStartedAt = Date.now();
   const { botId } = params;
 
   let from: string;
@@ -376,16 +379,41 @@ export async function POST(request: Request, { params }: Params) {
 
   let replyText: string;
   let hadToolUse = false;
-  try {
-    const result = await generateReply(systemPrompt, history, claudeOptions);
-    replyText = result.text;
-    hadToolUse = result.hadToolUse;
-  } catch (error) {
-    console.error('[webhook] Claude call failed', error);
-    replyText = FALLBACK_MESSAGE;
+  let cachedHit = false;
+  let modelUsed = 'cache';
+
+  const cached =
+    isKalyoBotId(bot.id) && userMeta.source === 'text'
+      ? checkCache(messageBody, history)
+      : null;
+
+  if (cached) {
+    console.log(`[cache] hit | pattern=${cached.pattern}`);
+    replyText = cached.response;
+    cachedHit = true;
+  } else {
+    console.log('[cache] miss');
+    const { model, reason, complexity } = selectModel(messageBody, history);
+    modelUsed = model;
+    console.log(
+      `[model-router] selected=${model} complexity=${complexity} reason="${reason}"`,
+    );
+
+    try {
+      const result = await generateReply(systemPrompt, history, {
+        ...claudeOptions,
+        model,
+      });
+      replyText = result.text;
+      hadToolUse = result.hadToolUse;
+    } catch (error) {
+      console.error('[webhook] Claude call failed', error);
+      replyText = FALLBACK_MESSAGE;
+      modelUsed = model;
+    }
   }
 
-  console.log('[webhook] reply_generated | had_tool_use:', hadToolUse);
+  console.log('[webhook] reply_generated | had_tool_use:', hadToolUse, '| cached:', cachedHit);
   if (escalationDetected && !hadToolUse) {
     console.warn('[escalation-warning] User requested human but Claude did not call notify_sales_team', {
       from,
@@ -394,8 +422,9 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const isFirstKalyoReply = totalUserMsgs === 1 && isKalyoBotId(bot.id);
-  const outboundBody = isFirstKalyoReply ? appendQuickReplyPrompt(replyText) : replyText;
-  const storedReply = isFirstKalyoReply ? outboundBody : replyText;
+  const outboundBody =
+    cachedHit || !isFirstKalyoReply ? replyText : appendQuickReplyPrompt(replyText);
+  const storedReply = outboundBody;
 
   const assistantNow = new Date().toISOString();
   const { error: assistantMsgError } = await supabase.from('messages').insert({
@@ -403,6 +432,7 @@ export async function POST(request: Request, { params }: Params) {
     role: 'assistant',
     content: storedReply,
     source: 'text',
+    source_type: cachedHit ? 'cache' : 'claude',
   });
   if (assistantMsgError) {
     console.error('[webhook] failed to insert assistant message', assistantMsgError);
@@ -426,6 +456,11 @@ export async function POST(request: Request, { params }: Params) {
   } else {
     console.warn('[webhook] bot missing Twilio credentials — skipping outbound send');
   }
+
+  const totalLatencyMs = Date.now() - webhookStartedAt;
+  console.log(
+    `[webhook-stats] cached=${cachedHit} model=${modelUsed} latency_ms=${totalLatencyMs}`,
+  );
 
   return emptyTwimlResponse();
 }
