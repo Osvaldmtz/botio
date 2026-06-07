@@ -6,6 +6,7 @@ import { setPipelineStageTrial } from '@/lib/pipeline-utils';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
+import { recordOutcome } from '@/lib/ab-testing';
 
 // --------------------------------------------------------------------------
 // Kalyo-specific Claude wiring shared by both the Twilio and Meta webhooks.
@@ -524,6 +525,9 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             } catch (trialStageErr) {
               console.error('[activate_pro_trial] pipeline stage update failed', trialStageErr);
             }
+
+            await recordOutcome(supabase, conversationId, 'trial_activated', { email });
+            await recordOutcome(supabase, conversationId, 'lead_captured', { source: 'trial' });
           }
 
           return result;
@@ -557,13 +561,19 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           );
           console.log('[notify_sales_team] result', JSON.stringify(result));
 
+          const supabase = createAdminClient();
+
+          if (result.status === 'success' && reason === 'purchase_intent') {
+            await recordOutcome(supabase, conversationId, 'purchase_intent', { reason });
+          }
+
           if (result.status === 'success' && (reason === 'new_lead' || reason === 'purchase_intent')) {
-            const supabase = createAdminClient();
             const { error } = await supabase
               .from('conversations')
               .update({ lead_captured: true })
               .eq('id', conversationId);
             if (error) console.error('[notify_sales_team] failed to mark lead_captured', error);
+            await recordOutcome(supabase, conversationId, 'lead_captured', { reason });
           }
 
           return result;

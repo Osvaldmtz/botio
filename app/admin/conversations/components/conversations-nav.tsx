@@ -9,10 +9,12 @@ const VIEW_KEY = 'botio_admin_conversations_view';
 export function ConversationsNav() {
   const pathname = usePathname();
   const isPipeline = pathname?.includes('/pipeline');
+  const isExperiments = pathname?.includes('/experiments');
 
   useEffect(() => {
+    if (isExperiments) return;
     localStorage.setItem(VIEW_KEY, isPipeline ? 'pipeline' : 'list');
-  }, [isPipeline]);
+  }, [isPipeline, isExperiments]);
 
   const tabClass = (active: boolean) =>
     `rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
@@ -22,12 +24,18 @@ export function ConversationsNav() {
     }`;
 
   return (
-    <nav className="flex gap-2">
-      <Link href="/admin/conversations" className={tabClass(!isPipeline)}>
-        Lista
+    <nav className="flex flex-wrap gap-2">
+      <Link
+        href="/admin/conversations"
+        className={tabClass(!isPipeline && !isExperiments)}
+      >
+        Conversaciones
       </Link>
       <Link href="/admin/conversations/pipeline" className={tabClass(Boolean(isPipeline))}>
         Pipeline
+      </Link>
+      <Link href="/admin/experiments" className={tabClass(Boolean(isExperiments))}>
+        Experimentos
       </Link>
     </nav>
   );

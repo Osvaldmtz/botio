@@ -17,6 +17,13 @@ import { selectModel } from '@/lib/model-router';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { maybeEnrichConversationOnHandoff } from '@/lib/handoff-enrichment';
 import { maybeAutoAdvancePipeline } from '@/lib/pipeline-utils';
+import {
+  buildAbSystemPromptSuffix,
+  ensureConversationAssignments,
+  getFirstMessageOverride,
+  recordOutcome,
+  type AbAssignmentContext,
+} from '@/lib/ab-testing';
 
 const HUMAN_ESCALATION_RE =
   /human[oa]|asesor[a]?|(?:hablar|habla|quiero)\s+con\s+(?:alguien|una?\s+persona)|persona\b|agente\b|equipo\s+de\s+ventas|\bventas\b|soporte\b|contactar|contacto\s+directo/i;
@@ -63,6 +70,10 @@ async function sendFarewellAndClose(
   conversationId: string,
   closeReason: string,
 ): Promise<void> {
+  if (closeReason === 'no_lead_limit') {
+    await recordOutcome(supabase, conversationId, 'dropped');
+  }
+
   await Promise.allSettled([
     bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number
       ? sendWhatsApp({
@@ -327,6 +338,20 @@ export async function POST(request: Request, { params }: Params) {
 
   const leadCaptured = (conversation as { lead_captured: boolean }).lead_captured;
 
+  let abAssignments: AbAssignmentContext[] = [];
+  if (isKalyoBotId(bot.id)) {
+    try {
+      abAssignments = await ensureConversationAssignments(
+        supabase,
+        bot.id,
+        conversation.id,
+        'first_message',
+      );
+    } catch (abErr) {
+      console.error('[ab-testing] assignment failed', abErr);
+    }
+  }
+
   const { count: userMsgCount, error: countError } = await supabase
     .from('messages')
     .select('id', { count: 'exact', head: true })
@@ -337,6 +362,14 @@ export async function POST(request: Request, { params }: Params) {
     console.error('[webhook] failed to count user messages — guards 1/3 will be skipped', countError);
   }
   const totalUserMsgs = userMsgCount ?? 0;
+  const isFirstUserMessage = totalUserMsgs === 1;
+  const firstMessageOverride = isFirstUserMessage
+    ? getFirstMessageOverride(abAssignments)
+    : null;
+
+  if (totalUserMsgs === 3) {
+    await recordOutcome(supabase, conversation.id, 'engaged');
+  }
 
   const userTimestamps = (historyRows ?? [])
     .filter((m) => m.role === 'user')
@@ -375,7 +408,8 @@ export async function POST(request: Request, { params }: Params) {
     senderFrom: from,
     conversationId: conversation.id,
   });
-  let systemPrompt = (bot.system_prompt ?? '') + systemSuffix;
+  let systemPrompt =
+    (bot.system_prompt ?? '') + systemSuffix + buildAbSystemPromptSuffix(abAssignments, isFirstUserMessage);
 
   if (
     userMeta.source === 'audio' &&
@@ -429,11 +463,14 @@ export async function POST(request: Request, { params }: Params) {
   let modelUsed = 'cache';
 
   const cached =
-    isKalyoBotId(bot.id) && userMeta.source === 'text'
+    isKalyoBotId(bot.id) && userMeta.source === 'text' && !firstMessageOverride
       ? checkCache(messageBody, history)
       : null;
 
-  if (cached) {
+  if (firstMessageOverride) {
+    replyText = firstMessageOverride;
+    modelUsed = 'ab-test';
+  } else if (cached) {
     console.log(`[cache] hit | pattern=${cached.pattern}`);
     replyText = cached.response;
     cachedHit = true;
@@ -508,6 +545,10 @@ export async function POST(request: Request, { params }: Params) {
     .select('pipeline_stage, lead_captured, customer_phone, last_message_at')
     .eq('id', conversation.id)
     .maybeSingle();
+
+  if (freshConv?.lead_captured && !leadCaptured) {
+    await recordOutcome(supabase, conversation.id, 'lead_captured');
+  }
 
   if (freshConv) {
     await maybeAutoAdvancePipeline(
