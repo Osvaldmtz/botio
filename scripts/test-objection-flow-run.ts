@@ -108,12 +108,13 @@ async function runTests(): Promise<void> {
     supabase,
     conversationId,
     customerPhone: testPhone,
-    messageBody: 'es demasiado caro para mí',
+    messageBody: 'Sigue siendo caro para mí',
     metadata: { name: 'María Test', email: testEmail },
   });
 
   assert(second != null && second.isRepeat === true, 'second is repeat');
   assert(second != null && second.replyText.includes('Osvaldo'), 'insistence mentions handoff');
+  assert(second != null && second.replyText.includes('email'), 'insistence asks for email');
 
   const { count } = await supabase
     .from('detected_objections')

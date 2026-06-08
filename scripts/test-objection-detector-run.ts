@@ -78,6 +78,7 @@ async function runTests(): Promise<void> {
 
   const cases: Array<{ msg: string; type: string }> = [
     { msg: 'es muy caro', type: 'price' },
+    { msg: 'Sigue siendo caro para mí', type: 'price' },
     { msg: '29 dólares son muchos para mí', type: 'price' },
     { msg: 'déjame pensarlo', type: 'thinking' },
     { msg: 'ya tengo doctoralia', type: 'competition' },

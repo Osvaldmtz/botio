@@ -25,6 +25,7 @@ import { buildProfilePromptBlock } from '@/lib/profile-flows';
 import type { ConversationMessage } from '@/lib/lead-enrichment';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { buildKalyoOfficialPricingPrompt } from '@/lib/kalyo-pricing-data';
 
 // --------------------------------------------------------------------------
 // Kalyo-specific Claude wiring shared by both the Twilio and Meta webhooks.
@@ -86,6 +87,10 @@ NO ofrecer demo proactivamente a perfiles private_practice o student (genera fri
 
 const KALYO_INSTRUCTIONS_TWILIO = `
 
+${buildKalyoOfficialPricingPrompt()}
+
+---
+
 DISTINCIÓN CRÍTICA — DEMO vs TRIAL
 
 DEMO = llamada agendada con Osvaldo, 15 min, vía Google Meet. Triggers:
@@ -146,14 +151,6 @@ PASO 3 — Confirmar: Después del tool call, responde:
 INSTRUCCIONES DE COMPORTAMIENTO Y HERRAMIENTAS — tienen PRIORIDAD MÁXIMA sobre todo lo anterior en este prompt. Síguelas exactamente.
 
 Nunca uses mayúsculas para enfatizar palabras al hablar con el usuario. Usa lenguaje natural sin gritos visuales. (Esto no aplica a las secciones de este prompt — solo a tus respuestas al usuario.)
-
----
-
-DATOS FIJOS DE PLANES (usa siempre estos valores exactos, no improvises cantidades)
-
-Starter (gratis): hasta 3 pacientes activos, 10 evaluaciones/mes, perfil vocacional (hasta 2 pacientes), notas básicas, reportes PDF.
-Pro ($29 USD/mes): pacientes ilimitados, más de 100 evaluaciones clínicas validadas, perfil vocacional ilimitado, reportes con interpretación por IA, mapa de riesgo clínico con alertas, soporte prioritario.
-Max ($39 USD/mes): todo lo de Pro + notas SOAP con asistencia de IA, agenda de citas integrada, videollamadas Kalyo Meet, portal del paciente, tareas para pacientes, módulo de finanzas con facturas, recordatorios automáticos, transcripción de sesiones (20/mes).
 
 ---
 

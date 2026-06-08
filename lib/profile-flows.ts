@@ -1,4 +1,5 @@
 import type { ProfileType } from '@/lib/profile-detection';
+import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
 
 export type RecommendedPlan = 'starter' | 'starter_free';
 
@@ -54,7 +55,7 @@ export const PROFILE_FLOWS: Record<Exclude<ProfileType, 'unknown'>, ProfileFlowC
       'cuando empieces a atender, ya tendrás todo configurado',
     ],
     objection_handling: {
-      precio: 'El plan Starter es gratis para siempre con hasta 3 pacientes — perfecto mientras estudias.',
+      precio: `El plan Starter es gratis para siempre con ${KALYO_PRICING.starter.max_patients} pacientes y ${KALYO_PRICING.starter.max_evaluations_per_month} evaluaciones/mes — perfecto mientras estudias.`,
       trial: 'El trial Pro es para psicólogos que ya atienden pacientes; el Starter gratis te sirve ahora.',
     },
   },

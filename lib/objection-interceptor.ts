@@ -64,7 +64,12 @@ export async function handleObjectionMessage(params: {
     params.supabase,
   );
 
-  if (!objection) return null;
+  if (!objection) {
+    console.log(
+      `[objection-interceptor] no_match | conv=${params.conversationId} | msg=${params.messageBody.slice(0, 60)}`,
+    );
+    return null;
+  }
 
   const lead = await loadObjectionLeadContext(
     params.supabase,
@@ -92,9 +97,11 @@ export async function handleObjectionMessage(params: {
   });
 
   if (insertError) {
-    console.error('[objection-detected] insert failed', insertError);
+    console.error('[objection-interceptor] insert failed', insertError);
     return null;
   }
+
+  const action = 'hardcoded_response';
 
   if (objection.type === 'competition' && !objection.is_repeat) {
     await notifyObjectionTelegram({
@@ -115,7 +122,7 @@ export async function handleObjectionMessage(params: {
   }
 
   console.log(
-    `[objection-detected] type=${objection.type} | conv=${params.conversationId} | is_repeat=${objection.is_repeat}`,
+    `[objection-interceptor] type=${objection.type} | is_repeat=${objection.is_repeat} | action=${action} | conv=${params.conversationId}`,
   );
 
   return {

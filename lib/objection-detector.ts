@@ -39,6 +39,18 @@ const PRIORITY: ObjectionType[] = [
 
 const PATTERNS: PatternRule[] = [
   { type: 'price', regex: /(?:es|esta|está|me parece|son)\s*(?:muy\s*|demasiado\s*)?caro/i, confidence: 'high' },
+  {
+    type: 'price',
+    regex: /sigue\s*(?:siendo\s*)?(?:muy\s*|demasiado\s*)?caro/i,
+    confidence: 'high',
+  },
+  {
+    type: 'price',
+    regex: /(?:todavia|aun|aún)\s*(?:es\s*)?(?:muy\s*|demasiado\s*)?caro/i,
+    confidence: 'high',
+  },
+  { type: 'price', regex: /(?:me\s*)?sigue\s*pareciendo\s*caro/i, confidence: 'high' },
+  { type: 'price', regex: /\bcaro\s+para\s+m[ií]\b/i, confidence: 'high' },
   { type: 'price', regex: /no\s*(?:tengo|cuento\s*con)\s*(?:el\s*)?(?:presupuesto|dinero|lana|plata)/i, confidence: 'high' },
   { type: 'price', regex: /(?:fuera|arriba)\s*de\s*mi\s*(?:rango|presupuesto)/i, confidence: 'high' },
   { type: 'price', regex: /(?:precio|costo)\s*(?:alto|elevado|caro)/i, confidence: 'medium' },
@@ -187,24 +199,45 @@ export function matchObjectionPattern(messageBody: string): Omit<ObjectionMatch,
   return matches[0];
 }
 
+async function countPriorObjections(
+  supabase: SupabaseClient,
+  conversationId: string,
+  type: ObjectionType,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('detected_objections')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId)
+    .eq('objection_type', type);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function detectObjection(
   messageBody: string,
   conversation: ObjectionConversation,
   supabase: SupabaseClient,
 ): Promise<ObjectionMatch | null> {
+  const normalized = normalizeObjectionText(messageBody);
+  const priorPriceCount = await countPriorObjections(supabase, conversation.id, 'price');
+
+  if (priorPriceCount > 0 && /\bcaro\b/.test(normalized)) {
+    return {
+      type: 'price',
+      confidence: 'high',
+      trigger_phrase: normalized.match(/\bcaro\b[^.!?]*/)?.[0] ?? 'caro',
+      is_repeat: true,
+    };
+  }
+
   const pattern = matchObjectionPattern(messageBody);
   if (!pattern) return null;
 
-  const { count, error } = await supabase
-    .from('detected_objections')
-    .select('id', { count: 'exact', head: true })
-    .eq('conversation_id', conversation.id)
-    .eq('objection_type', pattern.type);
-
-  if (error) throw error;
+  const priorCount = await countPriorObjections(supabase, conversation.id, pattern.type);
 
   return {
     ...pattern,
-    is_repeat: (count ?? 0) > 0,
+    is_repeat: priorCount > 0,
   };
 }

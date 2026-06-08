@@ -1,16 +1,12 @@
 import type { ChatMessage } from '@/lib/claude';
+import { buildPlansCacheResponse } from '@/lib/kalyo-pricing-data';
 
 export type CachedResponse = {
   pattern: string;
   response: string;
 };
 
-const PRECIO_SIMPLE_RESPONSE =
-  'Tenemos 3 planes:\n\n' +
-  '• *Starter* (gratis): 3 pacientes activos, 10 evaluaciones/mes\n' +
-  '• *Pro* ($29 USD/mes): pacientes ilimitados, +100 evaluaciones, reportes IA\n' +
-  '• *Max* ($39 USD/mes): todo Pro + SOAP IA, videollamadas, agenda\n\n' +
-  '¿Quieres probar Pro 15 días gratis?';
+const PRECIO_SIMPLE_RESPONSE = buildPlansCacheResponse();
 
 type CachePattern = {
   name: string;
