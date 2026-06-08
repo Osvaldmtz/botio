@@ -46,8 +46,9 @@ const supabase = createClient(url, key, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-const testPhone = `+5299905${String(Date.now()).slice(-5)}`;
+const testPhone = `+52999999${String(Date.now()).slice(-4)}`;
 const telegramSent: string[] = [];
+const createdConversationIds: string[] = [];
 
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
@@ -64,20 +65,25 @@ globalThis.fetch = async (input, init) => {
   return originalFetch(input, init);
 };
 
-async function cleanup(conversationId?: string): Promise<void> {
-  if (conversationId) {
-    await supabase.from('hot_lead_alert_queue').delete().eq('conversation_id', conversationId);
-  }
+async function cleanupAll(): Promise<void> {
   const { data: convs } = await supabase
     .from('conversations')
     .select('id')
-    .eq('customer_phone', testPhone);
-  const ids = (convs ?? []).map((c) => c.id);
-  if (ids.length) {
-    await supabase.from('hot_lead_alert_queue').delete().in('conversation_id', ids);
-    await supabase.from('messages').delete().in('conversation_id', ids);
-    await supabase.from('conversations').delete().in('id', ids);
-  }
+    .or(`customer_phone.eq.${testPhone},customer_phone.eq.webchat:${testPhone}`)
+    .contains('metadata', { test: true });
+
+  const ids = Array.from(
+    new Set([
+      ...createdConversationIds,
+      ...((convs ?? []).map((c) => c.id as string)),
+    ]),
+  );
+
+  if (ids.length === 0) return;
+
+  await supabase.from('hot_lead_alert_queue').delete().in('conversation_id', ids);
+  await supabase.from('messages').delete().in('conversation_id', ids);
+  await supabase.from('conversations').delete().in('id', ids);
 }
 
 async function ensureConversation(channel: 'whatsapp' | 'webchat' = 'whatsapp'): Promise<string> {
@@ -89,12 +95,14 @@ async function ensureConversation(channel: 'whatsapp' | 'webchat' = 'whatsapp'):
           channel: 'webchat',
           session_id: `sess-${Date.now()}`,
           lead_score: 50,
+          metadata: { test: true },
         }
       : {
           bot_id: botId,
           customer_phone: testPhone,
           channel: 'whatsapp',
           lead_score: 50,
+          metadata: { test: true },
         };
 
   const { data, error } = await supabase
@@ -103,12 +111,30 @@ async function ensureConversation(channel: 'whatsapp' | 'webchat' = 'whatsapp'):
     .select('id')
     .single();
   if (error || !data) throw error ?? new Error('conversation failed');
-  return data.id as string;
+  const id = data.id as string;
+  createdConversationIds.push(id);
+  return id;
+}
+
+async function seedMessages(
+  conversationId: string,
+  messages: ConversationMessage[],
+): Promise<void> {
+  for (const message of messages) {
+    const { error } = await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      role: message.role,
+      content: message.content,
+      source: 'text',
+      metadata: { test: true },
+    });
+    if (error) throw error;
+  }
 }
 
 async function main(): Promise<void> {
   console.log('[test] hot lead telegram alert E2E\n');
-  await cleanup();
+  await cleanupAll();
 
   const conversationId = await ensureConversation('whatsapp');
   console.log(`[test] conversation ${conversationId}`);
@@ -146,6 +172,8 @@ async function main(): Promise<void> {
   assert(hot.score >= 70, `hot score should be >=70, got ${hot.score}`);
   console.log(`[test] score transition ${warm.score} → ${hot.score}`);
 
+  await seedMessages(conversationId, hotMessages);
+
   telegramSent.length = 0;
   await enrichAndNotifyLead(supabase, {
     conversationId,
@@ -174,6 +202,7 @@ async function main(): Promise<void> {
   console.log('[test] idempotency OK');
 
   const webchatId = await ensureConversation('webchat');
+  await seedMessages(webchatId, hotMessages);
   await supabase
     .from('conversations')
     .update({ lead_score: 50, lead_signals: [], lead_temperature: 'warm' })
@@ -205,12 +234,14 @@ async function main(): Promise<void> {
   assert(telegramSent[0].includes('HOT LEAD detectado'), 'DB path message format OK');
   console.log('[test] DB/manual path OK');
 
-  await cleanup(conversationId);
-  await cleanup(webchatId);
   console.log('[test] ALL PASSED');
 }
 
-main().catch((err) => {
-  console.error('[test] FAILED', err);
-  process.exit(1);
-});
+void main()
+  .catch((err) => {
+    console.error('[test] FAILED', err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await cleanupAll();
+  });

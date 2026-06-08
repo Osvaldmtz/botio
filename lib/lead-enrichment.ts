@@ -228,6 +228,23 @@ export function enrichLead(input: LeadEnrichmentInput): EnrichedLead {
   };
 }
 
+async function countMessagesForConversation(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId);
+
+  if (error) {
+    console.error('[lead-enrichment] message count failed', { conversationId, error });
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
 export async function enrichAndNotifyLead(
   supabase: SupabaseClient,
   params: {
@@ -252,6 +269,14 @@ export async function enrichAndNotifyLead(
     email: params.email,
     name: params.name,
   });
+
+  const messageCount = await countMessagesForConversation(supabase, params.conversationId);
+  if (messageCount === 0 && process.env.NODE_ENV === 'production') {
+    console.warn(
+      `[lead-enrichment] skip persist | conv=${params.conversationId} | reason=no_messages_in_db`,
+    );
+    return enriched;
+  }
 
   const existingSignals = Array.isArray(convRow?.lead_signals)
     ? (convRow.lead_signals as string[])

@@ -60,6 +60,7 @@ async function createTestConversation(
     customer_phone: phone,
     channel: 'whatsapp',
     pipeline_stage: 'new',
+    metadata: { test: true },
   });
   if (error) throw error;
   return id;

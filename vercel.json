@@ -35,6 +35,10 @@
     {
       "path": "/api/cron/hot-lead-alerts",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-test-leads",
+      "schedule": "0 3 * * 0"
     }
   ]
 }

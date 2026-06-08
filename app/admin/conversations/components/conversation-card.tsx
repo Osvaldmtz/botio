@@ -30,6 +30,7 @@ export function ConversationCard({ conversation, selected, onSelect }: Props) {
   const title = extractLeadName(conversation.customer_phone, conversation.lead_signals);
   const hot = isHotLead(conversation.lead_score);
   const hotNew = isNewHotLead(conversation.created_at, conversation.lead_score);
+  const hotWithoutMessages = hot && conversation.message_count === 0;
 
   return (
     <button
@@ -57,7 +58,11 @@ export function ConversationCard({ conversation, selected, onSelect }: Props) {
             </Badge>
             {hot ? (
               <Badge tone="hot">🔥 HOT{conversation.lead_score !== null ? ` ${conversation.lead_score}` : ''}</Badge>
-            ) : temp ? (
+            ) : null}
+            {hotWithoutMessages ? (
+              <Badge tone="warning">⚠️ Sin mensajes (posible test)</Badge>
+            ) : null}
+            {!hot && temp ? (
               <Badge tone={temp.tone === 'hot' ? 'hot' : temp.tone === 'warm' ? 'warning' : 'gray'}>
                 {temp.label}
                 {conversation.lead_score !== null ? ` ${conversation.lead_score}` : ''}
