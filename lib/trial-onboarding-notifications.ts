@@ -46,6 +46,50 @@ async function defaultSendTelegram(text: string): Promise<void> {
   }
 }
 
+export function buildTrialEnrolledTelegramText(params: {
+  name: string;
+  email: string;
+  phone: string;
+  source: string;
+  trialEndsAt: string;
+}): string {
+  const trialDateStr = new Date(params.trialEndsAt).toLocaleDateString('es-MX', {
+    timeZone: 'America/Mexico_City',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+
+  return (
+    `🎉 <b>Trial enrolado en Onboarding cron</b>\n\n` +
+    `Cliente: ${params.name}\n` +
+    `📱 WhatsApp: ${params.phone}\n` +
+    `📧 Email: ${params.email}\n` +
+    `📍 Source: ${params.source}\n` +
+    `📅 Trial vence: ${trialDateStr}\n\n` +
+    `El cliente recibirá los 5 mensajes de onboarding en días 1, 3, 7, 13 y 15.`
+  );
+}
+
+export async function notifyTrialEnrolled(params: {
+  name: string;
+  email: string;
+  phone: string;
+  source: string;
+  trialEndsAt: string;
+  sendTelegram?: SendTelegramFn;
+}): Promise<void> {
+  const sendTelegram = params.sendTelegram ?? defaultSendTelegram;
+  try {
+    const text = buildTrialEnrolledTelegramText(params);
+    await sendTelegram(text);
+    console.log(`[trial-onboarding-webhook] telegram sent | email=${params.email}`);
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error(`[trial-onboarding-webhook] telegram failed | email=${params.email} | error=${error}`);
+  }
+}
+
 export async function notifyTrialOnboardingSent(params: {
   day: 1 | 3 | 7 | 13 | 15;
   demoId: string;
