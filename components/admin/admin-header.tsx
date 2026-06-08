@@ -16,10 +16,17 @@ export function AdminHeader() {
   const isOnboarding = pathname?.includes('/trial-onboarding');
   const isObjections = pathname?.includes('/objections');
   const isClosures = pathname?.includes('/analytics/closures');
+  const isDashboard =
+    pathname === '/admin/dashboard' || pathname === '/admin';
   const isConversations =
     pathname?.startsWith('/admin/conversations') && !isPipeline;
 
   const tabs = [
+    {
+      href: '/admin/dashboard',
+      label: 'Dashboard',
+      active: isDashboard,
+    },
     {
       href: '/admin/conversations',
       label: 'Conversaciones',
@@ -60,7 +67,7 @@ export function AdminHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-bg-border bg-bg">
       <div className="mx-auto flex h-14 max-w-dashboard items-center gap-6 px-4 sm:px-6">
-        <Link href="/admin" className="flex shrink-0 items-center gap-2">
+        <Link href="/admin/dashboard" className="flex shrink-0 items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded bg-accent text-xs font-semibold text-white">
             B
           </span>
