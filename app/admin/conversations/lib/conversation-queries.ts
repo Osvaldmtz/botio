@@ -1,6 +1,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ChannelFilter } from '@/lib/channel-utils';
+import type { ClosureReason } from '@/lib/conversation-closure-constants';
 
 const MEXICO_TZ = 'America/Mexico_City';
 
@@ -11,6 +12,13 @@ export type ConversationStatusFilter =
   | 'unanswered'
   | 'closed'
   | 'handoff';
+
+export type ClosureFilter =
+  | 'all'
+  | 'active'
+  | 'closed'
+  | ClosureReason;
+
 export type DateRangeFilter = 'today' | 'yesterday' | '7d' | 'custom' | 'all';
 
 export type ConversationFilters = {
@@ -18,6 +26,7 @@ export type ConversationFilters = {
   channel?: ChannelFilter;
   search?: string;
   status?: ConversationStatusFilter;
+  closure?: ClosureFilter;
   dateRange?: DateRangeFilter;
   from?: string;
   to?: string;
@@ -53,6 +62,10 @@ export type ConversationSummary = {
   pipeline_stage: string | null;
   pipeline_stage_updated_at: string | null;
   pipeline_stage_updated_by: string | null;
+  closed_at: string | null;
+  closure_reason: string | null;
+  closure_note: string | null;
+  closed_by: string | null;
 };
 
 export type DashboardStats = {
@@ -161,6 +174,17 @@ export async function fetchConversations(
   if (status === 'unanswered') q = q.eq('needs_reply', true);
   if (status === 'closed') q = q.eq('is_closed', true);
   if (status === 'handoff') q = q.eq('handoff_active', true);
+
+  const closure = filters.closure ?? 'all';
+  if (closure === 'active') q = q.is('closed_at', null);
+  if (closure === 'closed') q = q.not('closed_at', 'is', null);
+  if (
+    closure !== 'all' &&
+    closure !== 'active' &&
+    closure !== 'closed'
+  ) {
+    q = q.eq('closure_reason', closure);
+  }
 
   const { start, end } = resolveDateBounds(filters);
   if (start) q = q.gte('last_message_at', start);

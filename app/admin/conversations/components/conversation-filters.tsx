@@ -2,9 +2,11 @@
 
 import { RefreshCw, Search } from 'lucide-react';
 import type {
+  ClosureFilter,
   ConversationStatusFilter,
   DateRangeFilter,
 } from '../lib/conversation-queries';
+import { CLOSURE_REASONS, CLOSURE_REASON_UI } from '@/lib/conversation-closure-constants';
 import type { ChannelFilter } from '@/lib/channel-utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,6 +14,7 @@ import { cn } from '@/lib/cn';
 
 export type FilterState = {
   status: ConversationStatusFilter;
+  closure: ClosureFilter;
   channel: ChannelFilter;
   search: string;
   dateRange: DateRangeFilter;
@@ -132,6 +135,39 @@ export function ConversationFilters({
             {chip.label}
           </Chip>
         ))}
+      </div>
+
+      <div className="flex flex-wrap gap-1 border-t border-bg-border pt-3">
+        <Chip
+          active={filters.closure === 'all'}
+          onClick={() => onChange({ closure: 'all' })}
+        >
+          Todas
+        </Chip>
+        <Chip
+          active={filters.closure === 'active'}
+          onClick={() => onChange({ closure: 'active' })}
+        >
+          Activas
+        </Chip>
+        <Chip
+          active={filters.closure === 'closed'}
+          onClick={() => onChange({ closure: 'closed' })}
+        >
+          Cerradas
+        </Chip>
+        {CLOSURE_REASONS.map((reason) => {
+          const ui = CLOSURE_REASON_UI[reason];
+          return (
+            <Chip
+              key={reason}
+              active={filters.closure === reason}
+              onClick={() => onChange({ closure: reason })}
+            >
+              {ui.emoji} {ui.label}
+            </Chip>
+          );
+        })}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

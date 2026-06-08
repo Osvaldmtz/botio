@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { MessageBubble } from './message-bubble';
 import { HandoffControls, getHandoffAdminName } from './handoff-controls';
 import { HandoffChatBox } from './handoff-chat-box';
+import { ConversationClosureControls } from './conversation-closure-controls';
 import { cn } from '@/lib/cn';
 
 type Props = {
@@ -171,6 +172,13 @@ export function ConversationDetailPanel({
             <p className="p-4 text-sm text-semantic-hot">{error}</p>
           ) : detail ? (
             <div className="space-y-4 p-4">
+              <ConversationClosureControls
+                conversationId={detail.id}
+                closureReason={detail.closure_reason}
+                closureNote={detail.closure_note}
+                closedAt={detail.closed_at}
+                onUpdated={handleUpdated}
+              />
               <HandoffControls detail={detail} onUpdated={handleUpdated} />
 
               {isHandoffActive(detail) ? (

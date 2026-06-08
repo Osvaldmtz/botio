@@ -6,10 +6,12 @@ import {
   fetchBots,
   fetchConversations,
   fetchDashboardStats,
+  type ClosureFilter,
   type ConversationFilters,
   type ConversationStatusFilter,
   type DateRangeFilter,
 } from '@/app/admin/conversations/lib/conversation-queries';
+import { isClosureReason } from '@/lib/conversation-closure';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,11 +25,20 @@ function parseFilters(searchParams: URLSearchParams): ConversationFilters {
       ? channel
       : 'all';
 
+  const closureParam = searchParams.get('closure');
+  let closure: ClosureFilter = 'all';
+  if (closureParam === 'active' || closureParam === 'closed') {
+    closure = closureParam;
+  } else if (closureParam && isClosureReason(closureParam)) {
+    closure = closureParam;
+  }
+
   return {
     botId: searchParams.get('botId') ?? undefined,
     channel: validChannel,
     search: searchParams.get('search') ?? undefined,
     status: status && status !== 'all' ? status : 'all',
+    closure,
     dateRange: dateRange ?? 'all',
     from: searchParams.get('from') ?? undefined,
     to: searchParams.get('to') ?? undefined,

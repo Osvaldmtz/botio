@@ -13,6 +13,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { differenceInDays } from 'date-fns';
 import { cn } from '@/lib/cn';
+import {
+  formatClosureLabel,
+  type ClosureReason,
+} from '@/lib/conversation-closure-constants';
 
 type Props = {
   lead: PipelineLead;
@@ -36,6 +40,7 @@ export function PipelineCard({ lead, selected, onSelect }: Props) {
   const daysInStage = lead.pipeline_stage_updated_at
     ? differenceInDays(new Date(), new Date(lead.pipeline_stage_updated_at))
     : 0;
+  const adminClosed = Boolean(lead.closure_reason);
 
   return (
     <div
@@ -44,6 +49,7 @@ export function PipelineCard({ lead, selected, onSelect }: Props) {
       className={cn(
         'rounded-card border bg-bg p-3 transition-colors duration-150',
         selected ? 'border-accent bg-accent-muted/20' : 'border-bg-border hover:border-bg-border-hover',
+        adminClosed && !selected && 'border-dashed opacity-80',
         isDragging && 'cursor-grabbing',
       )}
     >
@@ -75,6 +81,11 @@ export function PipelineCard({ lead, selected, onSelect }: Props) {
             <span className="text-[11px] text-fg-tertiary">
               {formatRelativeTime(lead.last_message_at)}
             </span>
+            {adminClosed && lead.closure_reason ? (
+              <Badge tone="gray">
+                {formatClosureLabel(lead.closure_reason as ClosureReason)}
+              </Badge>
+            ) : null}
           </div>
         </button>
       </div>

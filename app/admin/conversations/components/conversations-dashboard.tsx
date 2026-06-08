@@ -25,6 +25,7 @@ const POLL_INTERVAL_MS = 10_000;
 function buildQuery(filters: FilterState): string {
   const params = new URLSearchParams();
   if (filters.status !== 'all') params.set('status', filters.status);
+  if (filters.closure !== 'all') params.set('closure', filters.closure);
   if (filters.channel !== 'all') params.set('channel', filters.channel);
   if (filters.search.trim()) params.set('search', filters.search.trim());
   if (filters.dateRange !== 'all') params.set('dateRange', filters.dateRange);
@@ -45,6 +46,7 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
 
   const [filters, setFilters] = useState<FilterState>({
     status: 'all',
+    closure: 'all',
     channel: 'all',
     search: '',
     dateRange: 'all',
