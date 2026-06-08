@@ -30,7 +30,11 @@ export function formatObjectionResponse(
         `✓ A $300 MXN por sesión, son ~4 sesiones extra al mes con el tiempo que recuperas\n\n` +
         `Te ofrezco 50% en tu primer mes: $${discount.pro_with_discount} USD\n` +
         `${proDiscount}\n\n` +
-        `O si prefieres probar sin pagar nada, te activo el plan Starter gratis (${starter.max_patients} pacientes, ${starter.max_evaluations_per_month} evaluaciones/mes). ¿Cuál prefieres?`
+        `O si prefieres probar sin pagar nada, te activo el plan Starter gratis:\n` +
+        `✓ ${starter.max_patients} pacientes activos\n` +
+        `✓ ${starter.max_evaluations_per_month} evaluaciones por mes\n` +
+        `✓ Reportes en PDF\n\n` +
+        `¿Cuál prefieres?`
       );
     }
     return (

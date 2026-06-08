@@ -4,11 +4,11 @@ export const KALYO_PRICING = {
     price_monthly: 0,
     price_label: 'Gratis',
     max_patients: 2,
-    max_evaluations_per_month: 3,
+    max_evaluations_per_month: 20,
     features: [
       '2 pacientes activos',
-      '3 evaluaciones por mes',
-      'Reportes PDF básicos',
+      '20 evaluaciones por mes',
+      'Reportes en PDF',
     ],
     not_included: [
       'Asistente de voz con IA',
@@ -67,7 +67,7 @@ export function buildKalyoOfficialPricingPrompt(): string {
   return `DATOS OFICIALES DE KALYO — NUNCA INVENTAR INFORMACIÓN:
 
 PLANES:
-- Starter (Gratis): ${s.max_patients} pacientes activos, ${s.max_evaluations_per_month} evaluaciones/mes, reportes PDF básicos
+- Starter (Gratis): ${s.max_patients} pacientes, ${s.max_evaluations_per_month} evaluaciones/mes, reportes PDF
 - Pro ($${p.price_monthly} USD/mes): pacientes ilimitados, evaluaciones ilimitadas, reportes con IA, DSM-5
 - Max ($${m.price_monthly} USD/mes): todo lo de Pro + asistente de voz IA + soporte prioritario
 

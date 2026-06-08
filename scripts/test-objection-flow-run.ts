@@ -93,6 +93,8 @@ async function runTests(): Promise<void> {
 
   assert(first != null && first.objectionType === 'price', 'first objection type price');
   assert(first != null && first.replyText.includes(proCoupon), 'first response includes PRIMER50 link');
+  assert(first != null && first.replyText.includes('20 evaluaciones'), 'first response has official Starter eval count');
+  assert(first != null && first.replyText.includes('2 pacientes activos'), 'first response has official Starter patients');
   assert(first != null && first.isRepeat === false, 'first not repeat');
 
   const { data: row1 } = await supabase
