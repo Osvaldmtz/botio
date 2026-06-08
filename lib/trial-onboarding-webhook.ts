@@ -4,10 +4,44 @@ import { renderName } from '@/lib/render-name';
 import {
   notifyTrialEnrolled,
   type SendTelegramFn,
+  type WelcomeMessageResult,
 } from '@/lib/trial-onboarding-notifications';
 
 const TRIAL_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
 const DEFAULT_KALYO_BOT_ID = '64f6eed2-1522-48fe-a2c6-f858b767df06';
+const WELCOME_STATUS_DELAY_MS = 2000;
+
+export type { WelcomeMessageResult } from '@/lib/trial-onboarding-notifications';
+
+export type WelcomeMessageCreds = {
+  accountSid: string;
+  authToken: string;
+  from: string;
+};
+
+export type WelcomeMessageTwilioFns = {
+  sendTemplate: (args: {
+    accountSid: string;
+    authToken: string;
+    from: string;
+    to: string;
+    contentSid: string;
+    contentVariables: Record<string, string>;
+  }) => Promise<{ sid: string }>;
+  sendPlain: (args: {
+    accountSid: string;
+    authToken: string;
+    from: string;
+    to: string;
+    body: string;
+  }) => Promise<{ sid: string }>;
+  fetchStatus: (args: {
+    accountSid: string;
+    authToken: string;
+    sid: string;
+  }) => Promise<{ status: string }>;
+  sleep: (ms: number) => Promise<void>;
+};
 
 export type TrialOnboardingEnrollInput = {
   email: string;
@@ -33,14 +67,180 @@ export type TrialOnboardingEnrollResult =
   | TrialOnboardingEnrollSuccess
   | TrialOnboardingEnrollFailure;
 
-function buildImmediateWelcomeMessage(name: string): string {
+export function buildImmediateWelcomeMessage(name: string): string {
   const display = renderName(name) || 'ahí';
   return (
     `¡Hola ${display}! 👋 Soy Sofía, asistente de Kalyo.\n\n` +
     `Te activaste el trial Pro de 15 días. Aquí estaré para resolverte dudas o ayudarte durante este tiempo.\n\n` +
-    `Tu primer paso: entra a https://app.kalyo.io/login y crea tu primer paciente.\n\n` +
-    `¿Te queda alguna duda?`
+    `Tu primer paso:\n` +
+    `1️⃣ Entra a app.kalyo.io/login\n` +
+    `2️⃣ Crea tu primer paciente\n` +
+    `3️⃣ Aplica una evaluación con IA\n\n` +
+    `Cualquier duda, escríbeme. ¡Bienvenido/a! 🎉`
   );
+}
+
+function defaultWelcomeTwilioFns(): WelcomeMessageTwilioFns {
+  return {
+    sendTemplate: async (args) => {
+      const { sendWhatsAppMessage } = await import('@/lib/twilio');
+      return sendWhatsAppMessage({
+        accountSid: args.accountSid,
+        authToken: args.authToken,
+        from: args.from,
+        to: args.to,
+        contentSid: args.contentSid,
+        contentVariables: args.contentVariables,
+      });
+    },
+    sendPlain: async (args) => {
+      const { sendWhatsAppMessage } = await import('@/lib/twilio');
+      return sendWhatsAppMessage({
+        accountSid: args.accountSid,
+        authToken: args.authToken,
+        from: args.from,
+        to: args.to,
+        body: args.body,
+      });
+    },
+    fetchStatus: async (args) => {
+      const { fetchTwilioMessageStatus } = await import('@/lib/twilio');
+      const status = await fetchTwilioMessageStatus(
+        args.accountSid,
+        args.authToken,
+        args.sid,
+      );
+      return { status: status.status };
+    },
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  };
+}
+
+function twilioErrorCode(error: unknown): number | null {
+  if (!error || typeof error !== 'object' || !('code' in error)) return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'number' ? code : null;
+}
+
+function isTemplateNotApprovedError(error: unknown): boolean {
+  if (twilioErrorCode(error) === 63016) return true;
+  if (error instanceof Error) {
+    return error.message.toLowerCase().includes('approval');
+  }
+  return false;
+}
+
+function isUndeliveredStatus(status: string): boolean {
+  return status === 'undelivered' || status === 'failed';
+}
+
+export async function sendWelcomeMessage(params: {
+  to: string;
+  name: string;
+  creds: WelcomeMessageCreds;
+  templateSid?: string | null;
+  twilio?: WelcomeMessageTwilioFns;
+}): Promise<WelcomeMessageResult> {
+  const { to, name, creds } = params;
+  const templateSid = params.templateSid ?? process.env.KALYO_WELCOME_TEMPLATE_SID;
+  const twilio = params.twilio ?? defaultWelcomeTwilioFns();
+  const displayName = renderName(name) || 'ahí';
+
+  if (templateSid) {
+    try {
+      const result = await twilio.sendTemplate({
+        accountSid: creds.accountSid,
+        authToken: creds.authToken,
+        from: creds.from,
+        to,
+        contentSid: templateSid,
+        contentVariables: { '1': displayName },
+      });
+
+      await twilio.sleep(WELCOME_STATUS_DELAY_MS);
+      const status = await twilio.fetchStatus({
+        accountSid: creds.accountSid,
+        authToken: creds.authToken,
+        sid: result.sid,
+      });
+
+      if (isUndeliveredStatus(status.status)) {
+        console.warn('[welcome-msg] template undelivered, falling back to plain text', {
+          sid: result.sid,
+          status: status.status,
+        });
+      } else {
+        console.log('[welcome-msg] template sent', {
+          sid: result.sid,
+          status: status.status,
+        });
+        return { success: true, method: 'template', sid: result.sid };
+      }
+    } catch (error) {
+      if (isTemplateNotApprovedError(error)) {
+        console.warn(
+          '[welcome-msg] template not yet approved by Meta, using plain text',
+          error instanceof Error ? error.message : String(error),
+        );
+      } else {
+        console.error('[welcome-msg] template error, falling back', error);
+      }
+    }
+  }
+
+  const textBody = buildImmediateWelcomeMessage(name);
+
+  try {
+    const result = await twilio.sendPlain({
+      accountSid: creds.accountSid,
+      authToken: creds.authToken,
+      from: creds.from,
+      to,
+      body: textBody,
+    });
+
+    await twilio.sleep(WELCOME_STATUS_DELAY_MS);
+    const status = await twilio.fetchStatus({
+      accountSid: creds.accountSid,
+      authToken: creds.authToken,
+      sid: result.sid,
+    });
+
+    if (status.status === 'undelivered') {
+      console.warn('[welcome-msg] plain text also undelivered (likely outside 24h window)', {
+        sid: result.sid,
+      });
+      return {
+        success: false,
+        method: 'plain_text',
+        sid: result.sid,
+        reason: 'undelivered_outside_window',
+      };
+    }
+
+    if (status.status === 'failed') {
+      console.warn('[welcome-msg] plain text failed', { sid: result.sid });
+      return {
+        success: false,
+        method: 'plain_text',
+        sid: result.sid,
+        reason: 'failed',
+      };
+    }
+
+    console.log('[welcome-msg] plain text sent', {
+      sid: result.sid,
+      status: status.status,
+    });
+    return { success: true, method: 'plain_text', sid: result.sid };
+  } catch (error) {
+    console.error('[welcome-msg] complete failure', error);
+    return {
+      success: false,
+      method: 'none',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 async function loadKalyoTwilioCreds(
@@ -216,31 +416,46 @@ export async function enrollTrialFromKalyoWebhook(
     throw insertError ?? new Error('Failed to insert trial_onboarding_messages');
   }
 
-  const welcomeBody = buildImmediateWelcomeMessage(name);
   const creds = await loadKalyoTwilioCreds(supabase);
+  let welcomeResult: WelcomeMessageResult | null = null;
 
   if (!options?.skipWhatsApp && creds) {
-    try {
-      const { sendWhatsApp } = await import('@/lib/twilio');
-      await sendWhatsApp({
-        accountSid: creds.accountSid,
-        authToken: creds.authToken,
-        from: creds.from,
-        to: phone,
-        body: welcomeBody,
-      });
+    welcomeResult = await sendWelcomeMessage({
+      to: phone,
+      name,
+      creds,
+    });
 
+    const welcomeStatus = welcomeResult.success ? 'sent' : 'failed';
+    const { error: welcomeUpdateError } = await supabase
+      .from('trial_onboarding_messages')
+      .update({
+        welcome_msg_status: welcomeStatus,
+        welcome_msg_method: welcomeResult.method,
+      })
+      .eq('id', row.id);
+
+    if (welcomeUpdateError) {
+      console.error(
+        '[trial-onboarding-webhook] welcome status update failed',
+        welcomeUpdateError,
+      );
+    }
+
+    if (welcomeResult.success) {
+      const welcomeBody = buildImmediateWelcomeMessage(name);
       await supabase.from('messages').insert({
         conversation_id: conversationId,
         role: 'assistant',
         content: welcomeBody,
         source: 'text',
         source_type: 'claude',
-        metadata: { source: 'trial_onboarding_welcome' },
+        metadata: {
+          source: 'trial_onboarding_welcome',
+          delivery_method: welcomeResult.method,
+          twilio_sid: welcomeResult.sid ?? null,
+        },
       });
-    } catch (err) {
-      console.error('[trial-onboarding-webhook] error | message=whatsapp send failed', err);
-      throw err;
     }
   }
 
@@ -250,6 +465,7 @@ export async function enrollTrialFromKalyoWebhook(
     phone,
     source,
     trialEndsAt: endsAt,
+    welcomeResult,
     sendTelegram: options?.sendTelegram,
   });
 

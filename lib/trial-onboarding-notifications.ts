@@ -1,5 +1,13 @@
 export type SendTelegramFn = (text: string) => Promise<void>;
 
+export type WelcomeMessageResult = {
+  success: boolean;
+  method: 'template' | 'plain_text' | 'none';
+  sid?: string;
+  reason?: string;
+  error?: string;
+};
+
 function displayName(name: string | null | undefined, email: string): string {
   const trimmed = name?.trim();
   if (trimmed) return trimmed;
@@ -46,12 +54,37 @@ async function defaultSendTelegram(text: string): Promise<void> {
   }
 }
 
+function formatWelcomeDeliveryLine(welcomeResult: WelcomeMessageResult | null | undefined): string {
+  if (!welcomeResult) {
+    return '📨 Mensaje bienvenida: omitido (sin credenciales Twilio o skipWhatsApp)';
+  }
+
+  if (welcomeResult.success) {
+    const via =
+      welcomeResult.method === 'template' ? 'template Meta' : 'texto plano';
+    return `📨 Mensaje bienvenida: enviado vía ${via}`;
+  }
+
+  const via =
+    welcomeResult.method === 'template'
+      ? 'template Meta'
+      : welcomeResult.method === 'plain_text'
+        ? 'texto plano'
+        : 'ninguno';
+  const reason = welcomeResult.reason ?? welcomeResult.error ?? 'error desconocido';
+  return (
+    `📨 Mensaje bienvenida: <b>FALLÓ</b> vía ${via}\n` +
+    `⚠️ Revisar manualmente al cliente — ${reason}`
+  );
+}
+
 export function buildTrialEnrolledTelegramText(params: {
   name: string;
   email: string;
   phone: string;
   source: string;
   trialEndsAt: string;
+  welcomeResult?: WelcomeMessageResult | null;
 }): string {
   const trialDateStr = new Date(params.trialEndsAt).toLocaleDateString('es-MX', {
     timeZone: 'America/Mexico_City',
@@ -66,7 +99,8 @@ export function buildTrialEnrolledTelegramText(params: {
     `📱 WhatsApp: ${params.phone}\n` +
     `📧 Email: ${params.email}\n` +
     `📍 Source: ${params.source}\n` +
-    `📅 Trial vence: ${trialDateStr}\n\n` +
+    `📅 Trial vence: ${trialDateStr}\n` +
+    `${formatWelcomeDeliveryLine(params.welcomeResult)}\n\n` +
     `El cliente recibirá los 5 mensajes de onboarding en días 1, 3, 7, 13 y 15.`
   );
 }
@@ -77,6 +111,7 @@ export async function notifyTrialEnrolled(params: {
   phone: string;
   source: string;
   trialEndsAt: string;
+  welcomeResult?: WelcomeMessageResult | null;
   sendTelegram?: SendTelegramFn;
 }): Promise<void> {
   const sendTelegram = params.sendTelegram ?? defaultSendTelegram;
