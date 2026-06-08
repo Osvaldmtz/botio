@@ -5,6 +5,7 @@ import type {
   ConversationSummary,
   DashboardStats,
 } from '../lib/conversation-queries';
+import { sortConversationsWithHotPriority } from '../lib/conversation-sort';
 import { AdminShell } from '@/components/admin/admin-shell';
 import { ConversationFilters, type FilterState } from './conversation-filters';
 import { ConversationStats } from './conversation-stats';
@@ -36,7 +37,9 @@ function buildQuery(filters: FilterState): string {
 }
 
 export function ConversationsDashboard({ initial }: { initial: InitialData }) {
-  const [conversations, setConversations] = useState(initial.conversations);
+  const [conversations, setConversations] = useState(
+    sortConversationsWithHotPriority(initial.conversations),
+  );
   const [stats, setStats] = useState(initial.stats);
   const [bots] = useState(initial.bots);
   const [fetchedAt, setFetchedAt] = useState(initial.fetchedAt);
@@ -63,7 +66,7 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
       const res = await fetch(`/api/admin/conversations?${queryString}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setConversations(data.conversations);
+      setConversations(sortConversationsWithHotPriority(data.conversations));
       setStats(data.stats);
       setFetchedAt(data.fetchedAt);
     } catch (error) {

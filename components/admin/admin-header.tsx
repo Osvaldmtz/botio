@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { LogOut, Settings } from 'lucide-react';
 import { Tabs } from '@/components/ui/tabs';
 import { logoutAction } from '@/app/admin/actions';
+import { NotificationPermissionPrompt } from './notification-permission-prompt';
+import { HotLeadMuteToggle } from './hot-lead-mute-toggle';
 
 export function AdminHeader() {
   const pathname = usePathname();
@@ -70,6 +72,7 @@ export function AdminHeader() {
         </div>
 
         <div className="ml-auto flex items-center gap-1">
+          <HotLeadMuteToggle />
           <Link
             href="/admin/calendar-settings"
             className="flex h-8 w-8 items-center justify-center rounded text-fg-muted transition-colors hover:bg-bg-subtle hover:text-fg"
@@ -92,6 +95,8 @@ export function AdminHeader() {
       <div className="border-t border-bg-border px-4 py-2 md:hidden">
         <Tabs items={tabs} />
       </div>
+
+      <NotificationPermissionPrompt />
     </header>
   );
 }

@@ -6,6 +6,7 @@ import {
   fetchBots,
   fetchConversations,
   fetchDashboardStats,
+  fetchNewHotLeads,
   type ClosureFilter,
   type ConversationFilters,
   type ConversationStatusFilter,
@@ -51,8 +52,27 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const filters = parseFilters(searchParams);
   const supabase = createAdminClient();
+
+  if (searchParams.get('onlyHot') === 'true') {
+    const newSince = searchParams.get('newSince');
+    if (!newSince) {
+      return NextResponse.json({ error: 'newSince is required' }, { status: 400 });
+    }
+    try {
+      const conversations = await fetchNewHotLeads(supabase, newSince);
+      return NextResponse.json({
+        conversations,
+        fetchedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[admin/conversations] hot leads fetch failed', error);
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  const filters = parseFilters(searchParams);
 
   try {
     const [conversations, stats, bots] = await Promise.all([

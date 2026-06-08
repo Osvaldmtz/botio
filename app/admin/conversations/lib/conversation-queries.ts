@@ -206,6 +206,23 @@ export async function fetchConversations(
   return (data ?? []) as ConversationSummary[];
 }
 
+export async function fetchNewHotLeads(
+  supabase: SupabaseClient,
+  newSince: string,
+  limit = 10,
+): Promise<ConversationSummary[]> {
+  const { data, error } = await supabase
+    .from('conversation_summary')
+    .select('*')
+    .gte('lead_score', 70)
+    .gt('created_at', newSince)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as ConversationSummary[];
+}
+
 export async function fetchDashboardStats(
   supabase: SupabaseClient,
   botId?: string,

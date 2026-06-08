@@ -11,6 +11,28 @@ export function truncate(text: string | null, len = 80): string {
   return text.length > len ? `${text.slice(0, len)}…` : text;
 }
 
+export const HOT_LEAD_SCORE_THRESHOLD = 70;
+
+export function isHotLead(score: number | null): boolean {
+  return (score ?? 0) >= HOT_LEAD_SCORE_THRESHOLD;
+}
+
+export function isNewHotLead(createdAt: string, score: number | null): boolean {
+  if (!isHotLead(score)) return false;
+  return Date.now() - new Date(createdAt).getTime() < 5 * 60 * 1000;
+}
+
+export function customerDisplayName(phone: string, signals: string[] | null): string {
+  if (signals?.length) {
+    const named = signals.find((s) => /nombre/i.test(s));
+    if (named) {
+      const value = named.replace(/^nombre[:\s]*/i, '').trim();
+      if (value) return value;
+    }
+  }
+  return 'Sin nombre';
+}
+
 export function extractLeadName(phone: string, signals: string[] | null): string {
   if (signals?.length) {
     const named = signals.find((s) => /nombre/i.test(s));

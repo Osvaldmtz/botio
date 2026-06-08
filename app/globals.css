@@ -13,3 +13,17 @@
     @apply bg-bg text-fg antialiased;
   }
 }
+
+@keyframes hot-pulse {
+  0%,
+  100% {
+    background-color: rgba(239, 68, 68, 0.05);
+  }
+  50% {
+    background-color: rgba(239, 68, 68, 0.15);
+  }
+}
+
+.conversation-card.hot-new {
+  animation: hot-pulse 2s ease-in-out infinite;
+}

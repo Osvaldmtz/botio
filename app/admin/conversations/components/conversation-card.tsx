@@ -9,6 +9,8 @@ import {
   conversationStatus,
   extractLeadName,
   formatRelativeTime,
+  isHotLead,
+  isNewHotLead,
   statusToneToBadge,
   temperatureBadge,
   truncate,
@@ -26,13 +28,17 @@ export function ConversationCard({ conversation, selected, onSelect }: Props) {
   const temp = temperatureBadge(conversation.lead_temperature);
   const channel = channelBadge(conversation.channel);
   const title = extractLeadName(conversation.customer_phone, conversation.lead_signals);
+  const hot = isHotLead(conversation.lead_score);
+  const hotNew = isNewHotLead(conversation.created_at, conversation.lead_score);
 
   return (
     <button
       type="button"
       onClick={() => onSelect(conversation.id)}
       className={cn(
-        'w-full rounded-card border px-4 py-3 text-left transition-colors duration-150',
+        'conversation-card w-full rounded-card border px-4 py-3 text-left transition-colors duration-150',
+        hot && 'border-l-4 border-l-semantic-hot',
+        hotNew && 'hot-new',
         selected
           ? 'border-accent bg-accent-muted/30'
           : 'border-bg-border bg-bg hover:bg-bg-elevated hover:border-bg-border-hover',
@@ -49,7 +55,9 @@ export function ConversationCard({ conversation, selected, onSelect }: Props) {
             <Badge tone={channel.tone}>
               {channel.emoji} {channel.label}
             </Badge>
-            {temp ? (
+            {hot ? (
+              <Badge tone="hot">🔥 HOT{conversation.lead_score !== null ? ` ${conversation.lead_score}` : ''}</Badge>
+            ) : temp ? (
               <Badge tone={temp.tone === 'hot' ? 'hot' : temp.tone === 'warm' ? 'warning' : 'gray'}>
                 {temp.label}
                 {conversation.lead_score !== null ? ` ${conversation.lead_score}` : ''}
