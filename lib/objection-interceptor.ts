@@ -78,7 +78,7 @@ export async function handleObjectionMessage(params: {
   );
 
   const responseText = formatObjectionResponse(objection.type, {
-    name: lead.name ?? 'ahí',
+    name: lead.name,
     isRepeat: objection.is_repeat,
   });
 

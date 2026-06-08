@@ -1,4 +1,5 @@
 import { getPaymentLink } from '@/lib/kalyo-payment-links';
+import { renderName } from '@/lib/render-name';
 
 export type TrialOnboardingUser = {
   trial_user_name?: string | null;
@@ -6,16 +7,16 @@ export type TrialOnboardingUser = {
 };
 
 function displayName(user: TrialOnboardingUser): string {
-  const name = user.trial_user_name?.trim();
+  const name = renderName(user.trial_user_name);
   if (name) return name;
-  const local = user.trial_user_email.split('@')[0]?.trim();
-  return local || 'ahí';
+  return renderName(user.trial_user_email.split('@')[0]);
 }
 
 export function formatDay1(user: TrialOnboardingUser): string {
   const name = displayName(user);
+  const greeting = name ? `Hola ${name},` : 'Hola,';
   return (
-    `👋 Hola ${name}, soy Sofía. Te activaste el trial Pro de Kalyo ayer.\n\n` +
+    `👋 ${greeting} soy Sofía. Te activaste el trial Pro de Kalyo ayer.\n\n` +
     `Tu primer paso recomendado:\n` +
     `1️⃣ Entra a app.kalyo.io\n` +
     `2️⃣ Login con tu email + password\n` +
@@ -27,8 +28,9 @@ export function formatDay1(user: TrialOnboardingUser): string {
 
 export function formatDay3(user: TrialOnboardingUser): string {
   const name = displayName(user);
+  const opener = name ? `${name}, ¿ya conoces` : '¿Ya conoces';
   return (
-    `${name}, ¿ya conoces la feature más diferenciadora de Kalyo?\n\n` +
+    `${opener} la feature más diferenciadora de Kalyo?\n\n` +
     `🎙️ *Asistente de voz con IA*\n\n` +
     `Hablas con Kalyo como con un colega:\n` +
     `- 'Crea sesión para María del jueves 10am'\n` +
@@ -42,8 +44,9 @@ export function formatDay3(user: TrialOnboardingUser): string {
 
 export function formatDay7(user: TrialOnboardingUser, daysLeft: number): string {
   const name = displayName(user);
+  const opener = name ? `${name}, llevas` : 'Llevas';
   return (
-    `${name}, llevas 7 días con tu trial Pro (te quedan ${daysLeft}).\n\n` +
+    `${opener} 7 días con tu trial Pro (te quedan ${daysLeft}).\n\n` +
     `¿Cómo te está funcionando? ¿Lograste hacer tu primera evaluación o usar el asistente de voz?\n\n` +
     `Si tienes dudas o algo no funciona como esperabas, te puedo agendar 15 min con Osvaldo del equipo para que te muestre todo en vivo.\n\n` +
     `Solo dime 'agendar demo' y lo coordino.`
@@ -52,8 +55,9 @@ export function formatDay7(user: TrialOnboardingUser, daysLeft: number): string 
 
 export function formatDay13(user: TrialOnboardingUser): string {
   const name = displayName(user);
+  const opener = name ? `⚠️ ${name}, tu trial` : '⚠️ Tu trial';
   return (
-    `⚠️ ${name}, tu trial Pro vence en 2 días.\n\n` +
+    `${opener} Pro vence en 2 días.\n\n` +
     `Lo que pierdes si no continúas:\n` +
     `✓ Asistente de voz con IA\n` +
     `✓ Evaluaciones ilimitadas\n` +
@@ -68,8 +72,9 @@ export function formatDay13(user: TrialOnboardingUser): string {
 
 export function formatDay15(user: TrialOnboardingUser): string {
   const name = displayName(user);
+  const opener = name ? `🔥 ÚLTIMA OPORTUNIDAD ${name}.` : '🔥 ÚLTIMA OPORTUNIDAD.';
   return (
-    `🔥 ÚLTIMA OPORTUNIDAD ${name}.\n\n` +
+    `${opener}\n\n` +
     `Tu trial Pro vence HOY a las 23:59.\n\n` +
     `Por ser uno de nuestros primeros usuarios beta, te ofrezco:\n\n` +
     `*50% descuento en tu primer mes* (código PRIMER50, aplicado automáticamente)\n\n` +

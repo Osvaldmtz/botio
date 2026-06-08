@@ -1,3 +1,5 @@
+import { renderName } from '@/lib/render-name';
+
 const DEFAULT_PAYMENT_LINKS = {
   pro: 'https://buy.stripe.com/6oU5kCbIcaFS4xa7AzgQE00',
   max: 'https://buy.stripe.com/dRm7sK27CbJW7Jmf31gQE01',
@@ -20,15 +22,15 @@ export function formatPayIntentReply(params: {
   day15SentAt: string | null;
 }): string {
   const name =
-    params.trialUserName?.trim() ||
-    params.trialUserEmail.split('@')[0]?.trim() ||
-    'ahí';
+    renderName(params.trialUserName) ||
+    renderName(params.trialUserEmail.split('@')[0]);
+  const opener = name ? `¡Genial ${name}!` : '¡Genial!';
   const coupon = params.day15SentAt ? 'PRIMER50' : undefined;
   const proLink = getPaymentLink('pro', coupon);
   const maxLink = getPaymentLink('max', coupon);
 
   return (
-    `¡Genial ${name}! Aquí tienes los links de pago:\n\n` +
+    `${opener} Aquí tienes los links de pago:\n\n` +
     `💎 *Pro $29/mes* (lo que tienes en el trial):\n${proLink}\n\n` +
     `🚀 *Max $39/mes* (incluye asistente de voz con IA):\n${maxLink}\n\n` +
     `El pago es vía Stripe (tarjeta de crédito/débito). Si tienes dudas, dime.`

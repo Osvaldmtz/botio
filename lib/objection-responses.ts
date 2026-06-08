@@ -1,21 +1,22 @@
 import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
 import type { ObjectionType } from '@/lib/objection-detector';
+import {
+  nameThenVerb,
+  prefixWithName,
+  prefixWithNamePeriod,
+  renderName,
+} from '@/lib/render-name';
 
 export type ObjectionResponseContext = {
-  name: string;
+  name?: string | null;
   isRepeat: boolean;
 };
-
-function displayName(name?: string | null): string {
-  const trimmed = name?.trim();
-  return trimmed || 'ahí';
-}
 
 export function formatObjectionResponse(
   type: ObjectionType,
   ctx: ObjectionResponseContext,
 ): string {
-  const name = displayName(ctx.name);
+  const name = renderName(ctx.name);
   const isRepeat = ctx.isRepeat;
   const starter = KALYO_PRICING.starter;
   const proDiscount = KALYO_PRICING.pro.payment_link_with_discount;
@@ -23,8 +24,9 @@ export function formatObjectionResponse(
 
   if (type === 'price') {
     if (!isRepeat) {
+      const greeting = name ? `Entiendo ${name}` : 'Entiendo';
       return (
-        `Entiendo ${name}, $29 al mes puede sonar a mucho al inicio. Te pongo las cuentas reales:\n\n` +
+        `${greeting}, $29 al mes puede sonar a mucho al inicio. Te pongo las cuentas reales:\n\n` +
         `✓ Con UNA sola sesión cobrada cubres el mes completo\n` +
         `✓ Te ahorra ~2 horas por paciente en escribir reportes\n` +
         `✓ A $300 MXN por sesión, son ~4 sesiones extra al mes con el tiempo que recuperas\n\n` +
@@ -37,8 +39,9 @@ export function formatObjectionResponse(
         `¿Cuál prefieres?`
       );
     }
+    const opener = nameThenVerb(name, 'entiendo');
     return (
-      `${name}, entiendo. Te pongo en contacto con Osvaldo del equipo para que vea cómo ajustarte algo más conveniente.\n\n` +
+      `${opener}. Te pongo en contacto con Osvaldo del equipo para que vea cómo ajustarte algo más conveniente.\n\n` +
       `Solo necesito tu email para que te escriba directamente.`
     );
   }
@@ -46,13 +49,13 @@ export function formatObjectionResponse(
   if (type === 'thinking') {
     if (!isRepeat) {
       return (
-        `Claro ${name}, es una decisión importante. Mientras lo piensas, puedes probar el trial Pro de 15 días GRATIS (sin tarjeta):\n\n` +
+        `${prefixWithName('Claro', name)} es una decisión importante. Mientras lo piensas, puedes probar el trial Pro de 15 días GRATIS (sin tarjeta):\n\n` +
         `https://app.kalyo.io/login\n\n` +
         `Así ves todo sin presión. ¿Te lo activo? Solo necesito tu nombre completo y email.`
       );
     }
     return (
-      `Entendido ${name}. Te dejo descansar la información — sin presión.\n\n` +
+      `${prefixWithNamePeriod('Entendido', name)} Te dejo descansar la información — sin presión.\n\n` +
       `Si tienes preguntas en los próximos días, escríbeme aquí mismo.\n\n` +
       `¿Te sirve si te recontacto en 3 días para ver si surgieron dudas?`
     );
@@ -61,7 +64,7 @@ export function formatObjectionResponse(
   if (type === 'competition') {
     if (!isRepeat) {
       return (
-        `Interesante ${name}, ¿qué usas hoy? Kalyo se diferencia en 3 cosas clave:\n\n` +
+        `${prefixWithName('Interesante', name)} ¿qué usas hoy? Kalyo se diferencia en 3 cosas clave:\n\n` +
         `🎙️ Asistente de voz con IA (hablas y registra todo)\n` +
         `📊 Reportes ejecutivos automáticos (sin escribir reportes a mano)\n` +
         `🇲🇽 Hecho en LATAM para psicólogos LATAM (DSM-5, español)\n\n` +
@@ -69,14 +72,14 @@ export function formatObjectionResponse(
       );
     }
     return (
-      `Perfecto ${name}, no busco convencerte si ya estás bien con tu sistema. Te dejo la puerta abierta — si algún día quieres probar Kalyo, te activo trial gratis sin pedir tarjeta.`
+      `${prefixWithName('Perfecto', name)} no busco convencerte si ya estás bien con tu sistema. Te dejo la puerta abierta — si algún día quieres probar Kalyo, te activo trial gratis sin pedir tarjeta.`
     );
   }
 
   if (type === 'no_time') {
     if (!isRepeat) {
       return (
-        `Te entiendo ${name}, todos andamos contra el tiempo. ¿Qué te parece si:\n\n` +
+        `${prefixWithName('Te entiendo', name)} todos andamos contra el tiempo. ¿Qué te parece si:\n\n` +
         `1️⃣ Te activo el trial gratis ahora (30 segundos)\n` +
         `2️⃣ Lo pruebas cuando puedas estos 15 días\n` +
         `3️⃣ Si te sirve, sigues. Si no, no pasa nada\n\n` +
@@ -84,7 +87,7 @@ export function formatObjectionResponse(
       );
     }
     return (
-      `Sin problema ${name}. Te recontacto en 7 días por si en ese momento es mejor.\n\n` +
+      `${prefixWithNamePeriod('Sin problema', name)} Te recontacto en 7 días por si en ese momento es mejor.\n\n` +
       `Mientras, si surge alguna duda, escríbeme aquí.`
     );
   }
@@ -92,7 +95,7 @@ export function formatObjectionResponse(
   if (type === 'not_useful') {
     if (!isRepeat) {
       return (
-        `Cuéntame más ${name}, ¿qué estás buscando exactamente? Quiero entender tu necesidad para ver si Kalyo encaja.\n\n` +
+        `${prefixWithName('Cuéntame más', name)} ¿qué estás buscando exactamente? Quiero entender tu necesidad para ver si Kalyo encaja.\n\n` +
         `Por ejemplo:\n` +
         `- ¿Algo más simple o más completo?\n` +
         `- ¿Uso personal o equipo?\n` +
@@ -100,13 +103,16 @@ export function formatObjectionResponse(
       );
     }
     return (
-      `Perfecto ${name}, agradezco tu honestidad. Si en el futuro tu necesidad cambia o conoces a algún colega que pueda beneficiarse, aquí estoy.`
+      `${prefixWithName('Perfecto', name)} agradezco tu honestidad. Si en el futuro tu necesidad cambia o conoces a algún colega que pueda beneficiarse, aquí estoy.`
     );
   }
 
   if (!isRepeat) {
+    const opener = name
+      ? `¡Justo Kalyo es perfecto para arrancar bien ${name}!`
+      : '¡Justo Kalyo es perfecto para arrancar bien!';
     return (
-      `¡Justo Kalyo es perfecto para arrancar bien ${name}!\n\n` +
+      `${opener}\n\n` +
       `Con pocos pacientes puedes:\n` +
       `✓ Estructurar tu práctica desde día 1\n` +
       `✓ Hacer evaluaciones con IA y verte profesional ante cada paciente\n` +
@@ -116,5 +122,5 @@ export function formatObjectionResponse(
     );
   }
 
-  return `Sin presión ${name}. Cuando estés listo, aquí estoy.`;
+  return `${prefixWithNamePeriod('Sin presión', name)} Cuando estés listo, aquí estoy.`;
 }

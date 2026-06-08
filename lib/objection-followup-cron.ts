@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TwilioCreds, SendWhatsAppFn } from '@/lib/trial-onboarding-cron';
+import { holaName, renderName } from '@/lib/render-name';
 
 export type ObjectionFollowupRow = {
   id: string;
@@ -21,11 +22,7 @@ function detectedAtWindow(minHoursAgo: number, maxHoursAgo: number): { from: str
 }
 
 function displayName(row: ObjectionFollowupRow): string {
-  if (row.customer_email) {
-    const local = row.customer_email.split('@')[0]?.trim();
-    if (local) return local;
-  }
-  return 'ahí';
+  return renderName(row.customer_email?.split('@')[0]);
 }
 
 export async function fetchThinkingFollowups(
@@ -62,14 +59,14 @@ export async function fetchNoTimeFollowups(
 
 function formatThinkingFollowup(name: string): string {
   return (
-    `Hola ${name}, te escribo siguiendo nuestra conversación. ¿Lograste pensarlo? ` +
+    `${holaName(name)} te escribo siguiendo nuestra conversación. ¿Lograste pensarlo? ` +
     `Si tienes preguntas sobre Kalyo, aquí estoy.`
   );
 }
 
 function formatNoTimeFollowup(name: string): string {
   return (
-    `Hola ${name}, espero estés mejor de tiempo. Solo pasaba a recordarte que Kalyo sigue aquí ` +
+    `${holaName(name)} espero estés mejor de tiempo. Solo pasaba a recordarte que Kalyo sigue aquí ` +
     `cuando quieras probarlo (trial gratis 15 días). ¿Te interesa?`
   );
 }

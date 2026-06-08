@@ -7,6 +7,7 @@ import {
   getCustomerTimezone,
   getCustomerTimezoneLabel,
 } from '@/lib/timezone-from-phone';
+import { renderName } from '@/lib/render-name';
 
 export type DemoReminderRow = {
   id: string;
@@ -82,9 +83,11 @@ export function formatReminder24h(
     display.timezone,
     display.label,
   );
+  const name = renderName(demo.customer_name);
+  const greeting = name ? `Hola ${name},` : 'Hola,';
 
   return (
-    `👋 Hola ${demo.customer_name}, te recuerdo tu demo Kalyo mañana:\n\n` +
+    `👋 ${greeting} te recuerdo tu demo Kalyo mañana:\n\n` +
     `📅 ${dateLabel}\n` +
     `⏰ ${timeLabel} ${timezoneLabel}\n` +
     `👤 Con ${DEMO_HOST_TEAM_LABEL}\n` +
@@ -105,11 +108,14 @@ export function formatReminder1h(
     display.timezone,
     display.label,
   );
+  const name = renderName(demo.customer_name);
+  const opener = name ? `en 1 hora, ${name}:` : 'en 1 hora:';
+  const emailSearch = name || 'Demo Kalyo';
 
   return (
-    `⏰ Tu demo Kalyo es en 1 hora, ${demo.customer_name}:\n\n` +
+    `⏰ Tu demo Kalyo es ${opener}\n\n` +
     `📅 Hoy a las ${timeLabel} ${timezoneLabel}\n` +
-    `🎥 Link Google Meet en tu email (busca '${demo.customer_name}' o 'Demo Kalyo')\n\n` +
+    `🎥 Link Google Meet en tu email (busca '${emailSearch}' o 'Demo Kalyo')\n\n` +
     `¡Nos vemos pronto! Si necesitas algo:\n` +
     `1️⃣ Confirmo, ahí nos vemos\n` +
     `2️⃣ Reagendar\n` +
@@ -126,8 +132,10 @@ export function formatReminderConfirmed(
     display.timezone,
     display.label,
   );
+  const name = renderName(demo.customer_name);
+  const opener = name ? `¡Perfecto, ${name}!` : '¡Perfecto!';
 
   return (
-    `✅ ¡Perfecto, ${demo.customer_name}! Te esperamos en tu demo el ${dateLabel} a las ${timeLabel} ${timezoneLabel}. Nos vemos pronto 👋`
+    `✅ ${opener} Te esperamos en tu demo el ${dateLabel} a las ${timeLabel} ${timezoneLabel}. Nos vemos pronto 👋`
   );
 }
