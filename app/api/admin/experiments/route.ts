@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 const KALYO_BOT_ID = process.env.KALYO_BOT_ID ?? '64f6eed2-1522-48fe-a2c6-f858b767df06';
 
 const DEFAULT_VARIANT_A =
-  '¡Hola! Soy Sofía de Kalyo 👋 Ayudamos a psicólogos a evaluar pacientes con +100 pruebas clínicas validadas, todo desde el navegador. ¿Qué te gustaría saber primero: evaluaciones, precios, o cómo funciona la prueba gratis?';
+  '¡Hola! Soy Sofía, asistente de Kalyo. ¿En qué te puedo ayudar?';
 
 export async function GET() {
   if (!isAdmin()) {

@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 
 type VariantResult = {
   name: string;
+  label?: string;
   count: number;
   conversions: number;
   conversion_rate: number;
@@ -14,8 +15,13 @@ type VariantResult = {
 type ExperimentResults = {
   variants: VariantResult[];
   winner?: string;
+  leading_variant?: string;
   p_value?: number;
+  p_value_vs_baseline?: number;
+  baseline_variant?: string;
   sample_ready: boolean;
+  conversions_needed?: number;
+  statistically_significant?: boolean;
 };
 
 export type ExperimentCardData = {
@@ -25,11 +31,13 @@ export type ExperimentCardData = {
   scope: string;
   status: string;
   winner_variant: string | null;
+  created_at?: string;
+  variants?: Record<string, { label?: string; first_message?: string }>;
   results?: ExperimentResults;
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  active: 'Activo',
+  active: 'Running',
   paused: 'Pausado',
   completed: 'Completado',
   archived: 'Archivado',
@@ -44,13 +52,21 @@ function statusTone(status: string): 'primary' | 'warning' | 'gray' {
 function ConversionBar({ rate, maxRate }: { rate: number; maxRate: number }) {
   const width = maxRate > 0 ? Math.round((rate / maxRate) * 100) : 0;
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded bg-bg-subtle">
+    <div className="h-2 w-full overflow-hidden rounded bg-bg-subtle">
       <div
         className="h-full rounded bg-accent transition-all duration-150"
-        style={{ width: `${Math.max(width, rate > 0 ? 4 : 0)}%` }}
+        style={{ width: `${Math.max(width, rate > 0 ? 6 : 0)}%` }}
       />
     </div>
   );
+}
+
+function variantLabel(
+  key: string,
+  variants?: Record<string, { label?: string }>,
+  result?: VariantResult,
+): string {
+  return result?.label ?? variants?.[key]?.label ?? key;
 }
 
 type Props = {
@@ -73,6 +89,7 @@ export function ExperimentCard({
   const results = experiment.results;
   const maxRate = Math.max(...(results?.variants ?? []).map((v) => v.conversion_rate), 1);
   const resolvedWinner = experiment.winner_variant ?? winner ?? results?.winner;
+  const leading = results?.leading_variant;
 
   return (
     <article
@@ -86,7 +103,7 @@ export function ExperimentCard({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-fg">{experiment.name}</h3>
+          <h3 className="text-sm font-semibold text-fg">📊 {experiment.name}</h3>
           {experiment.description ? (
             <p className="mt-1 text-sm text-fg-muted">{experiment.description}</p>
           ) : null}
@@ -129,7 +146,7 @@ export function ExperimentCard({
               disabled={actionLoading === `${experiment.id}-promote_winner`}
               onClick={() => onAction('promote_winner')}
             >
-              Promover
+              Promover ganadora
             </Button>
           ) : null}
           {experiment.status === 'active' || experiment.status === 'paused' ? (
@@ -146,29 +163,57 @@ export function ExperimentCard({
       </div>
 
       {results?.variants?.length ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {results.variants.map((v) => (
-            <div key={v.name} className="rounded border border-bg-border bg-bg-elevated p-3">
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="font-medium text-fg">
-                  Variante {v.name}
-                  {resolvedWinner === v.name ? ' ★' : ''}
-                </span>
-                <span className="tabular-nums text-fg-muted">
-                  {v.conversions}/{v.count} ({v.conversion_rate}%)
-                </span>
+        <div className="mt-4 space-y-3">
+          {results.variants.map((v) => {
+            const label = variantLabel(v.name, experiment.variants, v);
+            const isLeading = leading === v.name && !resolvedWinner;
+            const isWinner = resolvedWinner === v.name;
+            return (
+              <div key={v.name} className="rounded border border-bg-border bg-bg-elevated p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="font-medium text-fg">
+                    Variante {v.name} ({label})
+                    {isWinner || isLeading ? ' ★' : ''}
+                    {isLeading ? (
+                      <span className="ml-2 text-xs font-normal text-accent">— LEADING</span>
+                    ) : null}
+                  </span>
+                  <span className="tabular-nums text-fg-muted">
+                    Asignados: {v.count} | Convertidos: {v.conversions} ({v.conversion_rate}%)
+                  </span>
+                </div>
+                <ConversionBar rate={v.conversion_rate} maxRate={maxRate} />
               </div>
-              <ConversionBar rate={v.conversion_rate} maxRate={maxRate} />
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 
-      {results?.p_value !== undefined ? (
-        <p className="mt-3 text-xs text-fg-tertiary">
-          p-value: {results.p_value}
-          {results.sample_ready ? ' · muestra suficiente' : ' · acumulando muestra'}
-        </p>
+      {results ? (
+        <div className="mt-3 space-y-1 text-xs text-fg-tertiary">
+          {results.p_value_vs_baseline !== undefined ? (
+            <p>
+              Significancia vs baseline ({results.baseline_variant ?? 'A'}):{' '}
+              {results.statistically_significant ? '✓' : '○'} p=
+              {results.p_value_vs_baseline}
+              {results.statistically_significant && leading
+                ? ` — Variante ${leading} mejor que ${results.baseline_variant ?? 'A'}`
+                : ''}
+            </p>
+          ) : null}
+          {results.p_value !== undefined ? (
+            <p>p-value (top vs 2º): {results.p_value}</p>
+          ) : null}
+          {!results.sample_ready && results.conversions_needed !== undefined ? (
+            <p>
+              Necesita {results.conversions_needed} conversiones más por variante para confirmar
+            </p>
+          ) : results.sample_ready ? (
+            <p>· muestra suficiente (≥30 conversiones/variante)</p>
+          ) : (
+            <p>· acumulando muestra</p>
+          )}
+        </div>
       ) : null}
     </article>
   );

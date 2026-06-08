@@ -1,7 +1,12 @@
-import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type ExperimentScope = 'first_message' | string;
+
+export type ExperimentVariant = {
+  label?: string;
+  first_message?: string;
+  system_prompt?: string;
+};
 
 export type Experiment = {
   id: string;
@@ -10,7 +15,7 @@ export type Experiment = {
   bot_id: string | null;
   scope: ExperimentScope;
   status: string;
-  variants: Record<string, Record<string, unknown>>;
+  variants: Record<string, ExperimentVariant>;
   traffic_split: Record<string, number>;
   winner_variant: string | null;
   min_sample_size: number;
@@ -20,6 +25,7 @@ export type Experiment = {
 
 export type VariantResult = {
   name: string;
+  label?: string;
   count: number;
   conversions: number;
   conversion_rate: number;
@@ -29,8 +35,13 @@ export type ExperimentResults = {
   experiment_id: string;
   variants: VariantResult[];
   winner?: string;
+  leading_variant?: string;
   p_value?: number;
+  p_value_vs_baseline?: number;
+  baseline_variant?: string;
   sample_ready: boolean;
+  conversions_needed?: number;
+  statistically_significant?: boolean;
 };
 
 export type AbAssignmentContext = {
@@ -42,13 +53,14 @@ export type AbAssignmentContext = {
 };
 
 const CONVERSION_OUTCOMES = new Set([
+  'qualified_lead',
   'lead_captured',
   'trial_activated',
   'purchase',
   'purchase_intent',
 ]);
 
-function pickVariant(trafficSplit: Record<string, number>): string {
+export function pickVariant(trafficSplit: Record<string, number>): string {
   const entries = Object.entries(trafficSplit).filter(([, w]) => w > 0);
   if (entries.length === 0) return 'A';
 
@@ -61,6 +73,29 @@ function pickVariant(trafficSplit: Record<string, number>): string {
   }
 
   return entries[entries.length - 1][0];
+}
+
+export function uniformTrafficSplit(variantKeys: string[]): Record<string, number> {
+  if (variantKeys.length === 0) return { A: 1 };
+  const weight = 1 / variantKeys.length;
+  return Object.fromEntries(variantKeys.map((key) => [key, weight]));
+}
+
+function resolveTrafficSplit(
+  variants: Record<string, ExperimentVariant>,
+  trafficSplit: Record<string, number> | null | undefined,
+): Record<string, number> {
+  const keys = Object.keys(variants);
+  if (!trafficSplit || Object.keys(trafficSplit).length === 0) {
+    return uniformTrafficSplit(keys);
+  }
+  const filtered = Object.fromEntries(
+    keys
+      .map((key) => [key, Number(trafficSplit[key] ?? 0)] as const)
+      .filter(([, w]) => w > 0),
+  );
+  if (Object.keys(filtered).length === 0) return uniformTrafficSplit(keys);
+  return filtered;
 }
 
 function normalCdf(z: number): number {
@@ -90,6 +125,61 @@ function twoProportionZTest(
   return 2 * (1 - normalCdf(Math.abs(z)));
 }
 
+async function notifyAbWinnerTelegram(params: {
+  experimentName: string;
+  winner: string;
+  winnerLabel?: string;
+  conversionRate: number;
+  baselineRate: number;
+  pValue: number;
+}): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+  if (!token || !chatId) return;
+
+  const label = params.winnerLabel ?? params.winner;
+  const text =
+    `🏆 <b>A/B test ganador</b>\n\n` +
+    `Experimento: ${params.experimentName}\n` +
+    `Variante ${params.winner} (${label}) ganó con ${params.conversionRate}% conversión ` +
+    `(vs ${params.baselineRate}% baseline, p=${params.pValue})`;
+
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+    });
+  } catch (error) {
+    console.error('[ab-testing] telegram winner notify failed', error);
+  }
+}
+
+async function findPriorVariantByPhone(
+  supabase: SupabaseClient,
+  experimentId: string,
+  customerPhone: string,
+): Promise<string | null> {
+  const phone = customerPhone.trim();
+  if (!phone) return null;
+
+  const { data, error } = await supabase
+    .from('ab_assignments')
+    .select('variant, conversations!inner(customer_phone)')
+    .eq('experiment_id', experimentId)
+    .eq('conversations.customer_phone', phone)
+    .order('assigned_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[ab-testing] prior variant lookup failed', error);
+    return null;
+  }
+
+  return data?.variant ?? null;
+}
+
 export async function getActiveExperiments(
   supabase: SupabaseClient,
   botId: string,
@@ -106,10 +196,33 @@ export async function getActiveExperiments(
   return (data ?? []) as Experiment[];
 }
 
+async function getCompletedWinnerExperiments(
+  supabase: SupabaseClient,
+  botId: string,
+  scope: ExperimentScope,
+): Promise<Experiment[]> {
+  const { data, error } = await supabase
+    .from('ab_experiments')
+    .select('*')
+    .eq('status', 'completed')
+    .eq('scope', scope)
+    .not('winner_variant', 'is', null)
+    .or(`bot_id.eq.${botId},bot_id.is.null`);
+
+  if (error) throw error;
+  return (data ?? []) as Experiment[];
+}
+
 export async function assignVariant(
   supabase: SupabaseClient,
   experimentId: string,
   conversationId: string,
+  options?: {
+    customerPhone?: string;
+    forcedVariant?: string;
+    trafficSplit?: Record<string, number>;
+    variants?: Record<string, ExperimentVariant>;
+  },
 ): Promise<string> {
   const { data: existing } = await supabase
     .from('ab_assignments')
@@ -120,18 +233,52 @@ export async function assignVariant(
 
   if (existing?.variant) return existing.variant;
 
+  if (options?.forcedVariant) {
+    const variant = options.forcedVariant;
+    const { error: insertError } = await supabase.from('ab_assignments').insert({
+      experiment_id: experimentId,
+      conversation_id: conversationId,
+      variant,
+    });
+    if (insertError) throw insertError;
+    return variant;
+  }
+
+  if (options?.customerPhone) {
+    const prior = await findPriorVariantByPhone(
+      supabase,
+      experimentId,
+      options.customerPhone,
+    );
+    if (prior) {
+      const { error: insertError } = await supabase.from('ab_assignments').insert({
+        experiment_id: experimentId,
+        conversation_id: conversationId,
+        variant: prior,
+      });
+      if (insertError) throw insertError;
+      console.log(
+        `[ab-testing] reused prior variant=${prior} for phone conv=${conversationId}`,
+      );
+      return prior;
+    }
+  }
+
   const { data: experiment, error: expError } = await supabase
     .from('ab_experiments')
-    .select('traffic_split')
+    .select('traffic_split, variants')
     .eq('id', experimentId)
     .maybeSingle();
 
   if (expError || !experiment) throw expError ?? new Error('Experiment not found');
 
-  const split = (experiment.traffic_split ?? { A: 0.5, B: 0.5 }) as Record<
-    string,
-    number
-  >;
+  const variants = (options?.variants ??
+    experiment.variants ??
+    {}) as Record<string, ExperimentVariant>;
+  const split = resolveTrafficSplit(
+    variants,
+    options?.trafficSplit ?? (experiment.traffic_split as Record<string, number>),
+  );
   const variant = pickVariant(split);
 
   const { error: insertError } = await supabase.from('ab_assignments').insert({
@@ -149,33 +296,86 @@ export async function assignVariant(
   return variant;
 }
 
+async function persistAbMetadata(
+  supabase: SupabaseClient,
+  conversationId: string,
+  contexts: AbAssignmentContext[],
+): Promise<void> {
+  const first = contexts.find((c) => c.scope === 'first_message');
+  if (!first) return;
+
+  const { data: conv } = await supabase
+    .from('conversations')
+    .select('metadata')
+    .eq('id', conversationId)
+    .maybeSingle();
+
+  const metadata = {
+    ...((conv?.metadata as Record<string, unknown> | null) ?? {}),
+    ab_variant: first.variant,
+    ab_experiment_id: first.experiment_id,
+    ab_experiment_name: first.experiment_name,
+  };
+
+  await supabase.from('conversations').update({ metadata }).eq('id', conversationId);
+}
+
 export async function ensureConversationAssignments(
   supabase: SupabaseClient,
   botId: string,
   conversationId: string,
   scope: ExperimentScope = 'first_message',
+  customerPhone?: string,
 ): Promise<AbAssignmentContext[]> {
   console.log(`[ab-testing] checking active experiments for bot=${botId} scope=${scope}`);
 
-  const experiments = await getActiveExperiments(supabase, botId, scope);
-  if (experiments.length === 0) {
-    console.log('[ab-testing] no active experiments found');
+  const [activeExperiments, winnerExperiments] = await Promise.all([
+    getActiveExperiments(supabase, botId, scope),
+    getCompletedWinnerExperiments(supabase, botId, scope),
+  ]);
+
+  if (activeExperiments.length === 0 && winnerExperiments.length === 0) {
+    console.log('[ab-testing] no experiments found');
     return [];
   }
 
-  console.log(`[ab-testing] found ${experiments.length} experiments`);
+  console.log(
+    `[ab-testing] found ${activeExperiments.length} active, ${winnerExperiments.length} completed-with-winner`,
+  );
   const contexts: AbAssignmentContext[] = [];
 
-  for (const exp of experiments) {
-    const variant = await assignVariant(supabase, exp.id, conversationId);
-    const variants = exp.variants ?? {};
+  for (const exp of activeExperiments) {
+    const variant = await assignVariant(supabase, exp.id, conversationId, {
+      customerPhone,
+      variants: exp.variants,
+      trafficSplit: exp.traffic_split,
+    });
     contexts.push({
       experiment_id: exp.id,
       experiment_name: exp.name,
       variant,
       scope: exp.scope,
-      payload: (variants[variant] ?? {}) as Record<string, unknown>,
+      payload: (exp.variants[variant] ?? {}) as Record<string, unknown>,
     });
+  }
+
+  for (const exp of winnerExperiments) {
+    if (!exp.winner_variant) continue;
+    const variant = await assignVariant(supabase, exp.id, conversationId, {
+      customerPhone,
+      forcedVariant: exp.winner_variant,
+    });
+    contexts.push({
+      experiment_id: exp.id,
+      experiment_name: exp.name,
+      variant,
+      scope: exp.scope,
+      payload: (exp.variants[variant] ?? {}) as Record<string, unknown>,
+    });
+  }
+
+  if (contexts.length > 0) {
+    await persistAbMetadata(supabase, conversationId, contexts);
   }
 
   return contexts;
@@ -186,7 +386,6 @@ export function getFirstMessageOverride(
 ): string | null {
   for (const ctx of assignments) {
     if (ctx.scope !== 'first_message') continue;
-    if (ctx.variant === 'A') continue;
     const msg = ctx.payload.first_message;
     if (typeof msg === 'string' && msg.trim()) return msg.trim();
   }
@@ -202,12 +401,6 @@ export function buildAbSystemPromptSuffix(
   const parts: string[] = [];
   for (const ctx of assignments) {
     if (ctx.scope !== 'first_message') continue;
-    if (ctx.variant === 'A') {
-      parts.push(
-        `[A/B TEST — Variante A (control)] Usa el flujo y tono estándar de Kalyo para el primer mensaje.`,
-      );
-      continue;
-    }
     const msg = ctx.payload.first_message;
     if (typeof msg === 'string' && msg.trim()) {
       parts.push(
@@ -272,11 +465,13 @@ export async function getExperimentResults(
 ): Promise<ExperimentResults> {
   const { data: experiment, error: expError } = await supabase
     .from('ab_experiments')
-    .select('min_sample_size, winner_variant')
+    .select('min_sample_size, winner_variant, name, variants, status')
     .eq('id', experimentId)
     .maybeSingle();
 
   if (expError || !experiment) throw expError ?? new Error('Experiment not found');
+
+  const variantDefs = (experiment.variants ?? {}) as Record<string, ExperimentVariant>;
 
   const { data: assignments, error: assignError } = await supabase
     .from('ab_assignments')
@@ -291,6 +486,10 @@ export async function getExperimentResults(
     const bucket = byVariant.get(row.variant) ?? { ids: [], conversions: 0 };
     bucket.ids.push(row.id);
     byVariant.set(row.variant, bucket);
+  }
+
+  for (const key of Object.keys(variantDefs)) {
+    if (!byVariant.has(key)) byVariant.set(key, { ids: [], conversions: 0 });
   }
 
   const assignmentIds = (assignments ?? []).map((a) => a.id);
@@ -313,6 +512,7 @@ export async function getExperimentResults(
     const conversions = bucket.ids.filter((id) => conversionByAssignment.has(id)).length;
     variants.push({
       name,
+      label: variantDefs[name]?.label,
       count: bucket.ids.length,
       conversions,
       conversion_rate:
@@ -324,33 +524,72 @@ export async function getExperimentResults(
 
   variants.sort((a, b) => a.name.localeCompare(b.name));
 
-  const minSample = experiment.min_sample_size ?? 50;
-  const sample_ready = variants.every((v) => v.count >= minSample);
+  const minConversions = experiment.min_sample_size ?? 30;
+  const sample_ready =
+    variants.length >= 2 && variants.every((v) => v.conversions >= minConversions);
+
+  const maxConversions = Math.max(...variants.map((v) => v.conversions), 0);
+  const conversions_needed = sample_ready
+    ? 0
+    : Math.max(0, minConversions - maxConversions);
 
   let p_value: number | undefined;
+  let p_value_vs_baseline: number | undefined;
   let winner: string | undefined = experiment.winner_variant ?? undefined;
+  let leading_variant: string | undefined;
+  let statistically_significant = false;
 
   if (variants.length >= 2) {
     const sorted = [...variants].sort((a, b) => b.conversion_rate - a.conversion_rate);
+    leading_variant = sorted[0]?.name;
     const top = sorted[0];
     const second = sorted[1];
-    const p = twoProportionZTest(
+    const baseline =
+      variants.find((v) => v.name === 'A') ?? sorted[sorted.length - 1];
+
+    const pTopSecond = twoProportionZTest(
       top.count,
       top.conversions,
       second.count,
       second.conversions,
     );
-    if (p !== null) p_value = Math.round(p * 10000) / 10000;
+    if (pTopSecond !== null) p_value = Math.round(pTopSecond * 10000) / 10000;
+
+    const pVsBaseline = twoProportionZTest(
+      top.count,
+      top.conversions,
+      baseline.count,
+      baseline.conversions,
+    );
+    if (pVsBaseline !== null) {
+      p_value_vs_baseline = Math.round(pVsBaseline * 10000) / 10000;
+      statistically_significant = p_value_vs_baseline < 0.05;
+    }
 
     if (sample_ready && p_value !== undefined && p_value < 0.05) {
       winner = top.name;
-      if (!experiment.winner_variant) {
+      if (!experiment.winner_variant && experiment.status === 'active') {
+        const now = new Date().toISOString();
         await supabase
           .from('ab_experiments')
-          .update({ winner_variant: winner })
+          .update({
+            winner_variant: winner,
+            status: 'completed',
+            ended_at: now,
+          })
           .eq('id', experimentId);
+
+        await notifyAbWinnerTelegram({
+          experimentName: experiment.name,
+          winner: top.name,
+          winnerLabel: top.label,
+          conversionRate: top.conversion_rate,
+          baselineRate: baseline.conversion_rate,
+          pValue: p_value_vs_baseline ?? p_value,
+        });
+
         console.log(
-          `[ab-testing] winner detected | exp=${experimentId} | winner=${winner} | p_value=${p_value}`,
+          `[ab-testing] winner promoted | exp=${experimentId} | winner=${winner} | p_value=${p_value}`,
         );
       }
     }
@@ -360,8 +599,13 @@ export async function getExperimentResults(
     experiment_id: experimentId,
     variants,
     winner,
+    leading_variant,
     p_value,
+    p_value_vs_baseline,
+    baseline_variant: 'A',
     sample_ready,
+    conversions_needed,
+    statistically_significant,
   };
 }
 

@@ -538,6 +538,7 @@ export async function processIncomingMessage(
         bot.id,
         conversation.id,
         'first_message',
+        conversation.customer_phone,
       );
     } catch (abErr) {
       console.error('[ab-testing] assignment failed', abErr);
@@ -737,6 +738,7 @@ export async function processIncomingMessage(
 
   if (freshConv?.lead_captured && !leadCaptured) {
     await recordOutcome(supabase, conversation.id, 'lead_captured');
+    await recordOutcome(supabase, conversation.id, 'qualified_lead');
   }
 
   if (freshConv) {
