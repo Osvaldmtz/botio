@@ -11,6 +11,7 @@ import { ConversationFilters, type FilterState } from './conversation-filters';
 import { ConversationStats } from './conversation-stats';
 import { ConversationList } from './conversation-list';
 import { ConversationDetailPanel } from './conversation-detail';
+import { HotLeadsAlertBanner } from './hot-leads-alert-banner';
 
 type Bot = { id: string; name: string };
 
@@ -27,6 +28,7 @@ function buildQuery(filters: FilterState): string {
   const params = new URLSearchParams();
   if (filters.status !== 'all') params.set('status', filters.status);
   if (filters.closure !== 'all') params.set('closure', filters.closure);
+  if (filters.hotUnattended) params.set('hotUnattended', 'true');
   if (filters.channel !== 'all') params.set('channel', filters.channel);
   if (filters.search.trim()) params.set('search', filters.search.trim());
   if (filters.dateRange !== 'all') params.set('dateRange', filters.dateRange);
@@ -50,6 +52,7 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
   const [filters, setFilters] = useState<FilterState>({
     status: 'all',
     closure: 'all',
+    hotUnattended: false,
     channel: 'all',
     search: '',
     dateRange: 'all',
@@ -108,6 +111,17 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
         ) : null
       }
     >
+      <HotLeadsAlertBanner
+        count={stats.unattendedHot24h}
+        onFilter={() =>
+          setFilters((prev) => ({
+            ...prev,
+            hotUnattended: true,
+            status: 'all',
+            closure: 'all',
+          }))
+        }
+      />
       <ConversationStats stats={stats} />
       <ConversationFilters
         filters={filters}

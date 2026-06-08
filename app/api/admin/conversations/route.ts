@@ -40,6 +40,7 @@ function parseFilters(searchParams: URLSearchParams): ConversationFilters {
     search: searchParams.get('search') ?? undefined,
     status: status && status !== 'all' ? status : 'all',
     closure,
+    hotUnattended: searchParams.get('hotUnattended') === 'true',
     dateRange: dateRange ?? 'all',
     from: searchParams.get('from') ?? undefined,
     to: searchParams.get('to') ?? undefined,

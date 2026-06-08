@@ -15,6 +15,7 @@ import { cn } from '@/lib/cn';
 export type FilterState = {
   status: ConversationStatusFilter;
   closure: ClosureFilter;
+  hotUnattended: boolean;
   channel: ChannelFilter;
   search: string;
   dateRange: DateRangeFilter;

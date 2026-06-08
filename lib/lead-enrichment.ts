@@ -185,7 +185,7 @@ function recommendedActionFromScore(score: number): string {
 }
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { notifyHotLeadInstant } from '@/lib/notify-hot-lead';
+import { notifyHotLeadIfNew } from '@/lib/hot-lead-notifier';
 
 export function enrichLead(input: LeadEnrichmentInput): EnrichedLead {
   const text = allUserText(input.conversationMessages);
@@ -240,9 +240,11 @@ export async function enrichAndNotifyLead(
 ): Promise<EnrichedLead> {
   const { data: convRow } = await supabase
     .from('conversations')
-    .select('lead_signals, customer_phone')
+    .select('lead_signals, customer_phone, lead_score, channel, session_id')
     .eq('id', params.conversationId)
     .maybeSingle();
+
+  const previousScore = convRow?.lead_score ?? 0;
 
   const enriched = enrichLead({
     phone: params.phone,
@@ -274,18 +276,22 @@ export async function enrichAndNotifyLead(
     console.error('[lead-enrichment] persist failed', updateError);
   }
 
-  if (enriched.temperature === 'hot' && enriched.score >= 70) {
-    await notifyHotLeadInstant(
+  if (enriched.score >= 70) {
+    await notifyHotLeadIfNew({
       supabase,
-      {
+      conversation: {
         id: params.conversationId,
         customer_phone: params.phone,
+        channel: convRow?.channel ?? null,
+        session_id: convRow?.session_id ?? null,
         lead_signals: mergedSignals,
       },
-      enriched,
-      params.conversationMessages,
-      params.name,
-    );
+      enrichment: enriched,
+      previousScore,
+      messages: params.conversationMessages,
+      name: params.name,
+      email: params.email,
+    });
   }
 
   return enriched;

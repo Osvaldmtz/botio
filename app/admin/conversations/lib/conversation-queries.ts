@@ -27,6 +27,7 @@ export type ConversationFilters = {
   search?: string;
   status?: ConversationStatusFilter;
   closure?: ClosureFilter;
+  hotUnattended?: boolean;
   dateRange?: DateRangeFilter;
   from?: string;
   to?: string;
@@ -74,6 +75,7 @@ export type DashboardStats = {
   activeLastHour: number;
   unanswered: number;
   conversionRate: number;
+  unattendedHot24h: number;
 };
 
 export type ConversationMessage = {
@@ -186,6 +188,15 @@ export async function fetchConversations(
     q = q.eq('closure_reason', closure);
   }
 
+  if (filters.hotUnattended) {
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    q = q
+      .gte('lead_score', 70)
+      .eq('needs_reply', true)
+      .eq('handoff_active', false)
+      .gte('last_message_at', since24h);
+  }
+
   const { start, end } = resolveDateBounds(filters);
   if (start) q = q.gte('last_message_at', start);
   if (end) q = q.lte('last_message_at', end);
@@ -266,12 +277,27 @@ export async function fetchDashboardStats(
       ? Math.round((leadsToday / (newToday ?? 1)) * 10000) / 100
       : 0;
 
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  let unattendedHotQuery = supabase
+    .from('conversation_summary')
+    .select('id', { count: 'exact', head: true })
+    .gte('lead_score', 70)
+    .eq('needs_reply', true)
+    .eq('handoff_active', false)
+    .gte('last_message_at', since24h);
+
+  if (botId) unattendedHotQuery = unattendedHotQuery.eq('bot_id', botId);
+
+  const { count: unattendedHot24h, error: unattendedError } = await unattendedHotQuery;
+  if (unattendedError) throw unattendedError;
+
   return {
     conversationsToday,
     hotLeadsToday,
     activeLastHour,
     unanswered,
     conversionRate,
+    unattendedHot24h: unattendedHot24h ?? 0,
   };
 }
 
