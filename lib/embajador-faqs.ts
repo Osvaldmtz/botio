@@ -199,6 +199,15 @@ export function wantsWebinarRegistration(text: string): boolean {
   );
 }
 
+/** FAQ/guard signals that identify an embajador lead even when intent regex misses. */
+export function matchesAmbassadorFaqSignal(messageBody: string): boolean {
+  return (
+    matchEmbajadorFaq(messageBody) !== null ||
+    wantsWebinarRegistration(messageBody) ||
+    wantsDirectMeetLink(messageBody)
+  );
+}
+
 export function responseContainsLumaLink(text: string): boolean {
   return text.includes(LUMA_WEBINAR_URL);
 }

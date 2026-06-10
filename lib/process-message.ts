@@ -282,7 +282,7 @@ export async function processIncomingMessage(
 
     if (shouldMarkAmbassadorLead(ambassadorState, messageBody)) {
       console.log(
-        `[ambassador] intent detected | conv=${conversation.id} | msg="${messageBody.slice(0, 80)}"`,
+        `[ambassador] lead detected (intent or FAQ) | conv=${conversation.id} | msg="${messageBody.slice(0, 80)}"`,
       );
       await markAmbassadorLead(supabase, conversation.id, ambassadorState.metadata);
       isAmbassadorLead = true;

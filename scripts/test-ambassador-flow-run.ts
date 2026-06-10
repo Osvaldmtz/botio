@@ -3,6 +3,7 @@ import {
   LUMA_WEBINAR_URL,
   MEET_LINK_BLOCKED_RESPONSE,
   matchEmbajadorFaq,
+  matchesAmbassadorFaqSignal,
   responseContainsLumaLink,
   wantsDirectMeetLink,
 } from '../lib/embajador-faqs';
@@ -50,6 +51,18 @@ async function runTests(): Promise<void> {
   assert(webinarReply?.sentLumaLink === true, 'webinar registration sends Luma');
   assert(Boolean(webinarReply?.replyText.includes(LUMA_WEBINAR_URL)), 'webinar reply has Luma');
   console.log('✓ registro webinar → link Luma + sentLumaLink');
+
+  const webinarAlone = 'webinar';
+  assert(matchesAmbassadorFaqSignal(webinarAlone), 'webinar alone matches FAQ signal');
+  assert(
+    detectAmbassadorIntent(webinarAlone) === 'embajador_program' ||
+      matchesAmbassadorFaqSignal(webinarAlone),
+    'webinar alone should mark ambassador lead',
+  );
+  const webinarAloneReply = buildAmbassadorReply(webinarAlone, ambassadorState());
+  assert(webinarAloneReply?.faqId === 'webinar_info', 'webinar alone gets webinar_info FAQ');
+  assert(Boolean(webinarAloneReply?.replyText.includes(LUMA_WEBINAR_URL)), 'webinar alone has Luma');
+  console.log('✓ "webinar" sola → FAQ signal + mark lead + webinar_info (sin A/B)');
 
   const meet = 'Dame el link del Meet por favor';
   assert(wantsDirectMeetLink(meet), 'detect meet request');

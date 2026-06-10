@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { detectAmbassadorIntent } from '@/lib/intent-detector';
+import { matchesAmbassadorFaqSignal } from '@/lib/embajador-faqs';
 import { buildAmbassadorReply } from '@/lib/ambassador-messages';
 import { sendAmbassadorLeadTelegram } from '@/lib/telegram-notify';
 
@@ -41,12 +42,17 @@ export async function loadAmbassadorState(
   };
 }
 
+export { matchesAmbassadorFaqSignal } from '@/lib/embajador-faqs';
+
 export function shouldMarkAmbassadorLead(
   state: AmbassadorConversationState,
   messageBody: string,
 ): boolean {
   if (state.isAmbassadorLead) return false;
-  return detectAmbassadorIntent(messageBody) === 'embajador_program';
+  return (
+    detectAmbassadorIntent(messageBody) === 'embajador_program' ||
+    matchesAmbassadorFaqSignal(messageBody)
+  );
 }
 
 export async function markAmbassadorLead(
@@ -66,6 +72,8 @@ export async function markAmbassadorLead(
       metadata: nextMetadata,
       is_ambassador: true,
       lead_intent: 'Embajadores',
+      lead_score: null,
+      lead_temperature: null,
     })
     .eq('id', conversationId);
 }
