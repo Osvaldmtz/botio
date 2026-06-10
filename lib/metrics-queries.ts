@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { CLOSURE_REASON_UI, type ClosureReason } from '@/lib/conversation-closure-constants';
+import {
+  fetchAmbassadorMetrics,
+  type AmbassadorMetrics,
+} from '@/lib/ambassador-admin-queries';
+import { SALES_CONVERSATIONS_OR } from '@/lib/ambassador-filters';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -44,6 +49,9 @@ export type MetricsBundle = {
   closure_breakdown: Record<string, number>;
   trends_30d: TrendDay[];
   unattended_hot_leads: number;
+  ambassadors: AmbassadorMetrics;
+  /** Total conversations in 30d including ambassadors (for before/after reporting). */
+  total_conversations_30d_including_ambassadors: number;
 };
 
 const OBJECTION_LABELS: Record<string, string> = {
@@ -94,55 +102,67 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
 
   const [
     convRes,
+    convAllRes,
     trialRes,
     objectionRes,
     closureRes,
     hotRes,
-    paidTrialRes,
+    ambassadorConvIdsRes,
+    ambassadors,
   ] = await Promise.all([
     supabase
       .from('conversations')
       .select(
         'id, created_at, channel, lead_score, lead_captured, pipeline_stage, closure_reason',
       )
-      .gte('created_at', since),
+      .gte('created_at', since)
+      .or(SALES_CONVERSATIONS_OR),
+    supabase.from('conversations').select('id', { count: 'exact', head: true }).gte('created_at', since),
     supabase
       .from('trial_onboarding_messages')
       .select('id, trial_started_at, upgraded_to_paid_at, conversation_id')
       .gte('trial_started_at', since),
     supabase
       .from('detected_objections')
-      .select('objection_type, outcome')
+      .select('objection_type, outcome, conversation_id')
       .gte('detected_at', since),
     supabase
       .from('conversations')
       .select('closure_reason, closed_at')
       .not('closure_reason', 'is', null)
-      .gte('closed_at', since),
+      .gte('closed_at', since)
+      .or(SALES_CONVERSATIONS_OR),
     supabase
       .from('conversation_summary')
       .select('id', { count: 'exact', head: true })
       .gte('lead_score', 70)
       .eq('needs_reply', true)
       .eq('handoff_active', false)
-      .is('closed_at', null),
-    supabase
-      .from('conversations')
-      .select('id, created_at, closure_reason, pipeline_stage')
-      .or('closure_reason.eq.converted,pipeline_stage.eq.paid')
-      .gte('created_at', since),
+      .is('closed_at', null)
+      .or(SALES_CONVERSATIONS_OR),
+    supabase.from('conversations').select('id').eq('is_ambassador', true),
+    fetchAmbassadorMetrics(supabase),
   ]);
 
   if (convRes.error) throw convRes.error;
+  if (convAllRes.error) throw convAllRes.error;
   if (trialRes.error) throw trialRes.error;
   if (objectionRes.error) throw objectionRes.error;
   if (closureRes.error) throw closureRes.error;
   if (hotRes.error) throw hotRes.error;
-  if (paidTrialRes.error) throw paidTrialRes.error;
+  if (ambassadorConvIdsRes.error) throw ambassadorConvIdsRes.error;
+
+  const ambassadorIds = new Set(
+    (ambassadorConvIdsRes.data ?? []).map((row) => row.id as string),
+  );
 
   const convs = convRes.data ?? [];
-  const trials = trialRes.data ?? [];
-  const objections = objectionRes.data ?? [];
+  const trials = (trialRes.data ?? []).filter(
+    (t) => !t.conversation_id || !ambassadorIds.has(t.conversation_id as string),
+  );
+  const objections = (objectionRes.data ?? []).filter(
+    (row) => !row.conversation_id || !ambassadorIds.has(row.conversation_id as string),
+  );
   const closures = closureRes.data ?? [];
 
   const leads = convs.length;
@@ -252,5 +272,7 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
     closure_breakdown,
     trends_30d,
     unattended_hot_leads: hotRes.count ?? 0,
+    ambassadors,
+    total_conversations_30d_including_ambassadors: convAllRes.count ?? leads,
   };
 }

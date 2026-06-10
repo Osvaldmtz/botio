@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type {
   ConversationSummary,
   DashboardStats,
@@ -35,10 +36,14 @@ function buildQuery(filters: FilterState): string {
   if (filters.botId) params.set('botId', filters.botId);
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
+  if (filters.leadType && filters.leadType !== 'sales') {
+    params.set('leadType', filters.leadType);
+  }
   return params.toString();
 }
 
 export function ConversationsDashboard({ initial }: { initial: InitialData }) {
+  const router = useRouter();
   const [conversations, setConversations] = useState(
     sortConversationsWithHotPriority(initial.conversations),
   );
@@ -59,7 +64,19 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
     botId: '',
     from: '',
     to: '',
+    leadType: 'sales',
   });
+
+  const handleFilterChange = useCallback(
+    (patch: Partial<FilterState>) => {
+      if (patch.leadType === 'ambassadors') {
+        router.push('/admin/ambassadors');
+        return;
+      }
+      setFilters((prev) => ({ ...prev, ...patch }));
+    },
+    [router],
+  );
 
   const queryString = useMemo(() => buildQuery(filters), [filters]);
 
@@ -126,7 +143,7 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
       <ConversationFilters
         filters={filters}
         bots={bots}
-        onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
+        onChange={handleFilterChange}
         onRefresh={() => void loadData()}
         refreshing={refreshing}
         secondsSinceUpdate={secondsSinceUpdate}

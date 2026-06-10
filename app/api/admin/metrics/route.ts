@@ -26,6 +26,9 @@ export async function GET() {
       closure_breakdown: metrics.closure_breakdown,
       trends_30d: metrics.trends_30d,
       unattended_hot_leads: metrics.unattended_hot_leads,
+      ambassadors: metrics.ambassadors,
+      total_conversations_30d_including_ambassadors:
+        metrics.total_conversations_30d_including_ambassadors,
       insights,
       fetchedAt: new Date().toISOString(),
     });

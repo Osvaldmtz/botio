@@ -12,6 +12,7 @@ import {
   type ConversationStatusFilter,
   type DateRangeFilter,
 } from '@/app/admin/conversations/lib/conversation-queries';
+import type { LeadTypeFilter } from '@/lib/ambassador-filters';
 import { isClosureReason } from '@/lib/conversation-closure';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,10 @@ function parseFilters(searchParams: URLSearchParams): ConversationFilters {
     closure = closureParam;
   }
 
+  const leadTypeParam = searchParams.get('leadType');
+  const leadType: LeadTypeFilter =
+    leadTypeParam === 'all' || leadTypeParam === 'ambassadors' ? leadTypeParam : 'sales';
+
   return {
     botId: searchParams.get('botId') ?? undefined,
     channel: validChannel,
@@ -44,6 +49,7 @@ function parseFilters(searchParams: URLSearchParams): ConversationFilters {
     dateRange: dateRange ?? 'all',
     from: searchParams.get('from') ?? undefined,
     to: searchParams.get('to') ?? undefined,
+    leadType,
   };
 }
 

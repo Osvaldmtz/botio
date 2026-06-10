@@ -5,6 +5,7 @@ import {
   type PipelineStage,
   normalizeStage,
 } from '@/lib/pipeline';
+import { SALES_CONVERSATIONS_OR } from '@/lib/ambassador-filters';
 import {
   resolveDateBounds,
   type ConversationSummary,
@@ -34,7 +35,7 @@ export async function fetchPipelineLeads(
   supabase: SupabaseClient,
   filters: PipelineFilters,
 ): Promise<PipelineLead[]> {
-  let q = supabase.from('conversation_summary').select('*');
+  let q = supabase.from('conversation_summary').select('*').or(SALES_CONVERSATIONS_OR);
 
   if (filters.botId) q = q.eq('bot_id', filters.botId);
   if (filters.temperature) q = q.eq('lead_temperature', filters.temperature);
@@ -72,7 +73,8 @@ export async function fetchPipelineStats(
   let activeQuery = supabase
     .from('conversations')
     .select('id', { count: 'exact', head: true })
-    .neq('pipeline_stage', 'lost');
+    .neq('pipeline_stage', 'lost')
+    .or(SALES_CONVERSATIONS_OR);
 
   if (botId) activeQuery = activeQuery.eq('bot_id', botId);
   const { count: activeLeads } = await activeQuery;
@@ -106,7 +108,8 @@ export async function fetchPipelineStats(
 
   let stageQuery = supabase
     .from('conversations')
-    .select('pipeline_stage, pipeline_stage_updated_at');
+    .select('pipeline_stage, pipeline_stage_updated_at')
+    .or(SALES_CONVERSATIONS_OR);
 
   if (botId) stageQuery = stageQuery.eq('bot_id', botId);
   const { data: stageRows } = await stageQuery;

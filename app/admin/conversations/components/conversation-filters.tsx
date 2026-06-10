@@ -6,6 +6,7 @@ import type {
   ConversationStatusFilter,
   DateRangeFilter,
 } from '../lib/conversation-queries';
+import type { LeadTypeFilter } from '@/lib/ambassador-filters';
 import { CLOSURE_REASONS, CLOSURE_REASON_UI } from '@/lib/conversation-closure-constants';
 import type { ChannelFilter } from '@/lib/channel-utils';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,7 @@ export type FilterState = {
   botId: string;
   from: string;
   to: string;
+  leadType: LeadTypeFilter;
 };
 
 type Bot = { id: string; name: string };
@@ -49,6 +51,12 @@ const CHANNEL_CHIPS: Array<{ id: ChannelFilter; label: string }> = [
   { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'webchat', label: 'Web' },
   { id: 'telegram', label: 'Telegram' },
+];
+
+const LEAD_TYPE_CHIPS: Array<{ id: LeadTypeFilter; label: string }> = [
+  { id: 'sales', label: 'Solo ventas' },
+  { id: 'all', label: 'Todos' },
+  { id: 'ambassadors', label: 'Solo embajadores' },
 ];
 
 const DATE_CHIPS: Array<{ id: DateRangeFilter; label: string }> = [
@@ -112,6 +120,19 @@ export function ConversationFilters({
             Refresh
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-bg-border pb-3">
+        <span className="text-xs font-medium text-fg-muted">Tipo de lead:</span>
+        {LEAD_TYPE_CHIPS.map((chip) => (
+          <Chip
+            key={chip.id}
+            active={filters.leadType === chip.id}
+            onClick={() => onChange({ leadType: chip.id })}
+          >
+            {chip.label}
+          </Chip>
+        ))}
       </div>
 
       <div className="flex flex-wrap gap-1 border-b border-bg-border pb-3">

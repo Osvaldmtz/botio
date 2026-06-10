@@ -60,7 +60,7 @@ export type TrialOnboardingEnrollSuccess = {
 
 export type TrialOnboardingEnrollFailure = {
   success: false;
-  reason: 'already_enrolled';
+  reason: 'already_enrolled' | 'is_ambassador';
 };
 
 export type TrialOnboardingEnrollResult =
@@ -279,12 +279,22 @@ async function createKalyoConversation(
 
   const { data: existing } = await supabase
     .from('conversations')
-    .select('id, pipeline_stage')
+    .select('id, pipeline_stage, is_ambassador, metadata')
     .eq('bot_id', botId)
     .eq('customer_phone', params.phone)
     .maybeSingle();
 
   if (existing?.id) {
+    if (
+      existing.is_ambassador === true ||
+      (existing.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
+    ) {
+      console.log(
+        `[trial-onboarding] skip enroll | reason=is_ambassador | conv=${existing.id} | phone=${params.phone}`,
+      );
+      throw new Error('is_ambassador');
+    }
+
     await supabase
       .from('conversations')
       .update({
@@ -374,6 +384,21 @@ export async function enrollTrialFromKalyoWebhook(
     `[trial-onboarding-webhook] received | email=${email} | phone=${phone} | source=${source}`,
   );
 
+  const { data: ambassadorByPhone } = await supabase
+    .from('conversations')
+    .select('id, is_ambassador, metadata')
+    .eq('customer_phone', phone)
+    .eq('is_ambassador', true)
+    .maybeSingle();
+
+  if (
+    ambassadorByPhone?.is_ambassador === true ||
+    (ambassadorByPhone?.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
+  ) {
+    console.log(`[trial-onboarding] skip enroll | reason=is_ambassador | phone=${phone}`);
+    return { success: false, reason: 'is_ambassador' };
+  }
+
   const startedAt = input.trialStartedAt ?? new Date().toISOString();
   const endsAt = new Date(new Date(startedAt).getTime() + TRIAL_DAYS_MS).toISOString();
 
@@ -391,12 +416,20 @@ export async function enrollTrialFromKalyoWebhook(
     return { success: false, reason: 'already_enrolled' };
   }
 
-  const conversationId = await createKalyoConversation(supabase, {
-    phone,
-    email,
-    name,
-    source,
-  });
+  let conversationId: string;
+  try {
+    conversationId = await createKalyoConversation(supabase, {
+      phone,
+      email,
+      name,
+      source,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === 'is_ambassador') {
+      return { success: false, reason: 'is_ambassador' };
+    }
+    throw err;
+  }
 
   const { data: row, error: insertError } = await supabase
     .from('trial_onboarding_messages')

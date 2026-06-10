@@ -2,6 +2,12 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ChannelFilter } from '@/lib/channel-utils';
 import type { ClosureReason } from '@/lib/conversation-closure-constants';
+import {
+  fetchAmbassadorConversationIds,
+  filterSummariesByLeadType,
+  SALES_CONVERSATIONS_OR,
+  type LeadTypeFilter,
+} from '@/lib/ambassador-filters';
 
 const MEXICO_TZ = 'America/Mexico_City';
 
@@ -31,6 +37,7 @@ export type ConversationFilters = {
   dateRange?: DateRangeFilter;
   from?: string;
   to?: string;
+  leadType?: LeadTypeFilter;
 };
 
 export type ConversationSummary = {
@@ -67,6 +74,7 @@ export type ConversationSummary = {
   closure_reason: string | null;
   closure_note: string | null;
   closed_by: string | null;
+  is_ambassador?: boolean | null;
 };
 
 export type DashboardStats = {
@@ -159,7 +167,14 @@ export async function fetchConversations(
   supabase: SupabaseClient,
   filters: ConversationFilters,
 ): Promise<ConversationSummary[]> {
+  const leadType = filters.leadType ?? 'sales';
   let q = supabase.from('conversation_summary').select('*');
+
+  if (leadType === 'sales') {
+    q = q.or(SALES_CONVERSATIONS_OR);
+  } else if (leadType === 'ambassadors') {
+    q = q.eq('is_ambassador', true);
+  }
 
   if (filters.botId) {
     q = q.eq('bot_id', filters.botId);
@@ -213,7 +228,26 @@ export async function fetchConversations(
     ascending: false,
     nullsFirst: false,
   });
-  if (error) throw error;
+  if (error) {
+    if (leadType === 'sales' && error.message.includes('is_ambassador')) {
+      const ambassadorIds = await fetchAmbassadorConversationIds(supabase);
+      let fallback = supabase.from('conversation_summary').select('*');
+      if (filters.botId) fallback = fallback.eq('bot_id', filters.botId);
+      const channel = filters.channel ?? 'all';
+      if (channel !== 'all') fallback = fallback.eq('channel', channel);
+      const { data: fallbackData, error: fallbackError } = await fallback.order(
+        'last_message_at',
+        { ascending: false, nullsFirst: false },
+      );
+      if (fallbackError) throw fallbackError;
+      return filterSummariesByLeadType(
+        (fallbackData ?? []) as ConversationSummary[],
+        leadType,
+        ambassadorIds,
+      );
+    }
+    throw error;
+  }
   return (data ?? []) as ConversationSummary[];
 }
 
@@ -227,6 +261,7 @@ export async function fetchNewHotLeads(
     .select('*')
     .gte('lead_score', 70)
     .gt('created_at', newSince)
+    .or(SALES_CONVERSATIONS_OR)
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -245,7 +280,8 @@ export async function fetchDashboardStats(
     .from('conversation_summary')
     .select('id, lead_captured, lead_temperature, needs_reply, last_message_at')
     .gte('last_message_at', todayBounds.start)
-    .lte('last_message_at', todayBounds.end);
+    .lte('last_message_at', todayBounds.end)
+    .or(SALES_CONVERSATIONS_OR);
 
   if (botId) todayQuery = todayQuery.eq('bot_id', botId);
 
@@ -264,7 +300,8 @@ export async function fetchDashboardStats(
     .from('conversations')
     .select('id', { count: 'exact', head: true })
     .gte('created_at', todayBounds.start)
-    .lte('created_at', todayBounds.end);
+    .lte('created_at', todayBounds.end)
+    .or(SALES_CONVERSATIONS_OR);
 
   if (botId) newTodayQuery = newTodayQuery.eq('bot_id', botId);
 
@@ -284,7 +321,8 @@ export async function fetchDashboardStats(
     .gte('lead_score', 70)
     .eq('needs_reply', true)
     .eq('handoff_active', false)
-    .gte('last_message_at', since24h);
+    .gte('last_message_at', since24h)
+    .or(SALES_CONVERSATIONS_OR);
 
   if (botId) unattendedHotQuery = unattendedHotQuery.eq('bot_id', botId);
 

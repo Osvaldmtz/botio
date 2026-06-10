@@ -327,6 +327,20 @@ export async function ensureConversationAssignments(
   scope: ExperimentScope = 'first_message',
   customerPhone?: string,
 ): Promise<AbAssignmentContext[]> {
+  const { data: convRow } = await supabase
+    .from('conversations')
+    .select('is_ambassador, metadata')
+    .eq('id', conversationId)
+    .maybeSingle();
+
+  if (
+    convRow?.is_ambassador === true ||
+    (convRow?.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
+  ) {
+    console.log(`[ab-testing] skip assignment | reason=is_ambassador | conv=${conversationId}`);
+    return [];
+  }
+
   console.log(`[ab-testing] checking active experiments for bot=${botId} scope=${scope}`);
 
   const [activeExperiments, winnerExperiments] = await Promise.all([

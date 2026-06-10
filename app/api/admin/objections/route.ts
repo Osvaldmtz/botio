@@ -2,6 +2,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/admin-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { fetchAmbassadorConversationIds } from '@/lib/ambassador-filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,17 +50,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rows = (data ?? []).map((row) => ({
+  const ambassadorIds = await fetchAmbassadorConversationIds(supabase);
+  const salesRows = (data ?? []).filter(
+    (row) => !row.conversation_id || !ambassadorIds.has(row.conversation_id as string),
+  );
+
+  const rows = salesRows.map((row) => ({
     ...row,
     type_label: TYPE_LABELS[row.objection_type as string] ?? row.objection_type,
   }));
 
   const { data: recent } = await supabase
     .from('detected_objections')
-    .select('objection_type, outcome')
+    .select('objection_type, outcome, conversation_id')
     .gte('detected_at', thirtyDaysAgo);
 
-  const metricsBase = recent ?? [];
+  const metricsBase = (recent ?? []).filter(
+    (row) => !row.conversation_id || !ambassadorIds.has(row.conversation_id as string),
+  );
   const total30d = metricsBase.length;
   const converted = metricsBase.filter((r) => r.outcome === 'converted').length;
   const conversionRate = total30d > 0 ? Math.round((converted / total30d) * 100) : 0;

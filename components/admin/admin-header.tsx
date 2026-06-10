@@ -18,6 +18,7 @@ export function AdminHeader() {
   const isClosures = pathname?.includes('/analytics/closures');
   const isDashboard =
     pathname === '/admin/dashboard' || pathname === '/admin';
+  const isAmbassadors = pathname?.startsWith('/admin/ambassadors');
   const isConversations =
     pathname?.startsWith('/admin/conversations') && !isPipeline;
 
@@ -61,6 +62,11 @@ export function AdminHeader() {
       href: '/admin/experiments',
       label: 'Experimentos',
       active: isExperiments,
+    },
+    {
+      href: '/admin/ambassadors',
+      label: '🎓 Embajadores',
+      active: isAmbassadors,
     },
   ];
 

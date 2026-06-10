@@ -219,6 +219,19 @@ export async function detectObjection(
   conversation: ObjectionConversation,
   supabase: SupabaseClient,
 ): Promise<ObjectionMatch | null> {
+  const { data: convRow } = await supabase
+    .from('conversations')
+    .select('is_ambassador, metadata')
+    .eq('id', conversation.id)
+    .maybeSingle();
+
+  if (
+    convRow?.is_ambassador === true ||
+    (convRow?.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
+  ) {
+    return null;
+  }
+
   const normalized = normalizeObjectionText(messageBody);
   const priorPriceCount = await countPriorObjections(supabase, conversation.id, 'price');
 

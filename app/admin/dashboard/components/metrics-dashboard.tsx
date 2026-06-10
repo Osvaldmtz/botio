@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { AdminShell } from '@/components/admin/admin-shell';
 import { StatsHeader } from '@/components/admin/stats-header';
@@ -40,6 +41,12 @@ type ApiResponse = {
   closure_breakdown: Record<string, number>;
   trends_30d: Array<{ date: string; leads: number; trials: number; paid: number }>;
   unattended_hot_leads: number;
+  ambassadors?: {
+    total_leads: number;
+    luma_registered: number;
+    registration_rate: number;
+  };
+  total_conversations_30d_including_ambassadors?: number;
   insights: string[];
   fetchedAt: string;
 };
@@ -300,6 +307,31 @@ export function MetricsDashboard() {
         <p className="rounded-lg border border-semantic-hot/30 bg-semantic-hot-bg px-4 py-3 text-sm text-semantic-hot">
           🚨 {data.unattended_hot_leads} HOT lead(s) sin atender ahora mismo
         </p>
+      ) : null}
+
+      {data.ambassadors ? (
+        <section className="rounded-lg border border-bg-border bg-bg p-5">
+          <h2 className="text-sm font-semibold text-fg">🎓 Programa Embajadores (separado)</h2>
+          <p className="mt-2 text-sm text-fg-muted">
+            Leads (30d): <strong className="text-fg">{data.ambassadors.total_leads}</strong> ·
+            Registrados Luma:{' '}
+            <strong className="text-fg">{data.ambassadors.luma_registered}</strong> · Tasa:{' '}
+            {data.ambassadors.registration_rate}%
+          </p>
+          {data.total_conversations_30d_including_ambassadors != null &&
+          data.total_conversations_30d_including_ambassadors > funnel.leads ? (
+            <p className="mt-1 text-xs text-fg-tertiary">
+              Funnel de venta excluye{' '}
+              {data.total_conversations_30d_including_ambassadors - funnel.leads} embajador(es)
+            </p>
+          ) : null}
+          <Link
+            href="/admin/ambassadors"
+            className="mt-3 inline-block text-sm font-medium text-accent hover:underline"
+          >
+            Ver detalles →
+          </Link>
+        </section>
       ) : null}
     </AdminShell>
   );
