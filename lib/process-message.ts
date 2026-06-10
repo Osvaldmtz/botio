@@ -40,6 +40,15 @@ import {
 import { handleTrialOnboardingMessage } from '@/lib/trial-onboarding-interceptor';
 import { handleObjectionMessage } from '@/lib/objection-interceptor';
 import { trackObjectionOutcome } from '@/lib/objection-outcome-tracker';
+import {
+  handleAmbassadorMessage,
+  loadAmbassadorState,
+  markAmbassadorLead,
+  markWebinarLinkSent,
+  notifyAmbassadorLead,
+  shouldMarkAmbassadorLead,
+} from '@/lib/ambassador-handler';
+import { responseContainsLumaLink } from '@/lib/embajador-faqs';
 
 const HISTORY_LIMIT = 20;
 const FALLBACK_MESSAGE =
@@ -66,7 +75,8 @@ export type ProcessMessageSource =
   | 'auto_demo_check'
   | 'auto_demo_reminder'
   | 'trial_onboarding'
-  | 'objection_handler';
+  | 'objection_handler'
+  | 'ambassador_handler';
 
 export type ProcessIncomingMessageInput = {
   supabase: SupabaseClient;
@@ -252,6 +262,8 @@ export async function processIncomingMessage(
     .eq('conversation_id', conversation.id)
     .eq('role', 'user');
 
+  let isAmbassadorLead = false;
+
   if (isKalyoBotId(bot.id)) {
     const pending = await loadConversationPending(supabase, conversation.id);
     const kalyoCreds =
@@ -264,6 +276,53 @@ export async function processIncomingMessage(
         : null;
 
     await trackObjectionOutcome(supabase, conversation.id, messageBody);
+
+    let ambassadorState = await loadAmbassadorState(supabase, conversation.id);
+    isAmbassadorLead = ambassadorState.isAmbassadorLead;
+
+    if (shouldMarkAmbassadorLead(ambassadorState, messageBody)) {
+      await markAmbassadorLead(supabase, conversation.id, ambassadorState.metadata);
+      isAmbassadorLead = true;
+      ambassadorState = await loadAmbassadorState(supabase, conversation.id);
+      await notifyAmbassadorLead({
+        phone: conversation.customer_phone,
+        conversationId: conversation.id,
+        faqId: 'initial_detection',
+      }).catch((err) => console.error('[ambassador] notify failed', err));
+    }
+
+    if (isAmbassadorLead) {
+      const ambassadorReply = handleAmbassadorMessage(messageBody, ambassadorState);
+      if (ambassadorReply) {
+        if (ambassadorReply.sentLumaLink) {
+          await markWebinarLinkSent(supabase, conversation.id);
+        }
+
+        const assistantNow = new Date().toISOString();
+        await supabase.from('messages').insert({
+          conversation_id: conversation.id,
+          role: 'assistant',
+          content: ambassadorReply.replyText,
+          source: 'text',
+          source_type: 'claude',
+          metadata: {
+            source: ambassadorReply.source,
+            ambassador_faq_id: ambassadorReply.faqId ?? null,
+          },
+        });
+        await touchConversation(supabase, conversation.id, assistantNow);
+        console.log(
+          `[process-message] channel=${channel} | source=${ambassadorReply.source} | faq=${ambassadorReply.faqId ?? 'guard'} | conv=${conversation.id}`,
+        );
+
+        return {
+          replyText: ambassadorReply.replyText,
+          storedReply: ambassadorReply.replyText,
+          conversationId: conversation.id,
+          source: 'ambassador_handler',
+        };
+      }
+    }
 
     const objection = await handleObjectionMessage({
       supabase,
@@ -299,13 +358,15 @@ export async function processIncomingMessage(
       };
     }
 
-    const trialOnboarding = await handleTrialOnboardingMessage({
-      supabase,
-      conversationId: conversation.id,
-      customerPhone: conversation.customer_phone,
-      messageBody,
-      creds: kalyoCreds,
-    });
+    const trialOnboarding = !isAmbassadorLead
+      ? await handleTrialOnboardingMessage({
+          supabase,
+          conversationId: conversation.id,
+          customerPhone: conversation.customer_phone,
+          messageBody,
+          creds: kalyoCreds,
+        })
+      : null;
     if (trialOnboarding) {
       const assistantNow = new Date().toISOString();
       await supabase.from('messages').insert({
@@ -598,6 +659,7 @@ export async function processIncomingMessage(
     senderFrom: conversation.customer_phone,
     conversationId: conversation.id,
     conversationMessages,
+    isAmbassadorLead,
   });
 
   let systemPrompt =
@@ -620,7 +682,12 @@ export async function processIncomingMessage(
     systemPrompt += `\n\n[INSTRUCCIÓN INMEDIATA — ESTE TURNO ÚNICAMENTE] ${quickReplyHint}`;
   }
 
-  if (totalUserMsgs === 1 && isKalyoBotId(bot.id) && isAdPrefillMessage(messageBody)) {
+  if (
+    totalUserMsgs === 1 &&
+    isKalyoBotId(bot.id) &&
+    !isAmbassadorLead &&
+    isAdPrefillMessage(messageBody)
+  ) {
     systemPrompt +=
       '\n\n[INSTRUCCIÓN INMEDIATA — PRIMER MENSAJE DE CAMPAÑA] ' +
       'El usuario llegó desde un anuncio. Responde en máximo 3 oraciones. ' +
@@ -694,15 +761,21 @@ export async function processIncomingMessage(
     replyText = guardResult.replyText;
   }
 
-  const useQuickReplies = shouldAttachQuickReplies({
-    channel,
-    botId: bot.id,
-    totalUserMsgs,
-    messageBody,
-    hadToolUse,
-    source,
-    replyText,
-  });
+  if (isAmbassadorLead && responseContainsLumaLink(replyText)) {
+    await markWebinarLinkSent(supabase, conversation.id);
+  }
+
+  const useQuickReplies =
+    !isAmbassadorLead &&
+    shouldAttachQuickReplies({
+      channel,
+      botId: bot.id,
+      totalUserMsgs,
+      messageBody,
+      hadToolUse,
+      source,
+      replyText,
+    });
   const storedReply = useQuickReplies ? appendQuickReplyPrompt(replyText) : replyText;
 
   const assistantNow = new Date().toISOString();
@@ -736,7 +809,7 @@ export async function processIncomingMessage(
     .eq('id', conversation.id)
     .maybeSingle();
 
-  if (freshConv?.lead_captured && !leadCaptured) {
+  if (freshConv?.lead_captured && !leadCaptured && !isAmbassadorLead) {
     await recordOutcome(supabase, conversation.id, 'lead_captured');
     await recordOutcome(supabase, conversation.id, 'qualified_lead');
   }

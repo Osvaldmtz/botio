@@ -26,6 +26,7 @@ import type { ConversationMessage } from '@/lib/lead-enrichment';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { buildKalyoOfficialPricingPrompt } from '@/lib/kalyo-pricing-data';
+import { EMBAJADOR_SYSTEM_PROMPT } from '@/lib/embajador-prompt';
 
 // --------------------------------------------------------------------------
 // Kalyo-specific Claude wiring shared by both the Twilio and Meta webhooks.
@@ -702,8 +703,14 @@ export type BuildKalyoOptionsArgs =
       senderFrom: string;
       conversationId: string;
       conversationMessages?: ConversationMessage[];
+      isAmbassadorLead?: boolean;
     }
-  | { channel: 'meta'; bot: KalyoMetaBotRow; conversationMessages?: ConversationMessage[] };
+  | {
+      channel: 'meta';
+      bot: KalyoMetaBotRow;
+      conversationMessages?: ConversationMessage[];
+      isAmbassadorLead?: boolean;
+    };
 
 export type BuildKalyoOptionsResult = {
   systemSuffix: string;
@@ -828,16 +835,65 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
     return { systemSuffix: '', options: {} };
   }
 
+  if (args.isAmbassadorLead) {
+    return {
+      systemSuffix: `\n\n${EMBAJADOR_SYSTEM_PROMPT}`,
+      options: {
+        tools: [NOTIFY_SALES_TEAM_TOOL],
+        toolHandlers: {
+          notify_sales_team: async (input: unknown) => {
+            const obj =
+              typeof input === 'object' && input !== null
+                ? (input as Record<string, unknown>)
+                : {};
+            const creds =
+              args.channel === 'twilio' &&
+              args.bot.twilio_account_sid &&
+              args.bot.twilio_auth_token &&
+              args.bot.twilio_whatsapp_number
+                ? {
+                    accountSid: args.bot.twilio_account_sid,
+                    authToken: args.bot.twilio_auth_token,
+                    from: args.bot.twilio_whatsapp_number,
+                  }
+                : null;
+
+            if (!creds) {
+              return { status: 'error', message: 'Missing Twilio credentials' };
+            }
+
+            const result = await notifySalesTeam(
+              {
+                name: typeof obj.name === 'string' ? obj.name : undefined,
+                phone: typeof obj.phone === 'string' ? obj.phone : undefined,
+                email: typeof obj.email === 'string' ? obj.email : undefined,
+                reason: 'meta_ads_ambassador',
+                conversation_summary:
+                  typeof obj.conversation_summary === 'string'
+                    ? obj.conversation_summary
+                    : 'Lead embajador pidió hablar con humano',
+                whatsapp_number:
+                  args.channel === 'twilio' ? args.senderFrom : undefined,
+                conversationId:
+                  args.channel === 'twilio' ? args.conversationId : undefined,
+              },
+              creds,
+            );
+
+            return result;
+          },
+        },
+      },
+    };
+  }
+
   if (args.channel === 'meta') {
-    // Meta channel: text-only instructions with the WhatsApp deep link.
-    // No tools — trial activation is deliberately WhatsApp-only.
     return {
       systemSuffix: KALYO_INSTRUCTIONS_META,
       options: {},
     };
   }
 
-  // Twilio channel: full tool set.
   const { bot, senderFrom, conversationId, conversationMessages = [] } = args;
 
   const profile = detectPsychologistProfile(conversationMessages);

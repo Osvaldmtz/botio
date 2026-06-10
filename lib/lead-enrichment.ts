@@ -139,7 +139,11 @@ function allUserText(messages: ConversationMessage[]): string {
     .join('\n');
 }
 
+const EMBAJADOR_RE =
+  /embajador|programa de afiliados|afiliad[oa]|webinar|comisi[oó]n|ingreso extra|ganar dinero/i;
+
 function detectIntent(text: string): string {
+  if (EMBAJADOR_RE.test(text)) return 'Embajadores';
   if (SUPPORT_RE.test(text)) return 'Soporte';
   if (DEMO_RE.test(text)) return 'Demo';
   if (VOCATIONAL_RE.test(text)) return 'Vocacional';

@@ -45,6 +45,7 @@ const WHATSAPP_HEADERS: Record<string, string> = {
   demo_reschedule_requested: '🔄 Cliente pidió reagendar demo',
   demo_cancelled_by_customer: '❌ Demo cancelada por cliente',
   trial_user_wants_to_pay: '💳 Trial quiere pagar',
+  meta_ads_ambassador: '🎓 Lead Embajador Meta Ads',
 };
 
 const TEMPERATURE_EMOJI: Record<EnrichedLead['temperature'], string> = {

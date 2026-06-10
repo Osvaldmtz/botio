@@ -11,6 +11,15 @@ export type TelegramNotifyInput = {
   enriched?: EnrichedLead;
 };
 
+export type AmbassadorTelegramInput = {
+  name?: string;
+  phone?: string;
+  email?: string;
+  conversationUrl: string;
+  faqId?: string;
+  webinarRegistered?: boolean;
+};
+
 export type TelegramNotifyResult = { success: boolean; error?: string };
 
 const REASON_LABELS: Record<string, string> = {
@@ -21,6 +30,7 @@ const REASON_LABELS: Record<string, string> = {
   activate_trial: 'Trial Pro activado',
   trial_activated_via_botio: 'Trial activado vía Botio (cuenta nueva)',
   demo_scheduled: 'Demo agendada',
+  meta_ads_ambassador: 'Lead Embajador Meta Ads',
 };
 
 function temperatureHeader(temperature: EnrichedLead['temperature'], reasonLabel: string): string {
@@ -37,6 +47,57 @@ function formatLocation(enriched: EnrichedLead): string {
 function formatSignals(signals: string[]): string {
   if (signals.length === 0) return '• Sin señales destacadas';
   return signals.map((s) => `• ${s.charAt(0).toUpperCase() + s.slice(1)}`).join('\n');
+}
+
+export async function sendAmbassadorLeadTelegram(
+  input: AmbassadorTelegramInput,
+): Promise<TelegramNotifyResult> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+  if (!token || !chatId) {
+    return { success: false, error: 'missing env vars' };
+  }
+
+  const name = input.name?.trim() || '—';
+  const phone = input.phone?.trim() || '—';
+  const email = input.email?.trim() || '—';
+  const faqId = input.faqId?.trim() || '—';
+  const registered = input.webinarRegistered ? 'sí' : 'no';
+
+  const text = [
+    '🎓 <b>Nuevo lead EMBAJADOR</b>',
+    '',
+    `👤 <b>Nombre:</b> ${name}`,
+    `📱 <b>WhatsApp:</b> ${phone}`,
+    `📧 <b>Email:</b> ${email}`,
+    '📍 <b>Source:</b> meta_ads_ambassador',
+    `🎤 <b>Webinar registrado:</b> ${registered}`,
+    `💬 <b>Preguntó:</b> ${faqId}`,
+    `🔗 <b>Conversación:</b> <a href="${input.conversationUrl}">Abrir en Botio</a>`,
+  ].join('\n');
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      return { success: false, error: `${response.status}: ${body}` };
+    }
+
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
+  }
 }
 
 export async function sendLeadTelegram(
