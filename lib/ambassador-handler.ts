@@ -26,14 +26,15 @@ export async function loadAmbassadorState(
 ): Promise<AmbassadorConversationState> {
   const { data } = await supabase
     .from('conversations')
-    .select('metadata, webinar_link_sent_at, webinar_registered')
+    .select('metadata, is_ambassador, webinar_link_sent_at, webinar_registered')
     .eq('id', conversationId)
     .maybeSingle();
 
   const metadata = (data?.metadata as Record<string, unknown> | null) ?? {};
 
   return {
-    isAmbassadorLead: metadata.is_ambassador_lead === true,
+    isAmbassadorLead:
+      data?.is_ambassador === true || metadata.is_ambassador_lead === true,
     webinarLinkSentAt: (data?.webinar_link_sent_at as string | null) ?? null,
     webinarRegistered: Boolean(data?.webinar_registered),
     metadata,
@@ -63,6 +64,7 @@ export async function markAmbassadorLead(
     .from('conversations')
     .update({
       metadata: nextMetadata,
+      is_ambassador: true,
       lead_intent: 'Embajadores',
     })
     .eq('id', conversationId);
