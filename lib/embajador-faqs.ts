@@ -8,6 +8,27 @@ export type EmbajadorFaq = {
 
 export const EMBAJADOR_FAQS: EmbajadorFaq[] = [
   {
+    id: 'intro_embajador',
+    triggers: [
+      'programa de embajadores',
+      'programa embajadores',
+      'embajadores kalyo',
+      'estudiante de psicología',
+      'estudiante de psicologia',
+      'vi el anuncio',
+      'vi tu anuncio',
+      'soy estudiante',
+    ],
+    response: `¡Hola! 👋 Qué gusto que te interese el Programa de Embajadores Kalyo.
+
+Es 100% gratis: recomiendas Kalyo a psicólogos y ganas comisión por cada cliente que se registre gracias a ti.
+
+En el webinar gratuito te explicamos cómo funciona, cuánto puedes ganar y las estrategias paso a paso.
+
+📅 Regístrate aquí 👇
+${LUMA_WEBINAR_URL}`,
+  },
+  {
     id: 'que_es_kalyo',
     triggers: ['qué es kalyo', 'que es kalyo', 'qué es la plataforma', 'qué hace kalyo', 'plataforma'],
     response: `Kalyo es una plataforma tecnológica para psicólogos. Les ayuda a gestionar pacientes, historias clínicas, agenda, videollamadas, pruebas psicológicas y procesos administrativos en un solo lugar. 🧠✨

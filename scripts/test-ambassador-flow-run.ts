@@ -24,9 +24,17 @@ async function runTests(): Promise<void> {
     'Hola, soy estudiante y vi su anuncio sobre embajadores';
   assert(detectAmbassadorIntent(intro) === 'embajador_program', 'detect embajador intent');
   const introReply = buildAmbassadorReply(intro, ambassadorState());
-  assert(introReply === null, 'generic intro falls through to Claude');
+  assert(introReply?.faqId === 'intro_embajador', 'generic intro matches intro FAQ');
+  assert(Boolean(introReply?.replyText.includes(LUMA_WEBINAR_URL)), 'intro has Luma');
   assert(EMBAJADOR_SYSTEM_PROMPT.includes(LUMA_WEBINAR_URL), 'ambassador prompt has Luma');
-  console.log('✓ estudiante + anuncio embajadores → intent detectado, sin trial tools');
+
+  const prodMsg =
+    'Hola, soy estudiante de psicología y vi el anuncio sobre el programa de embajadores';
+  assert(detectAmbassadorIntent(prodMsg) === 'embajador_program', 'prod message detected');
+  const prodReply = buildAmbassadorReply(prodMsg, ambassadorState());
+  assert(prodReply?.faqId === 'intro_embajador', 'prod message gets intro FAQ');
+  assert(Boolean(prodReply?.sentLumaLink), 'prod message sends Luma');
+  console.log('✓ estudiante + anuncio embajadores → intent + intro FAQ + Luma');
 
   const inversion = 'Cuánto pago por inscribirme?';
   const inversionReply = buildAmbassadorReply(inversion, ambassadorState());

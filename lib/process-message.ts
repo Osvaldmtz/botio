@@ -281,6 +281,9 @@ export async function processIncomingMessage(
     isAmbassadorLead = ambassadorState.isAmbassadorLead;
 
     if (shouldMarkAmbassadorLead(ambassadorState, messageBody)) {
+      console.log(
+        `[ambassador] intent detected | conv=${conversation.id} | msg="${messageBody.slice(0, 80)}"`,
+      );
       await markAmbassadorLead(supabase, conversation.id, ambassadorState.metadata);
       isAmbassadorLead = true;
       ambassadorState = await loadAmbassadorState(supabase, conversation.id);
@@ -292,6 +295,9 @@ export async function processIncomingMessage(
     }
 
     if (isAmbassadorLead) {
+      console.log(
+        `[ambassador] lead active | conv=${conversation.id} | msg="${messageBody.slice(0, 80)}"`,
+      );
       const ambassadorReply = handleAmbassadorMessage(messageBody, ambassadorState);
       if (ambassadorReply) {
         if (ambassadorReply.sentLumaLink) {
@@ -721,7 +727,7 @@ export async function processIncomingMessage(
       ? checkCache(messageBody, history)
       : null;
 
-  if (firstMessageOverride) {
+  if (firstMessageOverride && !isAmbassadorLead) {
     replyText = firstMessageOverride;
     source = 'ab-test';
   } else if (cached) {
