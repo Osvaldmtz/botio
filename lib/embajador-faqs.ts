@@ -47,7 +47,22 @@ ${LUMA_WEBINAR_URL}`,
   },
   {
     id: 'inversion',
-    triggers: ['invertir', 'pagar', 'cuánto cuesta', 'cuanto cuesta', 'tengo que pagar', 'tiene costo', 'cuánto pago', 'cuanto pago'],
+    triggers: [
+      'invertir',
+      'pagar',
+      'cuánto cuesta',
+      'cuanto cuesta',
+      'tengo que pagar',
+      'tiene costo',
+      'cuánto pago',
+      'cuanto pago',
+      'inscripción',
+      'inscripcion',
+      'es gratis',
+      'cuesta algo',
+      'tiene algún costo',
+      'tiene algun costo',
+    ],
     response: `¡No necesitas invertir nada! 🎉
 
 El programa de Embajadores Kalyo es 100% gratis. Solo necesitas tu tiempo y ganas de recomendar.
@@ -68,7 +83,29 @@ Aprende todas las estrategias en el webinar: ${LUMA_WEBINAR_URL}`,
   },
   {
     id: 'cuanto_gano',
-    triggers: ['cuánto gano', 'cuanto gano', 'cuánto pagan', 'comisión', 'comisiones', 'cuánto dinero'],
+    triggers: [
+      'cuánto gano',
+      'cuanto gano',
+      'cuánto pagan',
+      'cuánto puedo ganar',
+      'cuanto puedo ganar',
+      'cuánto se puede ganar',
+      'cuánto se gana',
+      'cuanto se gana',
+      'qué puedo ganar',
+      'que puedo ganar',
+      'cuánto paga',
+      'cuanto paga',
+      'cuánto pagás',
+      'pagan bien',
+      'es buen dinero',
+      'cuánto se cobra',
+      'cuanto se cobra',
+      'comisión',
+      'comisiones',
+      'cuánto dinero',
+      'cuanto dinero',
+    ],
     response: `Tu ganancia depende de cuántos psicólogos recomiendes que se vuelvan clientes Kalyo. 💪
 
 Mientras más usuarios refieras, mayores ingresos.
@@ -78,7 +115,17 @@ ${LUMA_WEBINAR_URL}`,
   },
   {
     id: 'experiencia',
-    triggers: ['experiencia', 'no sé vender', 'nunca he vendido', 'sin experiencia'],
+    triggers: [
+      'experiencia',
+      'no sé vender',
+      'no se vender',
+      'nunca he vendido',
+      'sin experiencia',
+      'no he vendido nunca',
+      'soy nuevo en ventas',
+      'sin ventas',
+      'no tengo experiencia',
+    ],
     response: `No necesitas experiencia en ventas. 🚀
 
 En el webinar te daremos:
@@ -139,7 +186,18 @@ ${LUMA_WEBINAR_URL}`,
   },
   {
     id: 'no_conozco',
-    triggers: ['no conozco psicólogos', 'no tengo contactos', 'cómo encuentro', 'sin contactos'],
+    triggers: [
+      'no conozco psicólogos',
+      'no conozco psicologos',
+      'no tengo contactos',
+      'cómo encuentro',
+      'como encuentro',
+      'sin contactos',
+      'no tengo amigos psicólogos',
+      'no tengo amigos psicologos',
+      'cómo los contacto',
+      'como los contacto',
+    ],
     response: `¡No necesitas conocerlos previamente! 💡
 
 En el webinar aprenderás estrategias para encontrarlos a través de:

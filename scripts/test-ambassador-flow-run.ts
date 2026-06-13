@@ -81,6 +81,53 @@ async function runTests(): Promise<void> {
   assert(responseContainsLumaLink(faq?.response ?? ''), 'comision FAQ has luma');
   console.log('✓ FAQ comisiones');
 
+  // Fix 1 — Caso Marlon: "Plataforma" dispara que_es_kalyo, que no tiene Luma en su texto base.
+  // sentLumaLink debe ser true porque appendWebinarOfferIfNeeded añade el link al replyText final.
+  const plataforma = 'Plataforma';
+  assert(matchesAmbassadorFaqSignal(plataforma), 'plataforma matches ambassador FAQ signal');
+  const plataformaReply = buildAmbassadorReply(plataforma, ambassadorState());
+  assert(plataformaReply?.faqId === 'que_es_kalyo', 'plataforma gets que_es_kalyo FAQ');
+  assert(
+    Boolean(plataformaReply?.replyText.includes(LUMA_WEBINAR_URL)),
+    'que_es_kalyo replyText includes Luma (appended)',
+  );
+  assert(
+    plataformaReply?.sentLumaLink === true,
+    'que_es_kalyo sentLumaLink=true when Luma is appended (regression: Marlon bug)',
+  );
+  console.log('✓ "Plataforma" → que_es_kalyo FAQ + Luma appended + sentLumaLink=true (Fix 1)');
+
+  // Trigger gaps — cuanto_gano
+  const cuantoPuedoGanar = 'Cuánto puedo ganar?';
+  const cuantoPuedoGanarFaq = matchEmbajadorFaq(cuantoPuedoGanar);
+  assert(cuantoPuedoGanarFaq?.id === 'cuanto_gano', '"Cuánto puedo ganar?" must match cuanto_gano FAQ');
+  const cuantoPuedoGanarReply = buildAmbassadorReply(cuantoPuedoGanar, ambassadorState());
+  assert(Boolean(cuantoPuedoGanarReply?.sentLumaLink), '"Cuánto puedo ganar?" sentLumaLink=true');
+  console.log('✓ "Cuánto puedo ganar?" → cuanto_gano FAQ + sentLumaLink=true (trigger gap fix)');
+
+  const quePuedoGanar = 'Qué puedo ganar siendo embajador?';
+  const quePuedoGanarFaq = matchEmbajadorFaq(quePuedoGanar);
+  assert(quePuedoGanarFaq?.id === 'cuanto_gano', '"Qué puedo ganar?" must match cuanto_gano FAQ');
+  console.log('✓ "Qué puedo ganar siendo embajador?" → cuanto_gano FAQ (trigger gap fix)');
+
+  // Trigger gaps — inversion
+  const esGratis = 'Es gratis inscribirse?';
+  const esGratisFaq = matchEmbajadorFaq(esGratis);
+  assert(esGratisFaq?.id === 'inversion', '"Es gratis inscribirse?" must match inversion FAQ');
+  console.log('✓ "Es gratis inscribirse?" → inversion FAQ (trigger gap fix)');
+
+  // Trigger gaps — experiencia
+  const sinVentas = 'Soy nuevo en ventas, puedo ser embajador?';
+  const sinVentasFaq = matchEmbajadorFaq(sinVentas);
+  assert(sinVentasFaq?.id === 'experiencia', '"Soy nuevo en ventas" must match experiencia FAQ');
+  console.log('✓ "Soy nuevo en ventas, puedo ser embajador?" → experiencia FAQ (trigger gap fix)');
+
+  // Trigger gaps — no_conozco
+  const noAmigos = 'No tengo amigos psicólogos, cómo los consigo?';
+  const noAmigosFaq = matchEmbajadorFaq(noAmigos);
+  assert(noAmigosFaq?.id === 'no_conozco', '"No tengo amigos psicólogos" must match no_conozco FAQ');
+  console.log('✓ "No tengo amigos psicólogos" → no_conozco FAQ (trigger gap fix)');
+
   console.log('\nAll ambassador flow tests passed.');
 }
 

@@ -279,6 +279,8 @@ export async function processIncomingMessage(
 
     let ambassadorState = await loadAmbassadorState(supabase, conversation.id);
     isAmbassadorLead = ambassadorState.isAmbassadorLead;
+    // Capture pre-mark state to detect first-time ambassador identification this turn.
+    const wasAmbassadorBefore = ambassadorState.isAmbassadorLead;
 
     if (shouldMarkAmbassadorLead(ambassadorState, messageBody)) {
       console.log(
@@ -299,8 +301,23 @@ export async function processIncomingMessage(
         `[ambassador] lead active | conv=${conversation.id} | msg="${messageBody.slice(0, 80)}"`,
       );
       const ambassadorReply = handleAmbassadorMessage(messageBody, ambassadorState);
-      if (ambassadorReply) {
-        if (ambassadorReply.sentLumaLink) {
+
+      // Fix 2: deterministic Luma on first detection when no specific FAQ matches.
+      // detectAmbassadorIntent can fire on phrases like "ganar dinero" or "ingreso extra"
+      // that have no matching FAQ trigger. Without this fallback the code falls through
+      // to Claude, which may or may not include the Luma URL. On the turn a lead is
+      // first detected we force the intro_embajador FAQ so webinar_link_sent_at is
+      // always set. The guard conditions prevent sending a second intro on later turns
+      // or when Luma was already sent.
+      const wasJustDetected = !wasAmbassadorBefore && isAmbassadorLead;
+      const replyToSend =
+        ambassadorReply ??
+        (wasJustDetected && !ambassadorState.webinarLinkSentAt
+          ? handleAmbassadorMessage('programa de embajadores', ambassadorState)
+          : null);
+
+      if (replyToSend) {
+        if (replyToSend.sentLumaLink) {
           await markWebinarLinkSent(supabase, conversation.id);
         }
 
@@ -308,22 +325,22 @@ export async function processIncomingMessage(
         await supabase.from('messages').insert({
           conversation_id: conversation.id,
           role: 'assistant',
-          content: ambassadorReply.replyText,
+          content: replyToSend.replyText,
           source: 'text',
           source_type: 'claude',
           metadata: {
-            source: ambassadorReply.source,
-            ambassador_faq_id: ambassadorReply.faqId ?? null,
+            source: replyToSend.source,
+            ambassador_faq_id: replyToSend.faqId ?? null,
           },
         });
         await touchConversation(supabase, conversation.id, assistantNow);
         console.log(
-          `[process-message] channel=${channel} | source=${ambassadorReply.source} | faq=${ambassadorReply.faqId ?? 'guard'} | conv=${conversation.id}`,
+          `[process-message] channel=${channel} | source=${replyToSend.source} | faq=${replyToSend.faqId ?? 'guard'} | conv=${conversation.id}`,
         );
 
         return {
-          replyText: ambassadorReply.replyText,
-          storedReply: ambassadorReply.replyText,
+          replyText: replyToSend.replyText,
+          storedReply: replyToSend.replyText,
           conversationId: conversation.id,
           source: 'ambassador_handler',
         };
