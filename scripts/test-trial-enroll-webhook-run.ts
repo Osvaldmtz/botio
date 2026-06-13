@@ -124,6 +124,43 @@ async function runTests(): Promise<void> {
   );
   assert(duplicate.success === false && duplicate.reason === 'already_enrolled', 'duplicate skipped');
 
+  // Test: re-enrollment con trial vencido NO debe crear nuevo registro (caso Ariadne)
+  const expiredEmail = `enroll-expired-${Date.now()}@kalyo-test.local`;
+  const expiredPhone = `+5299904${String(Date.now()).slice(-5)}`;
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const fifteenDaysAfterThat = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+
+  await supabase.from('trial_onboarding_messages').insert({
+    customer_phone: expiredPhone,
+    trial_user_email: expiredEmail,
+    trial_user_name: 'Expired Test User',
+    trial_started_at: thirtyDaysAgo,
+    trial_ends_at: fifteenDaysAfterThat,
+  });
+
+  const reEnroll = await enrollTrialFromKalyoWebhook(
+    {
+      email: expiredEmail,
+      name: 'Expired Test User',
+      phone: expiredPhone,
+      source: 'retroactive_popup',
+    },
+    { supabase, skipWhatsApp: true },
+  );
+  assert(
+    reEnroll.success === false && reEnroll.reason === 'already_enrolled',
+    'expired trial: re-enrollment blocked (no duplicate row, no welcome)',
+  );
+
+  const { data: expiredRows } = await supabase
+    .from('trial_onboarding_messages')
+    .select('id')
+    .eq('trial_user_email', expiredEmail);
+  assert((expiredRows ?? []).length === 1, 'expired trial: exactly 1 row exists (no duplicate created)');
+
+  await supabase.from('trial_onboarding_messages').delete().eq('trial_user_email', expiredEmail);
+  console.log('  ✓ expired trial re-enrollment correctly blocked');
+
   await cleanup();
   console.log('\nAll trial enroll webhook tests passed.');
 }

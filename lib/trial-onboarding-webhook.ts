@@ -406,13 +406,10 @@ export async function enrollTrialFromKalyoWebhook(
     .from('trial_onboarding_messages')
     .select('id')
     .eq('trial_user_email', email)
-    .is('upgraded_to_paid_at', null)
-    .eq('unsubscribed', false)
-    .gte('trial_ends_at', new Date().toISOString())
     .maybeSingle();
 
   if (existing) {
-    console.log(`[trial-onboarding-webhook] skip duplicate | email=${email}`);
+    console.log(`[trial-onboarding-webhook] skip duplicate | email=${email} | reason=already_enrolled (any record, including expired)`);
     return { success: false, reason: 'already_enrolled' };
   }
 
