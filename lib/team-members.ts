@@ -3,6 +3,7 @@ export const KALYO_TEAM_EMAILS = [
   'zehynaperez1@gmail.com',  // Zehyna - Diseño y contenido
   'osvaldo@kalyo.io',        // Osvaldo - Founder
   'info@magnus.mx',          // Osvaldo - Magnus
+  'ana@coloris.mx',          // Ana - familia (esposa de Osvaldo)
 ] as const;
 
 export function isTeamMember(email: string | null | undefined): boolean {
