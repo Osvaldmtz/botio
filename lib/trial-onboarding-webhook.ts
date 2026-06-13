@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { renderName } from '@/lib/render-name';
+import { isTeamMember } from '@/lib/team-members';
 import {
   notifyTrialEnrolled,
   type SendTelegramFn,
@@ -60,7 +61,7 @@ export type TrialOnboardingEnrollSuccess = {
 
 export type TrialOnboardingEnrollFailure = {
   success: false;
-  reason: 'already_enrolled' | 'is_ambassador';
+  reason: 'already_enrolled' | 'is_ambassador' | 'is_team_member';
 };
 
 export type TrialOnboardingEnrollResult =
@@ -397,6 +398,11 @@ export async function enrollTrialFromKalyoWebhook(
   ) {
     console.log(`[trial-onboarding] skip enroll | reason=is_ambassador | phone=${phone}`);
     return { success: false, reason: 'is_ambassador' };
+  }
+
+  if (isTeamMember(email)) {
+    console.log(`[trial-onboarding] skip enroll | reason=is_team_member | email=${email}`);
+    return { success: false, reason: 'is_team_member' };
   }
 
   const startedAt = input.trialStartedAt ?? new Date().toISOString();

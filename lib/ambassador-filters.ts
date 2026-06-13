@@ -3,6 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 /** PostgREST filter: sales leads only (excludes is_ambassador = true). */
 export const SALES_CONVERSATIONS_OR = 'is_ambassador.is.null,is_ambassador.eq.false';
 
+/** PostgREST filter: non-team members only (excludes is_team_member = true). */
+export const TEAM_MEMBERS_FILTER = 'is_team_member.is.null,is_team_member.eq.false';
+
 export type LeadTypeFilter = 'all' | 'sales' | 'ambassadors';
 
 export function isSalesLead(isAmbassador: boolean | null | undefined): boolean {

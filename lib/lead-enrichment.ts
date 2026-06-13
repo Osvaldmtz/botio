@@ -261,16 +261,17 @@ export async function enrichAndNotifyLead(
 ): Promise<EnrichedLead> {
   const { data: convRow } = await supabase
     .from('conversations')
-    .select('lead_signals, customer_phone, lead_score, channel, session_id, is_ambassador, metadata')
+    .select('lead_signals, customer_phone, lead_score, channel, session_id, is_ambassador, is_team_member, metadata')
     .eq('id', params.conversationId)
     .maybeSingle();
 
   if (
     convRow?.is_ambassador === true ||
+    convRow?.is_team_member === true ||
     (convRow?.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
   ) {
     console.log(
-      `[lead-enrichment] skip HOT alert | reason=is_ambassador | conv=${params.conversationId}`,
+      `[lead-enrichment] skip | reason=${convRow?.is_team_member ? 'is_team_member' : 'is_ambassador'} | conv=${params.conversationId}`,
     );
     return enrichLead({
       phone: params.phone,

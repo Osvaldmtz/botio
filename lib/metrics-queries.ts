@@ -4,7 +4,7 @@ import {
   fetchAmbassadorMetrics,
   type AmbassadorMetrics,
 } from '@/lib/ambassador-admin-queries';
-import { SALES_CONVERSATIONS_OR } from '@/lib/ambassador-filters';
+import { SALES_CONVERSATIONS_OR, TEAM_MEMBERS_FILTER } from '@/lib/ambassador-filters';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -116,7 +116,8 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
         'id, created_at, channel, lead_score, lead_captured, pipeline_stage, closure_reason',
       )
       .gte('created_at', since)
-      .or(SALES_CONVERSATIONS_OR),
+      .or(SALES_CONVERSATIONS_OR)
+      .or(TEAM_MEMBERS_FILTER),
     supabase.from('conversations').select('id', { count: 'exact', head: true }).gte('created_at', since),
     supabase
       .from('trial_onboarding_messages')
@@ -131,7 +132,8 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
       .select('closure_reason, closed_at')
       .not('closure_reason', 'is', null)
       .gte('closed_at', since)
-      .or(SALES_CONVERSATIONS_OR),
+      .or(SALES_CONVERSATIONS_OR)
+      .or(TEAM_MEMBERS_FILTER),
     supabase
       .from('conversation_summary')
       .select('id', { count: 'exact', head: true })
@@ -139,7 +141,8 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
       .eq('needs_reply', true)
       .eq('handoff_active', false)
       .is('closed_at', null)
-      .or(SALES_CONVERSATIONS_OR),
+      .or(SALES_CONVERSATIONS_OR)
+      .or(TEAM_MEMBERS_FILTER),
     supabase.from('conversations').select('id').eq('is_ambassador', true),
     fetchAmbassadorMetrics(supabase),
   ]);

@@ -329,15 +329,16 @@ export async function ensureConversationAssignments(
 ): Promise<AbAssignmentContext[]> {
   const { data: convRow } = await supabase
     .from('conversations')
-    .select('is_ambassador, metadata')
+    .select('is_ambassador, is_team_member, metadata')
     .eq('id', conversationId)
     .maybeSingle();
 
   if (
     convRow?.is_ambassador === true ||
+    convRow?.is_team_member === true ||
     (convRow?.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
   ) {
-    console.log(`[ab-testing] skip assignment | reason=is_ambassador | conv=${conversationId}`);
+    console.log(`[ab-testing] skip assignment | reason=${convRow?.is_team_member ? 'is_team_member' : 'is_ambassador'} | conv=${conversationId}`);
     return [];
   }
 
