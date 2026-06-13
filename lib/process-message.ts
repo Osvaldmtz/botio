@@ -40,6 +40,7 @@ import {
 import { handleTrialOnboardingMessage } from '@/lib/trial-onboarding-interceptor';
 import { handleObjectionMessage } from '@/lib/objection-interceptor';
 import { trackObjectionOutcome } from '@/lib/objection-outcome-tracker';
+import { handlePurchaseIntentMessage } from '@/lib/purchase-intent-handler';
 import {
   handleAmbassadorMessage,
   loadAmbassadorState,
@@ -76,7 +77,8 @@ export type ProcessMessageSource =
   | 'auto_demo_reminder'
   | 'trial_onboarding'
   | 'objection_handler'
-  | 'ambassador_handler';
+  | 'ambassador_handler'
+  | 'purchase_intent_handler';
 
 export type ProcessIncomingMessageInput = {
   supabase: SupabaseClient;
@@ -345,6 +347,36 @@ export async function processIncomingMessage(
           source: 'ambassador_handler',
         };
       }
+    }
+
+    const purchaseIntent = await handlePurchaseIntentMessage({
+      messageBody,
+      phone: conversation.customer_phone,
+      customerName: (conversation as Record<string, unknown>).customer_name as string | null ?? null,
+      conversationId: conversation.id,
+      isAmbassadorLead,
+      isTeamMember: Boolean((conversation as Record<string, unknown>).is_team_member),
+    });
+    if (purchaseIntent) {
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: purchaseIntent.replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: { source: purchaseIntent.source, payment_link_sent: true },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      console.log(
+        `[process-message] channel=${channel} | source=${purchaseIntent.source} | conv=${conversation.id}`,
+      );
+      return {
+        replyText: purchaseIntent.replyText,
+        storedReply: purchaseIntent.replyText,
+        conversationId: conversation.id,
+        source: 'purchase_intent_handler',
+      };
     }
 
     const objection = await handleObjectionMessage({
