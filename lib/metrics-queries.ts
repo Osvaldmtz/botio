@@ -147,13 +147,13 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
     fetchAmbassadorMetrics(supabase),
   ]);
 
-  if (convRes.error) throw convRes.error;
-  if (convAllRes.error) throw convAllRes.error;
-  if (trialRes.error) throw trialRes.error;
-  if (objectionRes.error) throw objectionRes.error;
-  if (closureRes.error) throw closureRes.error;
-  if (hotRes.error) throw hotRes.error;
-  if (ambassadorConvIdsRes.error) throw ambassadorConvIdsRes.error;
+  if (convRes.error) throw new Error(convRes.error.message);
+  if (convAllRes.error) throw new Error(convAllRes.error.message);
+  if (trialRes.error) throw new Error(trialRes.error.message);
+  if (objectionRes.error) throw new Error(objectionRes.error.message);
+  if (closureRes.error) throw new Error(closureRes.error.message);
+  if (hotRes.error) throw new Error(hotRes.error.message);
+  if (ambassadorConvIdsRes.error) throw new Error(ambassadorConvIdsRes.error.message);
 
   const ambassadorIds = new Set(
     (ambassadorConvIdsRes.data ?? []).map((row) => row.id as string),

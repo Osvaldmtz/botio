@@ -51,7 +51,7 @@ export async function fetchAmbassadorMetrics(
     .eq('is_ambassador', true)
     .gte('created_at', since);
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 
   const rows = data ?? [];
   const total = rows.length;
@@ -89,7 +89,7 @@ export async function fetchAmbassadorRows(
   }
 
   const { data: convs, error } = await q;
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   if (!convs?.length) return [];
 
   const ids = convs.map((c) => c.id as string);
@@ -98,7 +98,7 @@ export async function fetchAmbassadorRows(
     .select('conversation_id, created_at')
     .in('conversation_id', ids);
 
-  if (msgError) throw msgError;
+  if (msgError) throw new Error(msgError.message);
 
   const countByConv = new Map<string, number>();
   const lastByConv = new Map<string, string>();
@@ -155,5 +155,5 @@ export async function markAmbassadorWebinarAttended(
 
   const { error } = await supabase.from('conversations').update(patch).eq('id', conversationId);
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }

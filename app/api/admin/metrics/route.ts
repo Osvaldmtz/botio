@@ -33,7 +33,12 @@ export async function GET() {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message =
+      error instanceof Error
+        ? error.message
+        : error && typeof error === 'object' && 'message' in error
+          ? String((error as Record<string, unknown>).message)
+          : String(error);
     console.error('[admin/metrics] failed', error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
