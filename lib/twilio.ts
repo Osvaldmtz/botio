@@ -1,4 +1,5 @@
 import 'server-only';
+import crypto from 'node:crypto';
 
 type QuickReplyButton = {
   id: string;
@@ -134,6 +135,37 @@ export async function sendWhatsApp(args: SendWhatsAppArgs): Promise<void> {
 function toWhatsAppAddress(address: string): string {
   const trimmed = address.trim();
   return trimmed.startsWith('whatsapp:') ? trimmed : `whatsapp:${trimmed}`;
+}
+
+/**
+ * Validates a Twilio webhook request signature.
+ *
+ * Algorithm (per Twilio docs):
+ *   1. Start with the full URL of the request.
+ *   2. Sort all POST parameters alphabetically by key and append key+value pairs to the URL.
+ *   3. Sign the resulting string with HMAC-SHA1 using the auth token as the key.
+ *   4. Base64-encode the digest and compare it with the X-Twilio-Signature header.
+ *
+ * Uses a timing-safe comparison to prevent timing attacks.
+ */
+export function validateTwilioSignature(
+  authToken: string,
+  url: string,
+  params: Record<string, string>,
+  signature: string,
+): boolean {
+  if (!authToken || !signature) return false;
+
+  const sortedKeys = Object.keys(params).sort();
+  const toSign = url + sortedKeys.map((k) => k + params[k]).join('');
+
+  const expected = crypto.createHmac('sha1', authToken).update(toSign, 'utf8').digest('base64');
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(signature, 'utf8'));
+  } catch {
+    return false;
+  }
 }
 
 const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response/>';

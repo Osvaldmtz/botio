@@ -1,9 +1,17 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendWhatsApp, emptyTwimlResponse } from '@/lib/twilio';
+import { sendWhatsApp, emptyTwimlResponse, validateTwilioSignature } from '@/lib/twilio';
 import { normalizePhone } from '@/lib/phone';
 import { transcribeAudio } from '@/lib/audio-transcription';
 import { processIncomingMessage } from '@/lib/process-message';
+
+/**
+ * Shared secret Kalyo adds to forwarded Twilio webhooks.
+ * Twilio's signature is validated by Kalyo before forwarding, so Botio
+ * can skip its own signature check when this header is present and correct.
+ * Set KALYO_FORWARD_SECRET in environment variables.
+ */
+const KALYO_FORWARD_SECRET = process.env.KALYO_FORWARD_SECRET ?? '';
 
 const UNSUPPORTED_MEDIA_MESSAGE =
   'Por ahora solo puedo procesar audio o texto. ¿Me lo escribes o me mandas audio? 🙏';
@@ -148,6 +156,37 @@ export async function POST(request: Request, { params }: Params) {
   if (!bot.is_active) {
     return new Response('Bot inactive', { status: 403 });
   }
+
+  // ── Signature validation ───────────────────────────────────────────────────
+  // Requests forwarded by Kalyo carry X-Kalyo-Forward-Secret and have already
+  // been validated by Kalyo, so Botio skips its own check.
+  // All other requests must carry a valid X-Twilio-Signature.
+  const kalyoHeader = request.headers.get('X-Kalyo-Forward-Secret');
+  const isKalyoForward =
+    KALYO_FORWARD_SECRET !== '' && kalyoHeader === KALYO_FORWARD_SECRET;
+
+  if (!isKalyoForward) {
+    const twilioSig = request.headers.get('X-Twilio-Signature') ?? '';
+    const params: Record<string, string> = {};
+    const formForValidation = await request.clone().formData().catch(() => null);
+    formForValidation?.forEach((value, key) => {
+      params[key] = String(value);
+    });
+
+    const valid =
+      bot.twilio_auth_token &&
+      validateTwilioSignature(bot.twilio_auth_token, request.url, params, twilioSig);
+
+    if (!valid) {
+      console.warn(
+        `[webhook] invalid Twilio signature | botId=${botId} | url=${request.url}`,
+      );
+      return new Response('Forbidden', { status: 403 });
+    }
+  } else {
+    console.log(`[webhook] Kalyo forward accepted | botId=${botId}`);
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   const incoming = await resolveIncomingMessage(
     bot as BotCredentials,
