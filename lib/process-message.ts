@@ -41,6 +41,15 @@ import { handleTrialOnboardingMessage } from '@/lib/trial-onboarding-interceptor
 import { handleObjectionMessage } from '@/lib/objection-interceptor';
 import { trackObjectionOutcome } from '@/lib/objection-outcome-tracker';
 import { handlePurchaseIntentMessage } from '@/lib/purchase-intent-handler';
+import { detectDemoIntent } from '@/lib/demo-intent-detector';
+import {
+  buildDemoSchedulingMessage,
+  notifyDemoLinkSent,
+} from '@/lib/demo-handler';
+import {
+  buildKalyoOfficialPricingPrompt,
+  buildPricingSummary,
+} from '@/lib/kalyo-pricing-data';
 import {
   handleAmbassadorMessage,
   loadAmbassadorState,
@@ -53,7 +62,9 @@ import { responseContainsLumaLink } from '@/lib/embajador-faqs';
 
 const HISTORY_LIMIT = 20;
 const FALLBACK_MESSAGE =
-  "Sorry, I'm having trouble right now. Please try again in a moment.";
+  'Dame un segundo, estoy procesando tu mensaje... 🤔 Si no recibes respuesta en 1 minuto, por favor reformula tu pregunta.';
+const FALLBACK_CLAUDE_EMPTY =
+  'Dame un segundo, estoy procesando tu mensaje... 🤔 Si no recibes respuesta en 1 minuto, por favor reformula tu pregunta.';
 const USER_MSG_LIMIT = 15;
 const BOT_STDDEV_THRESHOLD_MS = 500;
 const BOT_MIN_SAMPLES = 5;
@@ -78,7 +89,8 @@ export type ProcessMessageSource =
   | 'trial_onboarding'
   | 'objection_handler'
   | 'ambassador_handler'
-  | 'purchase_intent_handler';
+  | 'purchase_intent_handler'
+  | 'demo_scheduling_calendly';
 
 export type ProcessIncomingMessageInput = {
   supabase: SupabaseClient;
@@ -123,6 +135,26 @@ type ConversationRow = {
   customer_phone: string;
   last_message_at: string | null;
 };
+
+function readCustomerName(
+  conversation: ConversationRow,
+  metadata: Record<string, unknown>,
+): string | null {
+  const fromMeta =
+    (typeof metadata.customer_name === 'string' && metadata.customer_name) ||
+    (typeof metadata.name === 'string' && metadata.name) ||
+    null;
+  if (fromMeta) return fromMeta;
+  const row = conversation as Record<string, unknown>;
+  return typeof row.customer_name === 'string' ? row.customer_name : null;
+}
+
+function isPricingQuestion(messageBody: string): boolean {
+  return /precio|cu[áa]nto\s+cuesta|cu[áa]nto\s+vale|plan|cu[áa]l\s+plan/i.test(messageBody);
+}
+
+const EXPLICIT_AMBASSADOR_SIGNAL =
+  /\b(embajador|comisi[óo]n|ganar\s+dinero|webinar\s+embajador|programa\s+de\s+embajadores|afiliado)\b/i;
 
 function detectHumanEscalation(text: string): boolean {
   return HUMAN_ESCALATION_RE.test(text);
@@ -312,9 +344,10 @@ export async function processIncomingMessage(
       // always set. The guard conditions prevent sending a second intro on later turns
       // or when Luma was already sent.
       const wasJustDetected = !wasAmbassadorBefore && isAmbassadorLead;
+      const hasExplicitAmbassadorSignal = EXPLICIT_AMBASSADOR_SIGNAL.test(messageBody);
       const replyToSend =
         ambassadorReply ??
-        (wasJustDetected && !ambassadorState.webinarLinkSentAt
+        (wasJustDetected && hasExplicitAmbassadorSignal && !ambassadorState.webinarLinkSentAt
           ? handleAmbassadorMessage('programa de embajadores', ambassadorState)
           : null);
 
@@ -347,6 +380,43 @@ export async function processIncomingMessage(
           source: 'ambassador_handler',
         };
       }
+    }
+
+    if (!isAmbassadorLead && detectDemoIntent(messageBody)) {
+      const customerName = readCustomerName(conversation, metadata);
+      const replyText = buildDemoSchedulingMessage({ customerName });
+
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: 'demo_scheduling_calendly',
+          demo_link_sent: true,
+          sent_at: assistantNow,
+        },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+
+      await notifyDemoLinkSent({
+        customerName,
+        phone: conversation.customer_phone,
+        conversationId: conversation.id,
+      });
+
+      console.log(
+        `[process-message] channel=${channel} | source=demo_scheduling_calendly | conv=${conversation.id}`,
+      );
+
+      return {
+        replyText,
+        storedReply: replyText,
+        conversationId: conversation.id,
+        source: 'demo_scheduling_calendly',
+      };
     }
 
     const purchaseIntent = await handlePurchaseIntentMessage({
@@ -763,6 +833,10 @@ export async function processIncomingMessage(
     }
   }
 
+  if (isKalyoBotId(bot.id) && isPricingQuestion(messageBody)) {
+    systemPrompt += `\n\n${buildPricingSummary()}\n\n${buildKalyoOfficialPricingPrompt()}`;
+  }
+
   const escalationDetected = detectHumanEscalation(messageBody);
 
   let replyText: string;
@@ -789,7 +863,7 @@ export async function processIncomingMessage(
         ...claudeOptions,
         model,
       });
-      replyText = result.text;
+      replyText = result.text || FALLBACK_CLAUDE_EMPTY;
       hadToolUse = result.hadToolUse;
       toolsCalled = result.toolsCalled;
       toolResults = result.toolResults;
