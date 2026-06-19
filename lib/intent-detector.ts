@@ -24,6 +24,9 @@ export function detectAmbassadorIntent(text: string): AmbassadorIntent {
   const normalized = text.trim();
   if (!normalized) return null;
 
+  // Client psychologist signals override broad ambassador patterns (e.g. "webinar" alone)
+  if (isLikelyClientPsychologist(normalized)) return null;
+
   for (const pattern of AMBASSADOR_PATTERNS) {
     if (pattern.test(normalized)) {
       return 'embajador_program';
@@ -31,4 +34,24 @@ export function detectAmbassadorIntent(text: string): AmbassadorIntent {
   }
 
   return null;
+}
+
+const CLIENT_PSYCHOLOGIST_SIGNALS: RegExp[] = [
+  /\bpsic[óo]log[oa]s?\b/i,
+  /\bpacientes?\b/i,
+  /\b(plan|planes)\b.*\b(precio|costo|cu[áa]nto)\b/i,
+  /\b(precio|precios|costo|cu[áa]nto)\s+(cuesta|vale|del?\s+plan)/i,
+  /\bevaluaciones?\s+(cl[íi]nica|psicol[óo]gica)/i,
+  /\bnormativa\b/i,
+  /\bSIVIGILA\b/i,
+  /\bICD[\-\s]?10\b/i,
+  /\bDSM[\-\s]?5/i,
+  /\bnotas?\s+SOAP\b/i,
+  /\bexpediente\s+cl[íi]nico\b/i,
+  /\bagenda\s+(de\s+)?citas?\b/i,
+  /\bhistoria\s+cl[íi]nica\b/i,
+];
+
+export function isLikelyClientPsychologist(message: string): boolean {
+  return CLIENT_PSYCHOLOGIST_SIGNALS.some((p) => p.test(message));
 }

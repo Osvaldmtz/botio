@@ -44,11 +44,12 @@ export function buildAmbassadorReply(
 
   const faq = matchEmbajadorFaq(messageBody);
   if (faq) {
+    const replyText = appendWebinarOfferIfNeeded(faq.response, state.webinarLinkSentAt);
     return {
-      replyText: appendWebinarOfferIfNeeded(faq.response, state.webinarLinkSentAt),
+      replyText,
       source: 'ambassador_faq',
       faqId: faq.id,
-      sentLumaLink: responseContainsLumaLink(faq.response),
+      sentLumaLink: responseContainsLumaLink(replyText),
     };
   }
 

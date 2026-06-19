@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { detectAmbassadorIntent } from '@/lib/intent-detector';
+import { detectAmbassadorIntent, isLikelyClientPsychologist } from '@/lib/intent-detector';
 import { matchesAmbassadorFaqSignal } from '@/lib/embajador-faqs';
 import { buildAmbassadorReply } from '@/lib/ambassador-messages';
 import { sendAmbassadorLeadTelegram } from '@/lib/telegram-notify';
@@ -49,6 +49,14 @@ export function shouldMarkAmbassadorLead(
   messageBody: string,
 ): boolean {
   if (state.isAmbassadorLead) return false;
+
+  if (isLikelyClientPsychologist(messageBody)) {
+    console.log(
+      `[ambassador-detection] skip | reason=client_psychologist_signal | msg="${messageBody.slice(0, 80)}"`,
+    );
+    return false;
+  }
+
   return (
     detectAmbassadorIntent(messageBody) === 'embajador_program' ||
     matchesAmbassadorFaqSignal(messageBody)
