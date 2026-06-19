@@ -17,7 +17,7 @@
  *   F   control ambiguo             → no detectado ✓
  */
 
-import { detectAmbassadorIntent } from '../lib/intent-detector';
+import { detectAmbassadorIntent, isLikelyClientPsychologist } from '../lib/intent-detector';
 import {
   LUMA_WEBINAR_URL,
   matchEmbajadorFaq,
@@ -33,11 +33,15 @@ function assert(condition: boolean, message: string): void {
 
 /** Replica de shouldMarkAmbassadorLead cuando isAmbassadorLead=false */
 function shouldMarkAmbassadorLead(msg: string): boolean {
+  if (isLikelyClientPsychologist(msg)) return false;
   return (
     detectAmbassadorIntent(msg) === 'embajador_program' ||
     matchesAmbassadorFaqSignal(msg)
   );
 }
+
+const EXPLICIT_AMBASSADOR_SIGNAL =
+  /\b(embajador|comisi[óo]n|ganar\s+dinero|webinar\s+embajador|programa\s+de\s+embajadores|afiliado)\b/i;
 
 /**
  * Simula el bloque de process-message.ts DESPUÉS de Fix 2.
@@ -86,7 +90,14 @@ function simulateWithFix2(msg: string): {
   let usedFix2Fallback = false;
   let finalReply = specificReply;
 
-  if (!finalReply && wasJustDetected && !state.webinarLinkSentAt) {
+  const hasExplicitAmbassadorSignal = EXPLICIT_AMBASSADOR_SIGNAL.test(msg);
+
+  if (
+    !finalReply &&
+    wasJustDetected &&
+    hasExplicitAmbassadorSignal &&
+    !state.webinarLinkSentAt
+  ) {
     finalReply = buildAmbassadorReply('programa de embajadores', state);
     usedFix2Fallback = true;
   }
@@ -200,23 +211,29 @@ function runTests(): void {
   }
 
   // ─── Hard assertions ───────────────────────────────────────────────────────
-  const mainScenarios = scenarios.filter((r) => !r.label.startsWith('F'));
+  // B2 ("ingreso extra") detecta embajador pero ya no fuerza Luma — cae a Claude.
+  const mainScenarios = scenarios.filter(
+    (r) => !r.label.startsWith('F') && !r.label.startsWith('B2'),
+  );
   const allPass = mainScenarios.every((r) => r.status === 'PASS');
-  assert(allPass, `Todos los 8 escenarios principales deben ser PASS. Fallos: ${fails.map((r) => r.label).join(', ')}`);
+  assert(allPass, `Escenarios principales deben ser PASS. Fallos: ${fails.map((r) => r.label).join(', ')}`);
 
   // Fix 1 regression
   const marlon = scenarios.find((r) => r.label.startsWith('C'));
   assert(marlon?.sentLumaLink === true,    'Fix 1 regression: que_es_kalyo sentLumaLink debe ser true');
   assert(marlon?.wouldMarkDB === true,     'Fix 1 regression: que_es_kalyo debe marcar DB');
 
-  // Fix 2 coverage
+  // Fix 2 coverage — only explicit ambassador signals trigger forced intro
   const ganarDinero = scenarios.find((r) => r.label.startsWith('B '));
   assert(ganarDinero?.usedFix2Fallback === true, 'Fix 2: "Es para ganar dinero" debe usar fallback intro_embajador');
-  assert(ganarDinero?.wouldMarkDB === true,       'Fix 2: "Es para ganar dinero" debe marcar DB');
+  assert(ganarDinero?.wouldMarkDB === true, 'Fix 2: "Es para ganar dinero" debe marcar DB');
 
   const ingresoExtra = scenarios.find((r) => r.label.startsWith('B2'));
-  assert(ingresoExtra?.usedFix2Fallback === true, 'Fix 2: "ingreso extra" debe usar fallback intro_embajador');
-  assert(ingresoExtra?.wouldMarkDB === true,       'Fix 2: "ingreso extra" debe marcar DB');
+  assert(ingresoExtra?.detected === true, 'B2: "ingreso extra" sigue detectando embajador');
+  assert(
+    ingresoExtra?.usedFix2Fallback === false,
+    'Fix 2 guard: "ingreso extra" ya NO fuerza intro sin señal explícita',
+  );
 
   // Trigger gap fix — cuanto_gano
   const cuantoPuede = scenarios.find((r) => r.label.startsWith('D'));
@@ -229,7 +246,7 @@ function runTests(): void {
   assert(control?.detected === false, 'Control: mensaje ambiguo NO debe detectar embajador');
 
   console.log('\n✅ Todos los hard assertions OK');
-  console.log(`✅ 8/8 escenarios principales PASS`);
+  console.log(`✅ ${mainScenarios.length}/${mainScenarios.length} escenarios principales PASS (+ B2 guard verificado)`);
 }
 
 runTests();

@@ -9,7 +9,7 @@ import { savePendingDemoSlots } from '@/lib/demo-conversation';
 import { enrollTrialOnboarding } from '@/lib/trial-onboarding-enrollment';
 import {
   formatSlotsForBot,
-  getAvailableSlots,
+  getAvailableSlots, // DEPRECATED: 13 jun 2026 — reemplazado por Calendly direct link
   isValidEmail,
 } from '@/lib/google-calendar';
 import {
@@ -80,7 +80,9 @@ Cuando el usuario muestra duda final sobre activar trial:
 
 BLOQUE: DEMO PERSONALIZADA
 Si el usuario pide demo en vivo / llamada / reunión / ver en vivo (ver DISTINCIÓN CRÍTICA), o el perfil es clinic_team / institution_decision_maker:
-Sigue el BLOQUE DEMO — FLUJO PASO A PASO (agenda en Google Calendar, no links externos).
+Comparte el link oficial de Calendly: ${process.env.KALYO_DEMO_BOOKING_URL ?? 'https://calendly.com/osvaldo-21/demo-kalyo'}
+Calendly muestra horarios en la zona del lead y maneja confirmaciones automáticamente.
+NO intentes consultar Google Calendar ni inventar horarios disponibles.
 NO confundir con trial — "demo" NO significa "probar el producto gratis".
 
 NO ofrecer demo proactivamente a perfiles private_practice o student (genera fricción innecesaria).
@@ -107,7 +109,7 @@ DEMO = llamada agendada con Osvaldo, 15 min, vía Google Meet. Triggers:
 - "quiero hablar con alguien"
 - "quiero ver una demo"
 
-→ Usar flujo BLOQUE DEMO (schedule_demo / check_specific_time / confirm_demo_slot)
+→ Compartir link Calendly oficial (ver BLOQUE DEMO). El sistema puede enviarlo automáticamente.
 → NUNCA activar trial ni create_account_and_activate_trial cuando el usuario pidió demo
 
 TRIAL = activar 15 días Pro gratis sin tarjeta. Triggers:
@@ -307,64 +309,26 @@ REGLAS:
 
 ---
 
-BLOQUE DEMO — FLUJO PASO A PASO
+BLOQUE DEMO — LINK CALENDLY DIRECTO
 
 Cuándo ofrecer demo (prioridad sobre trial):
 - Usuario pide demo en vivo, llamada, reunión, agendar, ver en vivo (ver DISTINCIÓN CRÍTICA)
 - Perfil clinic_team o institution_decision_maker que pide conocer el producto en llamada
 - Si dice solo "demo" sin contexto → preguntar primero (DISTINCIÓN CRÍTICA), no asumir trial
 
-Paso 1 — Ofrecer demo:
-"Te puedo agendar una demo de 15 minutos con Osvaldo del equipo de Kalyo. ¿Te animas?"
+IMPORTANTE — DEMOS:
+- NUNCA intentes consultar horarios disponibles directamente ni uses schedule_demo para nuevas solicitudes.
+- Si el lead pide demo, comparte el link de Calendly: ${process.env.KALYO_DEMO_BOOKING_URL ?? 'https://calendly.com/osvaldo-21/demo-kalyo'}
+- Calendly muestra horarios en la zona del lead y maneja confirmaciones por email.
+- La demo dura ~30 minutos con Osvaldo del equipo Kalyo.
 
-Paso 2 — Pedir datos básicos:
-"Genial. Necesito tu nombre completo y email para enviarte la invitación."
+Mensaje sugerido cuando pidan demo:
+"Te paso el link para agendar tu demo personalizada. Verás horarios en tu zona horaria y recibirás confirmación por email: [link Calendly]"
 
-Paso 3 — Preguntar ciudad (NUEVO):
-DESPUÉS de tener nombre + email, ANTES de mostrar horarios:
-"Para mostrarte los horarios en tu hora local, ¿desde qué ciudad nos escribes?"
-
-Paso 4 — Llamar schedule_demo:
-Cuando tengas ciudad, llama schedule_demo con customer_email + customer_name + customer_city
-
-Paso 5 — Si el cliente pide hora específica:
-Llamar check_specific_time con la fecha, hora y la ciudad ya conocida
-
-Paso 6 — Cuando confirme, llamar confirm_demo_slot
-
-Si el cliente pide una hora ESPECÍFICA diferente a los 3 slots que ofreciste:
-- Llama check_specific_time con la fecha (YYYY-MM-DD) y hora (HH:MM) en la timezone del cliente
-- Si está disponible → confirma con el cliente y luego llama confirm_demo_slot con slot_number: "custom"
-- Si no está disponible → la tool devuelve alternativas cercanas; ofrécelas al cliente
-
-NUNCA digas "no está disponible" sin haber llamado check_specific_time primero.
-
-REGLAS CRÍTICAS DEL FLUJO DEMO:
-
-1. NUNCA digas "confirmado", "agendado", "te enviaremos invitación", "demo agendada" sin haber recibido confirmación exitosa de la tool confirm_demo_slot.
-
-2. Cuando el usuario elija un slot (responde 1, 2, 3 o hora específica):
-   - PRIMERA acción obligatoria: invocar confirm_demo_slot (o check_specific_time si pidió hora distinta)
-   - PROHIBIDO responder con texto de confirmación sin haber llamado la tool
-   - USA EXACTAMENTE el bot_message que retorna la tool, no inventes tu propio texto
-
-3. Si la tool retorna error o no hay disponibilidad:
-   - Comunica el error tal como viene en la respuesta
-   - Ofrece alternativas que retorna la tool
-
-4. Solo después de ver status success de confirm_demo_slot, puedes saludar al cliente y despedirte.
-
-IMPORTANTE:
-- NUNCA muestres slots sin haber preguntado la ciudad primero
-- Si schedule_demo retorna 'city_not_recognized', responde:
-  "No encontré esa ciudad en mi sistema. ¿Podrías decirme una ciudad principal cercana o el país?
-  Ejemplos: CDMX, Monterrey, Guadalajara, Cancún, Bogotá, Lima, Santiago, Buenos Aires, Madrid."
-- NUNCA asumas una timezone si no hay match seguro (solo high o medium)
-- Una vez tengas la ciudad, NO vuelvas a preguntar
-- NUNCA dar link de Calendly ni links externos de agendamiento
-- NUNCA inventar fechas/horas — siempre usar schedule_demo, check_specific_time y confirm_demo_slot
-- Si la tool retorna error de disponibilidad, ofrecer próxima semana
-- Validar que el email tenga formato correcto antes de llamar schedule_demo
+REGLAS:
+- NO inventar fechas/horas disponibles
+- NO decir "Tuve un problema consultando horario" — usa siempre el link Calendly
+- Si ya hay una demo en curso (confirm_demo_slot previo), puedes ayudar con reagendar vía el mismo link
 
 ---
 
