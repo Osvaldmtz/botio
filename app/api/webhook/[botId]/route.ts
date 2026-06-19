@@ -4,6 +4,7 @@ import { sendWhatsApp, emptyTwimlResponse, validateTwilioSignature } from '@/lib
 import { normalizePhone } from '@/lib/phone';
 import { transcribeAudio } from '@/lib/audio-transcription';
 import { processIncomingMessage } from '@/lib/process-message';
+import { processWithDebounce } from '@/lib/message-debouncer';
 
 /**
  * Shared secret Kalyo adds to forwarded Twilio webhooks.
@@ -202,19 +203,27 @@ export async function POST(request: Request, { params }: Params) {
 
   let result;
   try {
-    result = await processIncomingMessage({
-      supabase,
-      botId: bot.id,
-      channel: 'whatsapp',
-      identifier: from,
-      messageBody: incoming.body,
-      metadata: incoming.meta.metadata,
-      userMessageSource: incoming.meta.source,
-      audioDurationSeconds: incoming.meta.audioDurationSeconds,
-    });
+    const debounceKey = `${bot.id}:${from}`;
+    result = await processWithDebounce(debounceKey, () =>
+      processIncomingMessage({
+        supabase,
+        botId: bot.id,
+        channel: 'whatsapp',
+        identifier: from,
+        messageBody: incoming.body,
+        metadata: incoming.meta.metadata,
+        userMessageSource: incoming.meta.source,
+        audioDurationSeconds: incoming.meta.audioDurationSeconds,
+      }),
+    );
   } catch (error) {
     console.error('[webhook] processIncomingMessage failed', error);
     return new Response('Internal error', { status: 500 });
+  }
+
+  if (result === null) {
+    console.log(`[webhook] debounced duplicate message | bot=${bot.id} | from=${from}`);
+    return new Response(null, { status: 200 });
   }
 
   if (result.rateLimited) {

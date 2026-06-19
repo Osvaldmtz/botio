@@ -30,10 +30,13 @@ function getClient(): Anthropic {
   return client;
 }
 
+const FALLBACK_RESPONSE_ES =
+  'Dame un segundo, estoy procesando tu mensaje... 🤔 Si no recibes respuesta en 1 minuto, por favor reformula tu pregunta.';
+
 function extractFinalText(content: Anthropic.Messages.ContentBlock[]): string {
   const textBlock = content.find((block) => block.type === 'text');
-  if (!textBlock || textBlock.type !== 'text') {
-    return 'Sorry, I could not generate a response.';
+  if (!textBlock || textBlock.type !== 'text' || !textBlock.text.trim()) {
+    return FALLBACK_RESPONSE_ES;
   }
   return textBlock.text;
 }
@@ -152,5 +155,10 @@ export async function generateReply(
   }
 
   console.warn('[claude] tool-use loop exceeded max iterations');
-  return { text: 'Sorry, I got stuck. Please try again.', hadToolUse, toolsCalled, toolResults };
+  return {
+    text: 'Tuve un problema procesando tu mensaje. ¿Podrías intentarlo de nuevo? 🙏',
+    hadToolUse,
+    toolsCalled,
+    toolResults,
+  };
 }
