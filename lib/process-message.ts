@@ -299,6 +299,45 @@ export async function processIncomingMessage(
   let isAmbassadorLead = false;
 
   if (isKalyoBotId(bot.id)) {
+    // Demo Calendly — before ambassador/Claude. Explicit demo request is a client signal;
+    // must not be blocked by a stale is_ambassador flag on the conversation.
+    if (detectDemoIntent(messageBody)) {
+      const customerName = readCustomerName(conversation, metadata);
+      const replyText = buildDemoSchedulingMessage({ customerName });
+
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: 'demo_scheduling_calendly',
+          demo_link_sent: true,
+          sent_at: assistantNow,
+        },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+
+      await notifyDemoLinkSent({
+        customerName,
+        phone: conversation.customer_phone,
+        conversationId: conversation.id,
+      });
+
+      console.log(
+        `[process-message] channel=${channel} | source=demo_scheduling_calendly | conv=${conversation.id}`,
+      );
+
+      return {
+        replyText,
+        storedReply: replyText,
+        conversationId: conversation.id,
+        source: 'demo_scheduling_calendly',
+      };
+    }
+
     const pending = await loadConversationPending(supabase, conversation.id);
     const kalyoCreds =
       bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number
@@ -380,43 +419,6 @@ export async function processIncomingMessage(
           source: 'ambassador_handler',
         };
       }
-    }
-
-    if (!isAmbassadorLead && detectDemoIntent(messageBody)) {
-      const customerName = readCustomerName(conversation, metadata);
-      const replyText = buildDemoSchedulingMessage({ customerName });
-
-      const assistantNow = new Date().toISOString();
-      await supabase.from('messages').insert({
-        conversation_id: conversation.id,
-        role: 'assistant',
-        content: replyText,
-        source: 'text',
-        source_type: 'claude',
-        metadata: {
-          source: 'demo_scheduling_calendly',
-          demo_link_sent: true,
-          sent_at: assistantNow,
-        },
-      });
-      await touchConversation(supabase, conversation.id, assistantNow);
-
-      await notifyDemoLinkSent({
-        customerName,
-        phone: conversation.customer_phone,
-        conversationId: conversation.id,
-      });
-
-      console.log(
-        `[process-message] channel=${channel} | source=demo_scheduling_calendly | conv=${conversation.id}`,
-      );
-
-      return {
-        replyText,
-        storedReply: replyText,
-        conversationId: conversation.id,
-        source: 'demo_scheduling_calendly',
-      };
     }
 
     const purchaseIntent = await handlePurchaseIntentMessage({

@@ -46,7 +46,8 @@ async function main(): Promise<void> {
   assert(!detectDemoIntent('Cuánto cuesta la demo?'), 'demo: pricing question excluded');
   const demoMsg = buildDemoSchedulingMessage({ customerName: 'Edna' });
   assert(demoMsg.includes(getDemoBookingUrl()), 'demo message includes Calendly URL');
-  assert(demoMsg.includes('Edna'), 'demo message includes customer name');
+  assert(demoMsg.includes('fundador de Kalyo'), 'demo message mentions Osvaldo as founder');
+  assert(demoMsg.includes('100+'), 'demo message mentions 100+ evaluaciones');
   console.log('✓ Fix #1 — Demo intent + Calendly message');
 
   // ─── Fix #2: Ambassador false positives ──────────────────────────────────────
