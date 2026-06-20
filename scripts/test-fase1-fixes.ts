@@ -43,6 +43,18 @@ async function main(): Promise<void> {
   // ─── Fix #1: Demo intent ─────────────────────────────────────────────────────
   assert(detectDemoIntent('Quiero una demo'), 'demo: quiero una demo');
   assert(detectDemoIntent('Agéndame una llamada'), 'demo: agendar llamada');
+  assert(detectDemoIntent('Cómo hacer una cita'), 'demo: cómo hacer una cita');
+  assert(detectDemoIntent('Cómo agendo'), 'demo: cómo agendo');
+  assert(detectDemoIntent('Quiero una cita'), 'demo: quiero una cita');
+  assert(detectDemoIntent('Si claro con Osvaldo'), 'demo: sí claro con Osvaldo');
+  assert(detectDemoIntent('Cita con Osvaldo'), 'demo: cita con Osvaldo');
+  assert(detectDemoIntent('Hablar con Osvaldo'), 'demo: hablar con Osvaldo');
+  assert(!detectDemoIntent('Hola'), 'demo: hola excluded');
+  assert(!detectDemoIntent('Información sobre Kalyo'), 'demo: info general excluded');
+  assert(
+    !detectDemoIntent('Cuánto cuesta una sesión con paciente?'),
+    'demo: clinical session pricing excluded',
+  );
   assert(!detectDemoIntent('Cuánto cuesta la demo?'), 'demo: pricing question excluded');
   const demoMsg = buildDemoSchedulingMessage({ customerName: 'Edna' });
   assert(demoMsg.includes(getDemoBookingUrl()), 'demo message includes Calendly URL');

@@ -96,7 +96,7 @@ ${buildKalyoOfficialPricingPrompt()}
 
 DISTINCIÓN CRÍTICA — DEMO vs TRIAL
 
-DEMO = llamada agendada con Osvaldo, 15 min, vía Google Meet. Triggers:
+DEMO = llamada agendada con Osvaldo, 30 minutos, vía Calendly / videollamada. Triggers:
 - "quiero una demo"
 - "demo en vivo"
 - "demo con alguien"
@@ -124,7 +124,7 @@ TRIAL = activar 15 días Pro gratis sin tarjeta. Triggers:
 → Usar flujo INTENCIÓN DE COMPRA (activate_pro_trial / create_account_and_activate_trial)
 
 REGLA: "demo" como palabra suelta es AMBIGUA. Si solo dice "demo" sin más contexto, PREGUNTA:
-"¿Te refieres a agendar una demo en vivo conmigo (15 min con Osvaldo, vía Google Meet), o a probar Kalyo con el trial gratis de 15 días?"
+"¿Te refieres a agendar una demo en vivo conmigo (30 minutos con Osvaldo, vía Calendly), o a probar Kalyo con el trial gratis de 15 días?"
 
 Solo activa el flujo correcto después de la confirmación.
 

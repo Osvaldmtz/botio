@@ -302,6 +302,9 @@ export async function processIncomingMessage(
     // Demo Calendly — before ambassador/Claude. Explicit demo request is a client signal;
     // must not be blocked by a stale is_ambassador flag on the conversation.
     if (detectDemoIntent(messageBody)) {
+      console.log(
+        `[process-message] DEMO INTENT detected | conv=${conversation.id} | msg="${messageBody.slice(0, 80)}"`,
+      );
       const customerName = readCustomerName(conversation, metadata);
       const replyText = buildDemoSchedulingMessage({ customerName });
 
@@ -846,6 +849,12 @@ export async function processIncomingMessage(
   let toolsCalled: string[] = [];
   let toolResults: Record<string, unknown> = {};
   let source: ProcessMessageSource = 'claude';
+
+  if (isKalyoBotId(bot.id)) {
+    console.log(
+      `[process-message] no early-return triggered | falling to Claude pipeline | conv=${conversation.id} | msg="${messageBody.slice(0, 80)}"`,
+    );
+  }
 
   const cached =
     isKalyoBotId(bot.id) && userMessageSource === 'text' && !firstMessageOverride

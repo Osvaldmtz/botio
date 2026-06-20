@@ -68,7 +68,7 @@ export function formatObjectionResponse(
         `🎙️ Asistente de voz con IA (hablas y registra todo)\n` +
         `📊 Reportes ejecutivos automáticos (sin escribir reportes a mano)\n` +
         `🇲🇽 Hecho en LATAM para psicólogos LATAM (DSM-5, español)\n\n` +
-        `¿Te interesa ver una demo en vivo de cómo se compara? Te agendo 15 min con Osvaldo.`
+        `¿Te interesa ver una demo en vivo de cómo se compara? Te agendo 30 minutos con Osvaldo.`
       );
     }
     return (

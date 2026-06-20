@@ -48,7 +48,7 @@ export function formatDay7(user: TrialOnboardingUser, daysLeft: number): string 
   return (
     `${opener} 7 días con tu trial Pro (te quedan ${daysLeft}).\n\n` +
     `¿Cómo te está funcionando? ¿Lograste hacer tu primera evaluación o usar el asistente de voz?\n\n` +
-    `Si tienes dudas o algo no funciona como esperabas, te puedo agendar 15 min con Osvaldo del equipo para que te muestre todo en vivo.\n\n` +
+    `Si tienes dudas o algo no funciona como esperabas, te puedo agendar 30 minutos con Osvaldo del equipo para que te muestre todo en vivo.\n\n` +
     `Solo dime 'agendar demo' y lo coordino.`
   );
 }
