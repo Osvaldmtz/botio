@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ChevronDown, RefreshCw } from 'lucide-react';
+import { ChevronDown, RefreshCw, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { KpiLayout } from '@/components/admin/kpis/kpi-layout';
 import type { KpiInsightsData } from '@/lib/kpi/insights-types';
+import { KpiJarvisPage } from '@/components/admin/kpis/jarvis/kpi-page-shell';
+import { KpiJarvisPanel } from '@/components/admin/kpis/jarvis/kpi-jarvis-theme';
 
 type Props = {
   data: KpiInsightsData;
@@ -14,7 +15,7 @@ type InsightSection = {
   id: string;
   emoji: string;
   title: string;
-  color: string;
+  accent: 'emerald' | 'amber' | 'violet' | 'cyan';
   match: string;
 };
 
@@ -23,28 +24,28 @@ const SECTIONS: InsightSection[] = [
     id: 'working',
     emoji: '✅',
     title: 'Lo que está funcionando',
-    color: '#10B981',
+    accent: 'emerald',
     match: 'Lo que está funcionando',
   },
   {
     id: 'alerts',
     emoji: '⚠️',
     title: 'Alertas y problemas detectados',
-    color: '#F59E0B',
+    accent: 'amber',
     match: 'Alertas y problemas detectados',
   },
   {
     id: 'actions',
     emoji: '🎯',
     title: 'Top 3 acciones esta semana',
-    color: '#7F77DD',
+    accent: 'violet',
     match: 'Top 3 acciones esta semana',
   },
   {
     id: 'projection',
     emoji: '📈',
     title: 'Proyección a 30 días',
-    color: '#3B82F6',
+    accent: 'cyan',
     match: 'Proyección a 30 días',
   },
 ];
@@ -74,7 +75,7 @@ function renderInline(text: string): ReactNode[] {
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
-        <strong key={i} className="font-semibold text-fg">
+        <strong key={i} className="font-semibold text-slate-100">
           {part.slice(2, -2)}
         </strong>
       );
@@ -87,7 +88,7 @@ function MarkdownBody({ text }: { text: string }) {
   const lines = text.split('\n').filter((line) => line.trim());
 
   return (
-    <ul className="space-y-2 text-sm leading-relaxed text-fg-muted">
+    <ul className="space-y-2 text-sm leading-relaxed text-slate-300">
       {lines.map((line, i) => {
         const trimmed = line.trim();
         const bullet = trimmed.match(/^[-*•]\s+(.*)/);
@@ -96,14 +97,14 @@ function MarkdownBody({ text }: { text: string }) {
 
         if (bullet || numbered) {
           return (
-            <li key={i} className="ml-4 list-disc marker:text-fg-tertiary">
+            <li key={i} className="ml-4 list-disc marker:text-cyan-500/60">
               {renderInline(content)}
             </li>
           );
         }
 
         return (
-          <p key={i} className="text-fg-muted">
+          <p key={i} className="text-slate-300">
             {renderInline(trimmed)}
           </p>
         );
@@ -112,19 +113,15 @@ function MarkdownBody({ text }: { text: string }) {
   );
 }
 
-function SectionSkeleton({ color }: { color: string }) {
+function SectionSkeleton({ accent }: { accent: InsightSection['accent'] }) {
   return (
-    <div
-      className="animate-pulse rounded-lg border border-bg-border bg-bg p-5"
-      style={{ borderLeftWidth: 4, borderLeftColor: color }}
-    >
-      <div className="h-4 w-48 rounded bg-bg-subtle" />
-      <div className="mt-4 space-y-2">
-        <div className="h-3 w-full rounded bg-bg-subtle" />
-        <div className="h-3 w-5/6 rounded bg-bg-subtle" />
-        <div className="h-3 w-4/6 rounded bg-bg-subtle" />
+    <KpiJarvisPanel title="Analizando…" accent={accent}>
+      <div className="animate-pulse space-y-2">
+        <div className="h-3 w-full rounded bg-slate-800" />
+        <div className="h-3 w-5/6 rounded bg-slate-800" />
+        <div className="h-3 w-4/6 rounded bg-slate-800" />
       </div>
-    </div>
+    </KpiJarvisPanel>
   );
 }
 
@@ -193,93 +190,94 @@ export function InsightsPanel({ data }: Props) {
     }) ?? '—';
 
   return (
-    <KpiLayout
+    <KpiJarvisPage
       title="Análisis IA"
-      subtitle="Generado por Claude · Basado en datos reales"
+      subtitle="Jarvis Intelligence — Claude sobre datos reales"
+      sources={[{ id: 'claude', label: 'Claude', ok: !error }]}
     >
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <p className="text-sm text-fg-muted">
-          Última actualización:{' '}
-          <span className="tabular-nums text-fg">{formattedTime}</span>
-        </p>
-        <button
-          type="button"
-          onClick={() => void runAnalysis()}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#10B981] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} strokeWidth={1.5} />
-          Regenerar análisis
-        </button>
-      </div>
+      {() => (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-violet-500/20 bg-violet-500/5 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-violet-400" />
+              <p className="text-sm text-slate-300">
+                Última actualización:{' '}
+                <span className="font-mono tabular-nums text-violet-200">{formattedTime}</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void runAnalysis()}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:opacity-50"
+            >
+              <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} strokeWidth={1.5} />
+              Regenerar análisis
+            </button>
+          </div>
 
-      {error ? (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {error}
-        </div>
-      ) : null}
-
-      {loading && !content ? (
-        <div className="space-y-4">
-          <p className="text-sm font-medium text-fg-muted">Analizando tus KPIs...</p>
-          {SECTIONS.map((section) => (
-            <SectionSkeleton key={section.id} color={section.color} />
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {SECTIONS.map((section) => {
-            const body = sections[section.id] ?? '';
-            const isOpen = openSections[section.id] ?? true;
-            const isStreamingSection = loading && !body.trim();
-
-            return (
-              <div
-                key={section.id}
-                className="overflow-hidden rounded-lg border border-bg-border bg-bg"
-                style={{ borderLeftWidth: 4, borderLeftColor: section.color }}
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleSection(section.id)}
-                  className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
-                >
-                  <span className="text-sm font-semibold text-fg">
-                    {section.emoji} {section.title}
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      'h-4 w-4 shrink-0 text-fg-tertiary transition-transform',
-                      isOpen && 'rotate-180',
-                    )}
-                    strokeWidth={1.5}
-                  />
-                </button>
-
-                {isOpen ? (
-                  <div className="border-t border-bg-border px-5 pb-5 pt-4">
-                    {isStreamingSection ? (
-                      <div className="animate-pulse space-y-2">
-                        <div className="h-3 w-full rounded bg-bg-subtle" />
-                        <div className="h-3 w-5/6 rounded bg-bg-subtle" />
-                        <div className="h-3 w-4/6 rounded bg-bg-subtle" />
-                      </div>
-                    ) : body.trim() ? (
-                      <MarkdownBody text={body} />
-                    ) : (
-                      <p className="text-sm text-fg-tertiary">Esperando respuesta...</p>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-
-          {loading && content && !hasAnySection ? (
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg-muted">{content}</p>
+          {error ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+              {error}
+            </div>
           ) : null}
-        </div>
+
+          {loading && !content ? (
+            <div className="space-y-4">
+              <p className="text-sm font-medium text-cyan-300/80">Analizando tus KPIs…</p>
+              {SECTIONS.map((section) => (
+                <SectionSkeleton key={section.id} accent={section.accent} />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {SECTIONS.map((section) => {
+                const body = sections[section.id] ?? '';
+                const isOpen = openSections[section.id] ?? true;
+                const isStreamingSection = loading && !body.trim();
+
+                return (
+                  <KpiJarvisPanel
+                    key={section.id}
+                    title={`${section.emoji} ${section.title}`}
+                    accent={section.accent}
+                    action={
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(section.id)}
+                        className="rounded-lg p-1 text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                      >
+                        <ChevronDown
+                          className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180')}
+                          strokeWidth={1.5}
+                        />
+                      </button>
+                    }
+                  >
+                    {isOpen ? (
+                      isStreamingSection ? (
+                        <div className="animate-pulse space-y-2">
+                          <div className="h-3 w-full rounded bg-slate-800" />
+                          <div className="h-3 w-5/6 rounded bg-slate-800" />
+                          <div className="h-3 w-4/6 rounded bg-slate-800" />
+                        </div>
+                      ) : body.trim() ? (
+                        <MarkdownBody text={body} />
+                      ) : (
+                        <p className="text-sm text-slate-500">Esperando respuesta…</p>
+                      )
+                    ) : null}
+                  </KpiJarvisPanel>
+                );
+              })}
+
+              {loading && content && !hasAnySection ? (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-400">{content}</p>
+              ) : null}
+            </div>
+          )}
+        </>
       )}
-    </KpiLayout>
+    </KpiJarvisPage>
   );
 }

@@ -14,11 +14,18 @@ const ITEMS = [
   { href: '/admin/kpis/insights', label: 'Análisis IA' },
 ];
 
-export function KpiSubNav() {
+export function KpiSubNav({ jarvis }: { jarvis?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-wrap gap-1 rounded-lg border border-bg-border bg-bg-subtle/50 p-1">
+    <nav
+      className={cn(
+        'mb-4 flex flex-wrap gap-1 rounded-xl p-1',
+        jarvis
+          ? 'border border-cyan-500/20 bg-slate-950/80 backdrop-blur-sm'
+          : 'rounded-lg border border-bg-border bg-bg-subtle/50',
+      )}
+    >
       {ITEMS.map((item) => {
         const active = item.exact
           ? pathname === item.href
@@ -28,10 +35,14 @@ export function KpiSubNav() {
             key={item.href}
             href={item.href}
             className={cn(
-              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-              active
-                ? 'bg-bg text-fg shadow-sm'
-                : 'text-fg-muted hover:bg-bg hover:text-fg',
+              'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+              jarvis
+                ? active
+                  ? 'bg-emerald-500/15 text-emerald-200 shadow-[0_0_16px_rgba(16,185,129,0.25)]'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                : active
+                  ? 'bg-bg text-fg shadow-sm'
+                  : 'text-fg-muted hover:bg-bg hover:text-fg',
             )}
           >
             {item.label}
