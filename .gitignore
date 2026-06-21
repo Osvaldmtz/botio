@@ -28,7 +28,11 @@ yarn-error.log*
 # local env files
 .env*.local
 .env.local*
+.env.vercel.tmp
 google-credentials.json
+
+# one-off ops scripts (may reference prod IDs)
+scripts/rescue-ambassador-marlon.ts
 
 # vercel
 .vercel
