@@ -7,6 +7,7 @@ export type TabItem = {
   href: string;
   label: string;
   active: boolean;
+  icon?: React.ReactNode;
 };
 
 type Props = {
@@ -28,7 +29,14 @@ export function Tabs({ items, className }: Props) {
               : 'border-transparent text-fg-muted hover:text-fg',
           )}
         >
-          {item.label}
+          {item.icon ? (
+            <span className="inline-flex items-center gap-1.5">
+              {item.icon}
+              {item.label}
+            </span>
+          ) : (
+            item.label
+          )}
         </Link>
       ))}
     </nav>

@@ -43,6 +43,14 @@
     {
       "path": "/api/cron/stripe-past-due-check",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/twilio-sync",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/kalyo-sync",
+      "schedule": "0 6 * * *"
     }
   ]
 }

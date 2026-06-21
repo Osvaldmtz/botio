@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, Settings } from 'lucide-react';
+import { BarChart3, LogOut, Settings } from 'lucide-react';
 import { Tabs } from '@/components/ui/tabs';
 import { logoutAction } from '@/app/admin/actions';
 import { NotificationPermissionPrompt } from './notification-permission-prompt';
@@ -19,6 +19,7 @@ export function AdminHeader() {
   const isDashboard =
     pathname === '/admin/dashboard' || pathname === '/admin';
   const isAmbassadors = pathname?.startsWith('/admin/ambassadors');
+  const isKpis = pathname?.startsWith('/admin/kpis');
   const isConversations =
     pathname?.startsWith('/admin/conversations') && !isPipeline;
 
@@ -62,6 +63,12 @@ export function AdminHeader() {
       href: '/admin/experiments',
       label: 'Experimentos',
       active: isExperiments,
+    },
+    {
+      href: '/admin/kpis',
+      label: 'KPIs',
+      active: isKpis,
+      icon: <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.5} />,
     },
     {
       href: '/admin/ambassadors',
