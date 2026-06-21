@@ -1,5 +1,7 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isKalyoBotId } from '@/lib/conversation-utils';
+import { scheduleGhostReactivationIfEligible } from '@/lib/ghost-reactivation';
 import { sendWhatsApp, emptyTwimlResponse, validateTwilioSignature } from '@/lib/twilio';
 import { normalizePhone } from '@/lib/phone';
 import { transcribeAudio } from '@/lib/audio-transcription';
@@ -245,6 +247,14 @@ export async function POST(request: Request, { params }: Params) {
         body: outboundBody,
         quickReplies: result.quickReplies,
       });
+
+      if (result.conversationId && isKalyoBotId(bot.id)) {
+        void scheduleGhostReactivationIfEligible(
+          supabase,
+          result.conversationId,
+          bot.id,
+        );
+      }
     } catch (error) {
       console.error('[webhook] Twilio send failed', error);
     }

@@ -33,6 +33,8 @@ export type VariantResult = {
   count: number;
   conversions: number;
   conversion_rate: number;
+  trial_conversions: number;
+  trial_conversion_rate: number;
 };
 
 export type ExperimentResults = {
@@ -56,16 +58,11 @@ export type AbAssignmentContext = {
   payload: Record<string, unknown>;
 };
 
-const CONVERSION_OUTCOMES = new Set([
-  'qualified_lead',
-  'lead_captured',
-  'trial_activated',
-  'purchase',
-  'purchase_intent',
-]);
+const LEAD_CONVERSION_OUTCOME = 'qualified_lead';
+const TRIAL_CONVERSION_OUTCOME = 'trial_activado';
 
 const VARIANT_F_AFFIRMATIVE_RE =
-  /\b(s[ií]|si|dale|quiero|act[ií]valo|activalo|claro|adelante|listo|va)\b/i;
+  /\b(s[ií]|si|dale|quiero|act[ií]valo|activalo|claro|adelante|listo|va|por\s+favor|me\s+interesa|obvio|sale|[aá]ndale|c[oó]mo\s+no)\b/i;
 
 export function isVariantAffirmativeResponse(text: string): boolean {
   return VARIANT_F_AFFIRMATIVE_RE.test(text.trim());
@@ -569,36 +566,45 @@ export async function getExperimentResults(
 
   if (assignError) throw assignError;
 
-  const byVariant = new Map<string, { ids: string[]; conversions: number }>();
+  const byVariant = new Map<string, { ids: string[] }>();
 
   for (const row of assignments ?? []) {
-    const bucket = byVariant.get(row.variant) ?? { ids: [], conversions: 0 };
+    const bucket = byVariant.get(row.variant) ?? { ids: [] };
     bucket.ids.push(row.id);
     byVariant.set(row.variant, bucket);
   }
 
   for (const key of Object.keys(variantDefs)) {
-    if (!byVariant.has(key)) byVariant.set(key, { ids: [], conversions: 0 });
+    if (!byVariant.has(key)) byVariant.set(key, { ids: [] });
   }
 
   const assignmentIds = (assignments ?? []).map((a) => a.id);
-  const conversionByAssignment = new Set<string>();
+  const leadConversionByAssignment = new Set<string>();
+  const trialConversionByAssignment = new Set<string>();
 
   if (assignmentIds.length > 0) {
     const { data: outcomes } = await supabase
       .from('ab_outcomes')
       .select('assignment_id, outcome_type')
       .in('assignment_id', assignmentIds)
-      .in('outcome_type', Array.from(CONVERSION_OUTCOMES));
+      .in('outcome_type', [LEAD_CONVERSION_OUTCOME, TRIAL_CONVERSION_OUTCOME]);
 
     for (const o of outcomes ?? []) {
-      conversionByAssignment.add(o.assignment_id);
+      if (o.outcome_type === LEAD_CONVERSION_OUTCOME) {
+        leadConversionByAssignment.add(o.assignment_id);
+      }
+      if (o.outcome_type === TRIAL_CONVERSION_OUTCOME) {
+        trialConversionByAssignment.add(o.assignment_id);
+      }
     }
   }
 
   const variants: VariantResult[] = [];
   for (const [name, bucket] of Array.from(byVariant.entries())) {
-    const conversions = bucket.ids.filter((id) => conversionByAssignment.has(id)).length;
+    const conversions = bucket.ids.filter((id) => leadConversionByAssignment.has(id)).length;
+    const trialConversions = bucket.ids.filter((id) =>
+      trialConversionByAssignment.has(id),
+    ).length;
     variants.push({
       name,
       label: variantDefs[name]?.label,
@@ -607,6 +613,11 @@ export async function getExperimentResults(
       conversion_rate:
         bucket.ids.length > 0
           ? Math.round((conversions / bucket.ids.length) * 10000) / 100
+          : 0,
+      trial_conversions: trialConversions,
+      trial_conversion_rate:
+        bucket.ids.length > 0
+          ? Math.round((trialConversions / bucket.ids.length) * 10000) / 100
           : 0,
     });
   }

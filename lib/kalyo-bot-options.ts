@@ -170,7 +170,8 @@ CAMINO 2 — Usuario NUEVO (primera vez):
 - Llama create_account_and_activate_trial con email y full_name.
 - El sistema crea la cuenta y activa el trial Pro de 15 días automáticamente (sin registro manual en la web).
 
-NUNCA pidas al usuario nuevo que se registre manualmente en app.kalyo.io si ya te dio nombre y email — usa create_account_and_activate_trial.
+NUNCA pidas al usuario nuevo que se registre manualmente en la web si ya te dio nombre y email — usa create_account_and_activate_trial.
+NUNCA envíes links de registro distintos a https://app.kalyo.io/login (prohibido: kalyo.io/register, kalyo.io, app.kalyo.io/login?mode=register).
 
 ---
 
@@ -198,8 +199,8 @@ Crea cuenta nueva en Kalyo + activa trial Pro 15 días. SOLO cuando el usuario p
 Input requerido: email + full_name.
 
 Qué responder según el resultado:
-- success + password: Entrega credenciales, link de login, fecha de fin de trial, y recuerda cambiar password en Configuración → Seguridad.
-- success + reactivated (sin password): Cuenta existente con trial reactivado; puede entrar con su password habitual.
+- success: Entrega link https://app.kalyo.io/login, email, y recuerda que elige su contraseña al entrar por primera vez.
+- success + reactivated (sin password): Cuenta existente con trial reactivado; puede entrar con su password habitual en https://app.kalyo.io/login
 - error "trial_already_used": "Veo que ya tienes cuenta en Kalyo. ¿Quieres que te ayude a hacer login? https://app.kalyo.io/login"
 - error genérico: Discúlpate; el equipo fue notificado.
 
@@ -691,33 +692,25 @@ function formatTrialEndDate(iso: string): string {
 
 function buildAccountCreationSuccessMessage(
   email: string,
-  password: string | undefined,
+  fullName: string | undefined,
   trialEndsAt: string,
   reactivated?: boolean,
 ): string {
   const trialDate = formatTrialEndDate(trialEndsAt);
-  if (reactivated || !password) {
-    return `✅ ¡Trial Pro reactivado!
+  const name = fullName?.trim();
+  const greeting = name ? `¡Listo ${name}!` : '¡Listo!';
 
-📧 Email: ${email}
-🔗 Login: https://app.kalyo.io/login
+  if (reactivated) {
+    return `${greeting} Tu trial Pro está activo 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${email}.
 
 Tu trial Pro de 15 días empezó hoy. Termina el ${trialDate}.
 
 ¿Te ayudo con el setup inicial?`;
   }
 
-  return `✅ ¡Cuenta creada y trial Pro activado!
-
-📧 Email: ${email}
-🔑 Password: ${password}
-🔗 Login: https://app.kalyo.io/login
-
-Cambia tu password al entrar (Configuración → Seguridad).
+  return `${greeting} Tu cuenta está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${email} y la contraseña es la que elijas al entrar por primera vez.
 
 Tu trial Pro de 15 días empezó hoy. Termina el ${trialDate}.
-
-Si no pediste este trial, ignora este mensaje 🙏
 
 ¿Te ayudo con el setup inicial?`;
 }
@@ -932,6 +925,10 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               },
             );
 
+            await recordOutcome(createAdminClient(), conversationId, 'trial_activado', {
+              email: result.email,
+            });
+
             return {
               status: 'success',
               email: result.email,
@@ -940,7 +937,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               reactivated: result.reactivated ?? false,
               bot_message: buildAccountCreationSuccessMessage(
                 result.email,
-                result.password,
+                fullName,
                 result.trial_ends_at,
                 result.reactivated,
               ),

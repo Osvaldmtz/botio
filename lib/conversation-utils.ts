@@ -106,7 +106,7 @@ export function buildFollowupMessage(firstUserMessage: string | null): string {
   if (/prueba|trial|gratis|gratuit/i.test(text)) {
     return (
       'Hola 👋 ¿Seguiste con la prueba gratis de Kalyo? ' +
-      'Si ya te registraste en app.kalyo.io, escríbeme tu email y activo tu Pro de 15 días al instante.'
+      'Si ya te registraste, escríbeme tu email y activo tu Pro de 15 días al instante. Entra en https://app.kalyo.io/login cuando quieras.'
     );
   }
 

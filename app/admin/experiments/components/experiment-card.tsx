@@ -11,6 +11,8 @@ type VariantResult = {
   count: number;
   conversions: number;
   conversion_rate: number;
+  trial_conversions: number;
+  trial_conversion_rate: number;
 };
 
 type ExperimentResults = {
@@ -244,7 +246,8 @@ export function ExperimentCard({
                     ) : null}
                   </span>
                   <span className="tabular-nums text-fg-muted">
-                    Asignados: {v.count} | Convertidos: {v.conversions} ({v.conversion_rate}%)
+                    Asignados: {v.count} | Convertidos (lead): {v.conversions} ({v.conversion_rate}
+                    %) | Trials activados: {v.trial_conversions} ({v.trial_conversion_rate}%)
                   </span>
                 </div>
                 {message ? <VariantMessageText text={message} /> : null}

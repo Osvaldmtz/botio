@@ -18,7 +18,7 @@ export function formatDay1(user: TrialOnboardingUser): string {
   return (
     `👋 ${greeting} soy Sofía. Te activaste el trial Pro de Kalyo ayer.\n\n` +
     `Tu primer paso recomendado:\n` +
-    `1️⃣ Entra a app.kalyo.io\n` +
+    `1️⃣ Entra a https://app.kalyo.io/login\n` +
     `2️⃣ Login con tu email + password\n` +
     `3️⃣ Crea tu primer paciente (botón '+' arriba a la derecha)\n` +
     `4️⃣ Asígnale una evaluación\n\n` +
@@ -38,7 +38,7 @@ export function formatDay3(user: TrialOnboardingUser): string {
     `- 'Genera reporte de evaluación de Ana'\n\n` +
     `Lo hace en segundos.\n\n` +
     `Mira cómo funciona: https://kalyo.io/#asistente-voz\n\n` +
-    `Pruébalo en app.kalyo.io → botón micrófono abajo a la derecha.`
+    `Pruébalo en https://app.kalyo.io/login → botón micrófono abajo a la derecha.`
   );
 }
 

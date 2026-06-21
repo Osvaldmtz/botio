@@ -10,6 +10,7 @@ import {
   shouldAttachQuickReplies,
 } from '@/lib/kalyo-messages';
 import { isAdPrefillMessage, isKalyoBotId, touchConversation } from '@/lib/conversation-utils';
+import { cancelGhostReactivationIfActive } from '@/lib/ghost-reactivation';
 import { enrichAndNotifyLead, type ConversationMessage } from '@/lib/lead-enrichment';
 import { checkCache } from '@/lib/response-cache';
 import { selectModel } from '@/lib/model-router';
@@ -293,6 +294,18 @@ export async function processIncomingMessage(
   if (userMsgError) throw userMsgError;
 
   await touchConversation(supabase, conversation.id, nowIso);
+
+  if (isKalyoBotId(bot.id)) {
+    const { count: userCountAfterInsert } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('conversation_id', conversation.id)
+      .eq('role', 'user');
+
+    if ((userCountAfterInsert ?? 0) > 1) {
+      void cancelGhostReactivationIfActive(supabase, conversation.id);
+    }
+  }
 
   const { count: handoffUserCount } = await supabase
     .from('messages')
