@@ -20,7 +20,9 @@ import {
   buildAbSystemPromptSuffix,
   ensureConversationAssignments,
   getFirstMessageOverride,
+  loadConversationFirstMessageAssignment,
   recordOutcome,
+  resolveVariantFSecondMessage,
   type AbAssignmentContext,
 } from '@/lib/ab-testing';
 import { buildCustomerPhone, type ConversationChannel } from '@/lib/channel-utils';
@@ -90,7 +92,8 @@ export type ProcessMessageSource =
   | 'objection_handler'
   | 'ambassador_handler'
   | 'purchase_intent_handler'
-  | 'demo_scheduling_calendly';
+  | 'demo_scheduling_calendly'
+  | 'ab-test-variant-f-turn2';
 
 export type ProcessIncomingMessageInput = {
   supabase: SupabaseClient;
@@ -134,6 +137,7 @@ type ConversationRow = {
   pipeline_stage_updated_by: string | null;
   customer_phone: string;
   last_message_at: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 function readCustomerName(
@@ -209,7 +213,7 @@ async function upsertConversation(
       { onConflict: 'bot_id,customer_phone' },
     )
     .select(
-      'id, is_closed, lead_captured, handoff_active, pipeline_stage, pipeline_stage_updated_by, customer_phone, last_message_at',
+      'id, is_closed, lead_captured, handoff_active, pipeline_stage, pipeline_stage_updated_by, customer_phone, last_message_at, metadata',
     )
     .single();
 
@@ -743,6 +747,67 @@ export async function processIncomingMessage(
   const firstMessageOverride = isFirstUserMessage
     ? getFirstMessageOverride(abAssignments)
     : null;
+
+  if (
+    isKalyoBotId(bot.id) &&
+    !isAmbassadorLead &&
+    !handoffActive &&
+    totalUserMsgs === 2 &&
+    channel === 'whatsapp'
+  ) {
+    const convMetadata = (conversation.metadata as Record<string, unknown> | null) ?? {};
+    const turn2AlreadySent = convMetadata.ab_variant_f_turn2_sent === true;
+    const assignment = await loadConversationFirstMessageAssignment(
+      supabase,
+      conversation.id,
+    );
+    const variantFReply =
+      assignment &&
+      resolveVariantFSecondMessage(
+        assignment.variant,
+        assignment.payload,
+        messageBody,
+        totalUserMsgs,
+        turn2AlreadySent,
+      );
+
+    if (variantFReply) {
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: variantFReply,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: 'ab-test-variant-f-turn2',
+          ab_variant: 'F',
+          ab_experiment_id: assignment.experiment_id,
+        },
+      });
+      await supabase
+        .from('conversations')
+        .update({
+          metadata: {
+            ...convMetadata,
+            ab_variant_f_turn2_sent: true,
+          },
+        })
+        .eq('id', conversation.id);
+      await touchConversation(supabase, conversation.id, assistantNow);
+
+      console.log(
+        `[process-message] channel=${channel} | source=ab-test-variant-f-turn2 | conv=${conversation.id}`,
+      );
+
+      return {
+        replyText: variantFReply,
+        storedReply: variantFReply,
+        conversationId: conversation.id,
+        source: 'ab-test-variant-f-turn2',
+      };
+    }
+  }
 
   if (totalUserMsgs === 3) {
     await recordOutcome(supabase, conversation.id, 'engaged');

@@ -5,7 +5,11 @@ export type ExperimentScope = 'first_message' | string;
 export type ExperimentVariant = {
   label?: string;
   first_message?: string;
+  second_message?: string;
   system_prompt?: string;
+  active?: boolean;
+  assigned?: number;
+  converted?: number;
 };
 
 export type Experiment = {
@@ -60,6 +64,17 @@ const CONVERSION_OUTCOMES = new Set([
   'purchase_intent',
 ]);
 
+const VARIANT_F_AFFIRMATIVE_RE =
+  /\b(s[ií]|si|dale|quiero|act[ií]valo|activalo|claro|adelante|listo|va)\b/i;
+
+export function isVariantAffirmativeResponse(text: string): boolean {
+  return VARIANT_F_AFFIRMATIVE_RE.test(text.trim());
+}
+
+function activeVariantKeys(variants: Record<string, ExperimentVariant>): string[] {
+  return Object.keys(variants).filter((key) => variants[key]?.active !== false);
+}
+
 export function pickVariant(trafficSplit: Record<string, number>): string {
   const entries = Object.entries(trafficSplit).filter(([, w]) => w > 0);
   if (entries.length === 0) return 'A';
@@ -85,10 +100,13 @@ function resolveTrafficSplit(
   variants: Record<string, ExperimentVariant>,
   trafficSplit: Record<string, number> | null | undefined,
 ): Record<string, number> {
-  const keys = Object.keys(variants);
+  const keys = activeVariantKeys(variants);
+  if (keys.length === 0) return { B: 1 };
+
   if (!trafficSplit || Object.keys(trafficSplit).length === 0) {
     return uniformTrafficSplit(keys);
   }
+
   const filtered = Object.fromEntries(
     keys
       .map((key) => [key, Number(trafficSplit[key] ?? 0)] as const)
@@ -404,6 +422,62 @@ export function getFirstMessageOverride(
     const msg = ctx.payload.first_message;
     if (typeof msg === 'string' && msg.trim()) return msg.trim();
   }
+  return null;
+}
+
+export function resolveVariantFSecondMessage(
+  variant: string,
+  payload: Record<string, unknown>,
+  userMessage: string,
+  totalUserMsgs: number,
+  turn2AlreadySent: boolean,
+): string | null {
+  if (variant !== 'F') return null;
+  if (totalUserMsgs !== 2) return null;
+  if (turn2AlreadySent) return null;
+
+  const second = payload.second_message;
+  if (typeof second !== 'string' || !second.trim()) return null;
+  if (!isVariantAffirmativeResponse(userMessage)) return null;
+
+  return second.trim();
+}
+
+export async function loadConversationFirstMessageAssignment(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<AbAssignmentContext | null> {
+  const { data, error } = await supabase
+    .from('ab_assignments')
+    .select('variant, experiment_id, ab_experiments(id, name, scope, variants)')
+    .eq('conversation_id', conversationId)
+    .order('assigned_at', { ascending: false });
+
+  if (error) {
+    console.error('[ab-testing] load assignment failed', error);
+    return null;
+  }
+
+  for (const row of data ?? []) {
+    const exp = row.ab_experiments as {
+      id?: string;
+      name?: string;
+      scope?: string;
+      variants?: Record<string, ExperimentVariant>;
+    } | null;
+    if (!exp?.id || exp.scope !== 'first_message') continue;
+
+    const variant = row.variant;
+    const payload = (exp.variants?.[variant] ?? {}) as Record<string, unknown>;
+    return {
+      experiment_id: exp.id,
+      experiment_name: exp.name ?? '',
+      variant,
+      scope: 'first_message',
+      payload,
+    };
+  }
+
   return null;
 }
 

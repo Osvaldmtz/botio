@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -32,7 +33,13 @@ export type ExperimentCardData = {
   status: string;
   winner_variant: string | null;
   created_at?: string;
-  variants?: Record<string, { label?: string; first_message?: string }>;
+  variants?: Record<string, {
+    label?: string;
+    first_message?: string;
+    second_message?: string;
+    system_prompt?: string;
+    active?: boolean;
+  }>;
   results?: ExperimentResults;
 };
 
@@ -67,6 +74,58 @@ function variantLabel(
   result?: VariantResult,
 ): string {
   return result?.label ?? variants?.[key]?.label ?? key;
+}
+
+function variantMessage(
+  key: string,
+  variants?: Record<string, { first_message?: string; system_prompt?: string }>,
+): string | null {
+  const variant = variants?.[key];
+  if (!variant) return null;
+  const text = variant.first_message?.trim() || variant.system_prompt?.trim();
+  return text || null;
+}
+
+function VariantMessageText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) {
+      setClamped(false);
+      return;
+    }
+    setClamped(el.scrollHeight > el.clientHeight + 1);
+  }, [text, expanded]);
+
+  return (
+    <div className="mt-2">
+      <p
+        ref={ref}
+        className={cn(
+          'whitespace-pre-wrap text-[13px] italic leading-relaxed',
+          !expanded && 'line-clamp-4',
+        )}
+        style={{ color: 'var(--color-text-secondary, #71717A)' }}
+      >
+        {text}
+      </p>
+      {clamped && !expanded ? (
+        <button
+          type="button"
+          className="mt-1 text-xs text-accent hover:underline"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(true);
+          }}
+        >
+          ver más
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 type Props = {
@@ -166,6 +225,9 @@ export function ExperimentCard({
         <div className="mt-4 space-y-3">
           {results.variants.map((v) => {
             const label = variantLabel(v.name, experiment.variants, v);
+            const message = variantMessage(v.name, experiment.variants);
+            const secondMessage = experiment.variants?.[v.name]?.second_message?.trim();
+            const isInactive = experiment.variants?.[v.name]?.active === false;
             const isLeading = leading === v.name && !resolvedWinner;
             const isWinner = resolvedWinner === v.name;
             return (
@@ -173,6 +235,9 @@ export function ExperimentCard({
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm">
                   <span className="font-medium text-fg">
                     Variante {v.name} ({label})
+                    {isInactive ? (
+                      <span className="ml-2 text-xs font-normal text-fg-tertiary">— Retirada</span>
+                    ) : null}
                     {isWinner || isLeading ? ' ★' : ''}
                     {isLeading ? (
                       <span className="ml-2 text-xs font-normal text-accent">— LEADING</span>
@@ -182,6 +247,15 @@ export function ExperimentCard({
                     Asignados: {v.count} | Convertidos: {v.conversions} ({v.conversion_rate}%)
                   </span>
                 </div>
+                {message ? <VariantMessageText text={message} /> : null}
+                {secondMessage ? (
+                  <div className="mt-1">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
+                      Turno 2
+                    </p>
+                    <VariantMessageText text={secondMessage} />
+                  </div>
+                ) : null}
                 <ConversionBar rate={v.conversion_rate} maxRate={maxRate} />
               </div>
             );
