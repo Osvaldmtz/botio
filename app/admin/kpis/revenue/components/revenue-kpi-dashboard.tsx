@@ -1,8 +1,22 @@
 'use client';
 
 import { useMemo } from 'react';
-import { DollarSign, FlaskConical, Layers, TrendingDown, TrendingUp, Users } from 'lucide-react';
+import {
+  Clock,
+  DollarSign,
+  FlaskConical,
+  Layers,
+  Scale,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
 import type { KalyoMetricRow } from '@/lib/kpi/types';
+import {
+  computeLtvDerived,
+  formatLtvMonthsLabel,
+  getLtvCacRatioCardHealth,
+} from '@/lib/kpi/ltv-utils';
 import { KpiEmptyState } from '@/components/admin/kpis/kpi-empty-state';
 import { KpiVividMetric } from '@/components/admin/kpis/vivid/kpi-vivid-metric';
 import { KpiVividPanel } from '@/components/admin/kpis/vivid/kpi-vivid-panel';
@@ -16,7 +30,7 @@ export function RevenueKpiDashboard({ latest, history }: Props) {
   return (
     <KpiVividPage
       title="Revenue KPIs"
-      subtitle="MRR, suscriptores y mix de planes"
+      subtitle="MRR, churn, LTV y mix de planes"
       sources={[{ id: 'kalyo', label: 'Kalyo', ok: latest != null || history.length > 0 }]}
     >
       {({ range }) => <RevenueContent latest={latest} history={history} range={range} />}
@@ -40,7 +54,23 @@ function RevenueContent({
   const maxPct = total > 0 ? ((max / total) * 100).toFixed(1) : '0';
   const mrr = Number(latest?.mrr ?? 0);
   const subs = latest?.active_subscribers ?? 0;
-  const arpu = subs > 0 ? mrr / subs : null;
+  const churned30d = latest?.churned_30d ?? 0;
+  const churnRate = Number(latest?.churn_rate ?? 0);
+
+  const ltv = useMemo(
+    () =>
+      computeLtvDerived({
+        mrr,
+        active_subscribers: subs,
+        churn_rate: churnRate,
+      }),
+    [mrr, subs, churnRate],
+  );
+
+  const storedLtvAvg = latest?.ltv_avg != null ? Number(latest.ltv_avg) : ltv.ltv_avg;
+  const storedRatio =
+    latest?.ltv_cac_ratio != null ? Number(latest.ltv_cac_ratio) : ltv.ltv_cac_ratio;
+  const ratioHealth = getLtvCacRatioCardHealth(storedRatio);
 
   const filtered = useMemo(() => sliceByRange(history, range), [history, range]);
   const mrrChart = filtered.map((row) => ({
@@ -50,6 +80,8 @@ function RevenueContent({
     trials: Number(row.trialing ?? 0),
     churn: Number(row.churned_today ?? 0),
     converted: Number(row.converted_today ?? 0),
+    churn30d: Number(row.churned_30d ?? 0),
+    churnRate: Number(row.churn_rate ?? 0),
   }));
 
   const planPie = total > 0 ? [{ name: 'Pro', value: pro }, { name: 'Max', value: max }] : [];
@@ -63,15 +95,67 @@ function RevenueContent({
     return <KpiEmptyState description="Ejecuta /api/cron/kalyo-sync" />;
   }
 
+  const churn30dLabel =
+    churned30d === 0
+      ? 'Sin cancelaciones'
+      : `${churned30d} cancelación${churned30d === 1 ? '' : 'es'}`;
+
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        <KpiVividMetric label="MRR" value={latest?.mrr != null ? `$${Number(latest.mrr).toLocaleString()}` : '—'} icon={DollarSign} accent="emerald" spark={mrrChart.map((d) => d.mrr)} />
+        <KpiVividMetric
+          label="MRR"
+          value={latest?.mrr != null ? `$${Number(latest.mrr).toLocaleString()}` : '—'}
+          icon={DollarSign}
+          accent="emerald"
+          spark={mrrChart.map((d) => d.mrr)}
+        />
         <KpiVividMetric label="Suscriptores" value={(latest?.active_subscribers ?? 0).toLocaleString()} icon={Users} accent="sky" />
         <KpiVividMetric label="Trialing" value={(latest?.trialing ?? 0).toLocaleString()} icon={FlaskConical} accent="violet" />
         <KpiVividMetric label="Pro / Max" value={`${pro} / ${max}`} icon={Layers} accent="indigo" />
-        <KpiVividMetric label="ARPU" value={arpu != null ? `$${arpu.toFixed(0)}` : '—'} icon={TrendingUp} accent="amber" />
+        <KpiVividMetric label="ARPU" value={ltv.avg_mrr_per_subscriber > 0 ? `$${ltv.avg_mrr_per_subscriber.toFixed(0)}` : '—'} icon={TrendingUp} accent="amber" />
         <KpiVividMetric label="Churn hoy" value={String(latest?.churned_today ?? 0)} icon={TrendingDown} accent="rose" />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+        <KpiVividMetric
+          label="Churn 30d"
+          value={churn30dLabel}
+          icon={TrendingDown}
+          accent={churned30d === 0 ? 'emerald' : 'rose'}
+        />
+        <KpiVividMetric
+          label="Churn rate"
+          value={`${churnRate.toFixed(1)}%`}
+          hint="mensual"
+          icon={TrendingDown}
+          accent="orange"
+        />
+        <KpiVividMetric
+          label="LTV promedio"
+          value={`$${storedLtvAvg.toLocaleString('en-US', { maximumFractionDigits: 0 })} USD`}
+          hint={formatLtvMonthsLabel(churnRate)}
+          icon={DollarSign}
+          accent="violet"
+        />
+        <KpiVividMetric
+          label="Ratio LTV:CAC"
+          value={`${storedRatio.toFixed(1)}x`}
+          hint={ratioHealth.hint}
+          icon={Scale}
+          accent={ratioHealth.accent}
+        />
+        <KpiVividMetric
+          label="Payback period"
+          value={
+            ltv.payback_months != null
+              ? `${ltv.payback_months.toFixed(1)} meses`
+              : '—'
+          }
+          hint={`CAC ~$${ltv.cac_usd.toFixed(0)} USD`}
+          icon={Clock}
+          accent="sky"
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -90,6 +174,21 @@ function RevenueContent({
             <KpiEmptyState />
           )}
         </KpiVividPanel>
+        <KpiVividPanel title="Churn rate mensual" accent="rose">
+          {mrrChart.length > 0 ? (
+            <KpiVividLineChart
+              data={mrrChart}
+              xKey="date"
+              series={[{ dataKey: 'churnRate', name: 'Churn rate %', color: '#F43F5E' }]}
+              height={260}
+            />
+          ) : (
+            <KpiEmptyState />
+          )}
+        </KpiVividPanel>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
         <KpiVividPanel title="Trials + conversiones" accent="violet">
           {mrrChart.length > 0 ? (
             <KpiVividAreaChart
@@ -100,7 +199,19 @@ function RevenueContent({
                 { dataKey: 'converted', name: 'Convertidos hoy', color: '#10B981' },
                 { dataKey: 'churn', name: 'Churn hoy', color: '#F43F5E' },
               ]}
-              height={260}
+              height={220}
+            />
+          ) : (
+            <KpiEmptyState />
+          )}
+        </KpiVividPanel>
+        <KpiVividPanel title="Cancelaciones 30d" accent="amber">
+          {mrrChart.length > 0 ? (
+            <KpiVividLineChart
+              data={mrrChart}
+              xKey="date"
+              series={[{ dataKey: 'churn30d', name: 'Churn 30d', color: '#F59E0B' }]}
+              height={220}
             />
           ) : (
             <KpiEmptyState />
@@ -112,17 +223,12 @@ function RevenueContent({
         <KpiVividPanel title="Mix de planes" accent="indigo">
           {planPie.length > 0 ? <KpiVividPieChart data={planPie} height={220} /> : <KpiEmptyState />}
         </KpiVividPanel>
-        <KpiVividPanel title="Suscriptores (línea)" accent="sky">
-          {mrrChart.length > 0 ? (
-            <KpiVividLineChart
-              data={mrrChart}
-              xKey="date"
-              series={[{ dataKey: 'subs', name: 'Suscriptores', color: '#0EA5E9' }]}
-              height={220}
-            />
-          ) : (
-            <KpiEmptyState />
-          )}
+        <KpiVividPanel title="LTV por plan" subtitle={formatLtvMonthsLabel(churnRate)} accent="sky">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <KpiVividMetric label="LTV Pro" value={`$${ltv.ltv_pro.toFixed(0)}`} accent="indigo" compact />
+            <KpiVividMetric label="LTV Max" value={`$${ltv.ltv_max.toFixed(0)}`} accent="violet" compact />
+            <KpiVividMetric label="LTV avg" value={`$${storedLtvAvg.toFixed(0)}`} accent="emerald" compact />
+          </div>
         </KpiVividPanel>
       </div>
 

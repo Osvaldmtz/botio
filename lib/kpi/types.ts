@@ -22,6 +22,10 @@ export type KalyoMetricRow = {
   churned_today: number | null;
   plan_pro: number | null;
   plan_max: number | null;
+  churned_30d: number | null;
+  churn_rate: number | null;
+  ltv_avg: number | null;
+  ltv_cac_ratio: number | null;
   synced_at: string;
 };
 

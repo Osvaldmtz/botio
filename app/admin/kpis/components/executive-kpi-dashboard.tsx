@@ -23,6 +23,7 @@ import { KpiLayout } from '@/components/admin/kpis/kpi-layout';
 import { KpiEmptyState } from '@/components/admin/kpis/kpi-empty-state';
 import { KpiSectionError } from '@/components/admin/kpis/kpi-section-error';
 import { RealtimeWidget } from '@/components/admin/kpis/realtime-widget';
+import { BusinessHealthCard } from '@/components/admin/kpis/business-health-card';
 import { KpiVividMetric } from '@/components/admin/kpis/vivid/kpi-vivid-metric';
 import { KpiVividPanel, KpiVividSectionTitle } from '@/components/admin/kpis/vivid/kpi-vivid-panel';
 import {
@@ -206,6 +207,13 @@ export function ExecutiveKpiDashboard({ data }: Props) {
         ) : null}
 
         <RealtimeWidget enabled={liveEnabled} />
+
+        {data.kalyo ? (
+          <BusinessHealthCard
+            ltvCacRatio={data.kalyo.ltv_cac_ratio}
+            ltvAvg={data.kalyo.ltv_avg}
+          />
+        ) : null}
 
         {!hasAnyData ? (
           <KpiEmptyState />
