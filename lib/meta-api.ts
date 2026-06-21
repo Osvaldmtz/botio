@@ -31,6 +31,8 @@ export type CachedInstagramContext = {
   page_access_token: string;
   ig_business_account_id: string;
   ig_username?: string;
+  /** True when ig_business_account_id is a real IG node (not the Facebook Page ID). */
+  uses_instagram_graph: boolean;
 };
 
 /** @deprecated Use CachedInstagramContext */
@@ -169,7 +171,12 @@ async function metaFetchAds<T>(url: string, cacheKey: string): Promise<{ data: T
 export async function resolveInstagramContext(): Promise<CachedInstagramContext> {
   const cached = await readCache<CachedInstagramContext>(IG_CONTEXT_CACHE_KEY);
   if (cached?.page_access_token && cached?.ig_business_account_id) {
-    return cached;
+    return {
+      ...cached,
+      uses_instagram_graph:
+        cached.uses_instagram_graph ??
+        cached.ig_business_account_id !== cached.page_id,
+    };
   }
 
   const userToken = getUserMetaToken();
@@ -192,19 +199,24 @@ export async function resolveInstagramContext(): Promise<CachedInstagramContext>
       username?: string;
       instagram_business_account?: InstagramBusinessAccountRef | { id?: string };
       connected_instagram_account?: InstagramBusinessAccountRef | { id?: string };
+      page_backed_instagram_accounts?: { data?: Array<{ id: string }> };
     }>(`/${page.id}`, page.access_token, {
-      fields: 'instagram_business_account,connected_instagram_account,username',
+      fields:
+        'instagram_business_account,connected_instagram_account,page_backed_instagram_accounts,username',
     });
 
+    const backedIgId = pageJson.page_backed_instagram_accounts?.data?.[0]?.id;
     const igRef =
       pageJson.instagram_business_account ?? pageJson.connected_instagram_account;
-    const igId =
+    const linkedIgId =
       typeof igRef === 'object' && igRef !== null && 'id' in igRef ? igRef.id : undefined;
 
-    // New Page Experience: IG fields (username) appear on the Page node when IG is linked
-    // but instagram_business_account may be omitted — use Page ID as the IG node.
-    const resolvedIgId = igId ?? (pageJson.username ? page.id : undefined);
+    // Prefer linked IG Business Account — token grants access via instagram_business_account,
+    // while page_backed_instagram_accounts may reference a node the app cannot query.
+    const resolvedIgId = linkedIgId ?? backedIgId ?? (pageJson.username ? page.id : undefined);
     if (!resolvedIgId) continue;
+
+    const usesInstagramGraph = Boolean(linkedIgId ?? backedIgId);
 
     const igUsername =
       typeof igRef === 'object' &&
@@ -220,6 +232,7 @@ export async function resolveInstagramContext(): Promise<CachedInstagramContext>
       page_access_token: page.access_token,
       ig_business_account_id: resolvedIgId,
       ig_username: igUsername,
+      uses_instagram_graph: usesInstagramGraph,
     };
 
     await writeCache(IG_CONTEXT_CACHE_KEY, context, IG_CONTEXT_CACHE_TTL_MS);
@@ -351,30 +364,45 @@ export async function fetchMetaAdsDaily(datePreset = 'last_30d'): Promise<MetaAd
   return data?.data ?? [];
 }
 
-export async function fetchInstagramInsights(
-  metrics: string[],
+/** Facebook Page Insights metrics (New Page Experience — replaces deprecated IG metrics). */
+const PAGE_INSIGHT_METRIC_MAP = {
+  reach: 'page_total_media_view_unique',
+  impressions: 'page_media_view',
+  engagements: 'page_post_engagements',
+} as const;
+
+type PageInsightSeries = Array<{ value: number; end_time: string }>;
+
+async function fetchPageInsightSeries(
+  pageId: string,
+  pageToken: string,
+  metric: string,
   datePreset: string,
-): Promise<InstagramInsightPoint[]> {
-  const ctx = await resolveInstagramContext();
+): Promise<PageInsightSeries> {
   const params = new URLSearchParams({
-    access_token: ctx.page_access_token,
-    metric: metrics.join(','),
+    access_token: pageToken,
+    metric,
     period: 'day',
     date_preset: datePreset,
   });
 
-  const cacheKey = `ig_insights_${ctx.ig_business_account_id}_${metrics.join('_')}_${datePreset}`;
+  const cacheKey = `page_insights_${pageId}_${metric}_${datePreset}`;
   const json = await metaFetch<{
-    data: Array<{
-      name: string;
-      values: Array<{ value: number; end_time: string }>;
-    }>;
-  }>(`${META_GRAPH}/${ctx.ig_business_account_id}/insights?${params}`, cacheKey);
+    data: Array<{ name: string; values: PageInsightSeries }>;
+  }>(`${META_GRAPH}/${pageId}/insights?${params}`, cacheKey);
 
+  return json.data?.[0]?.values ?? [];
+}
+
+function mergePageInsightPoints(
+  reach: PageInsightSeries,
+  impressions: PageInsightSeries,
+  engagements: PageInsightSeries,
+): InstagramInsightPoint[] {
   const byDate = new Map<string, InstagramInsightPoint>();
 
-  for (const series of json.data ?? []) {
-    for (const point of series.values ?? []) {
+  const upsert = (series: PageInsightSeries, field: 'reach' | 'impressions' | 'accounts_engaged') => {
+    for (const point of series) {
       const date = point.end_time.slice(0, 10);
       const existing = byDate.get(date) ?? {
         date,
@@ -383,29 +411,163 @@ export async function fetchInstagramInsights(
         profile_views: 0,
         accounts_engaged: 0,
       };
-
-      if (series.name === 'reach') existing.reach = Number(point.value) || 0;
-      if (series.name === 'impressions') existing.impressions = Number(point.value) || 0;
-      if (series.name === 'profile_views') existing.profile_views = Number(point.value) || 0;
-      if (series.name === 'accounts_engaged') existing.accounts_engaged = Number(point.value) || 0;
-
+      existing[field] = Number(point.value) || 0;
       byDate.set(date, existing);
     }
-  }
+  };
+
+  upsert(reach, 'reach');
+  upsert(impressions, 'impressions');
+  upsert(engagements, 'accounts_engaged');
 
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export async function fetchInstagramMedia(): Promise<InstagramMediaItem[]> {
+export async function fetchInstagramInsights(
+  _metrics?: string[],
+  datePreset = 'last_30d',
+): Promise<InstagramInsightPoint[]> {
   const ctx = await resolveInstagramContext();
+
+  if (ctx.uses_instagram_graph) {
+    return fetchInstagramGraphInsights(
+      ctx.ig_business_account_id,
+      ctx.page_access_token,
+      datePreset,
+    );
+  }
+
+  const [reach, impressions, engagements] = await Promise.all([
+    fetchPageInsightSeries(ctx.page_id, ctx.page_access_token, PAGE_INSIGHT_METRIC_MAP.reach, datePreset),
+    fetchPageInsightSeries(ctx.page_id, ctx.page_access_token, PAGE_INSIGHT_METRIC_MAP.impressions, datePreset),
+    fetchPageInsightSeries(
+      ctx.page_id,
+      ctx.page_access_token,
+      PAGE_INSIGHT_METRIC_MAP.engagements,
+      datePreset,
+    ),
+  ]);
+
+  return mergePageInsightPoints(reach, impressions, engagements);
+}
+
+type IgGraphInsightMetric = {
+  name: string;
+  values?: Array<{ value: number; end_time: string }>;
+  total_value?: { value: number };
+};
+
+function totalValueFromMetrics(metrics: IgGraphInsightMetric[], name: string): number {
+  const metric = metrics.find((m) => m.name === name);
+  return Number(metric?.total_value?.value) || 0;
+}
+
+function mergeInstagramGraphInsights(
+  reachMetrics: IgGraphInsightMetric[],
+  aggregateMetrics: IgGraphInsightMetric[],
+  views7d: number,
+  accountsEngaged7d: number,
+): InstagramInsightPoint[] {
+  const reachSeries = reachMetrics.find((m) => m.name === 'reach')?.values ?? [];
+  const viewsTotal = totalValueFromMetrics(aggregateMetrics, 'views');
+  const profileViewsTotal = totalValueFromMetrics(aggregateMetrics, 'profile_views');
+  const accountsEngagedTotal = totalValueFromMetrics(aggregateMetrics, 'accounts_engaged');
+
+  if (reachSeries.length === 0) {
+    return [];
+  }
+
+  const viewsPerDay = viewsTotal > 0 ? viewsTotal / reachSeries.length : 0;
+  const points: InstagramInsightPoint[] = reachSeries.map((point) => ({
+    date: point.end_time.slice(0, 10),
+    reach: Number(point.value) || 0,
+    impressions: viewsPerDay,
+    profile_views: 0,
+    accounts_engaged: 0,
+  }));
+
+  const latest = points[points.length - 1];
+  latest.profile_views = profileViewsTotal;
+  latest.accounts_engaged = accountsEngagedTotal;
+
+  // 7d card metrics sum slice(-7); attribute period totals to recent points only.
+  const recentPoints = points.slice(-7);
+  if (recentPoints.length > 0 && views7d > 0) {
+    const viewsPerRecentDay = views7d / recentPoints.length;
+    for (const point of recentPoints) {
+      point.impressions = viewsPerRecentDay;
+    }
+  }
+  if (recentPoints.length > 0 && accountsEngaged7d > 0) {
+    const engagedPerRecentDay = accountsEngaged7d / recentPoints.length;
+    for (const point of recentPoints) {
+      point.accounts_engaged = engagedPerRecentDay;
+    }
+  }
+
+  return points;
+}
+
+async function fetchInstagramGraphInsights(
+  igId: string,
+  pageToken: string,
+  datePreset: string,
+): Promise<InstagramInsightPoint[]> {
+  const reachParams = new URLSearchParams({
+    access_token: pageToken,
+    metric: 'reach',
+    period: 'day',
+    date_preset: datePreset,
+  });
+  const aggregateParams = new URLSearchParams({
+    access_token: pageToken,
+    metric: 'views,profile_views,accounts_engaged',
+    metric_type: 'total_value',
+    period: 'day',
+    date_preset: datePreset,
+  });
+  const aggregate7dParams = new URLSearchParams({
+    access_token: pageToken,
+    metric: 'views,accounts_engaged',
+    metric_type: 'total_value',
+    period: 'day',
+    date_preset: 'last_7d',
+  });
+
+  const [reachJson, aggregateJson, aggregate7dJson] = await Promise.all([
+    metaFetch<{ data: IgGraphInsightMetric[] }>(
+      `${META_GRAPH}/${igId}/insights?${reachParams}`,
+      `ig_graph_reach_${igId}_${datePreset}`,
+    ),
+    metaFetch<{ data: IgGraphInsightMetric[] }>(
+      `${META_GRAPH}/${igId}/insights?${aggregateParams}`,
+      `ig_graph_agg_${igId}_${datePreset}`,
+    ),
+    metaFetch<{ data: IgGraphInsightMetric[] }>(
+      `${META_GRAPH}/${igId}/insights?${aggregate7dParams}`,
+      `ig_graph_agg_${igId}_last_7d`,
+    ),
+  ]);
+
+  return mergeInstagramGraphInsights(
+    reachJson.data ?? [],
+    aggregateJson.data ?? [],
+    totalValueFromMetrics(aggregate7dJson.data ?? [], 'views'),
+    totalValueFromMetrics(aggregate7dJson.data ?? [], 'accounts_engaged'),
+  );
+}
+
+async function fetchInstagramGraphMedia(
+  igId: string,
+  pageToken: string,
+): Promise<InstagramMediaItem[]> {
   const params = new URLSearchParams({
-    access_token: ctx.page_access_token,
-    fields:
-      'id,caption,media_type,timestamp,like_count,comments_count,insights.metric(reach,engagement,saved,shares)',
+    access_token: pageToken,
+    fields: 'id,caption,media_type,timestamp,like_count,comments_count,reach,impressions,saved',
     limit: '25',
   });
 
-  const cacheKey = `ig_media_recent_${ctx.ig_business_account_id}`;
+  const cacheKey = `ig_graph_media_${igId}`;
   const json = await metaFetch<{
     data: Array<{
       id: string;
@@ -414,43 +576,91 @@ export async function fetchInstagramMedia(): Promise<InstagramMediaItem[]> {
       timestamp?: string;
       like_count?: number;
       comments_count?: number;
-      insights?: { data: Array<{ name: string; values: Array<{ value: number }> }> };
+      reach?: number;
+      impressions?: number;
+      saved?: number;
     }>;
-  }>(`${META_GRAPH}/${ctx.ig_business_account_id}/media?${params}`, cacheKey);
+  }>(`${META_GRAPH}/${igId}/media?${params}`, cacheKey);
 
-  return (json.data ?? []).map((item) => {
-    const insightMap = new Map(
-      (item.insights?.data ?? []).map((i) => [i.name, i.values[0]?.value ?? 0]),
-    );
-    return {
-      id: item.id,
-      caption: item.caption ?? null,
-      media_type: item.media_type ?? 'UNKNOWN',
-      timestamp: item.timestamp ?? '',
-      like_count: item.like_count ?? 0,
-      comments_count: item.comments_count ?? 0,
-      reach: insightMap.get('reach') ?? 0,
-      engagement: insightMap.get('engagement') ?? 0,
-      saved: insightMap.get('saved') ?? 0,
-      shares: insightMap.get('shares') ?? 0,
-    };
+  return (json.data ?? []).map((item) => ({
+    id: item.id,
+    caption: item.caption ?? null,
+    media_type: item.media_type ?? 'UNKNOWN',
+    timestamp: item.timestamp ?? '',
+    like_count: item.like_count ?? 0,
+    comments_count: item.comments_count ?? 0,
+    reach: item.reach ?? 0,
+    engagement: (item.like_count ?? 0) + (item.comments_count ?? 0) + (item.saved ?? 0),
+    saved: item.saved ?? 0,
+    shares: 0,
+  }));
+}
+
+export async function fetchInstagramMedia(): Promise<InstagramMediaItem[]> {
+  const ctx = await resolveInstagramContext();
+
+  if (ctx.uses_instagram_graph) {
+    return fetchInstagramGraphMedia(ctx.ig_business_account_id, ctx.page_access_token);
+  }
+
+  const params = new URLSearchParams({
+    access_token: ctx.page_access_token,
+    fields: 'id,message,created_time',
+    limit: '25',
   });
+
+  const cacheKey = `page_posts_${ctx.page_id}`;
+  const json = await metaFetch<{
+    data: Array<{
+      id: string;
+      message?: string;
+      created_time?: string;
+    }>;
+  }>(`${META_GRAPH}/${ctx.page_id}/posts?${params}`, cacheKey);
+
+  return (json.data ?? []).map((item) => ({
+    id: item.id,
+    caption: item.message ?? null,
+    media_type: 'POST',
+    timestamp: item.created_time ?? '',
+    like_count: 0,
+    comments_count: 0,
+    reach: 0,
+    engagement: 0,
+    saved: 0,
+    shares: 0,
+  }));
 }
 
 export async function fetchInstagramFollowerCount(): Promise<number | null> {
   const ctx = await resolveInstagramContext();
-  const params = new URLSearchParams({
-    access_token: ctx.page_access_token,
-    fields: 'followers_count',
-  });
+
+  if (ctx.uses_instagram_graph) {
+    try {
+      const cacheKey = `ig_graph_followers_${ctx.ig_business_account_id}`;
+      const json = await metaFetch<{ followers_count?: number }>(
+        `${META_GRAPH}/${ctx.ig_business_account_id}?${new URLSearchParams({
+          access_token: ctx.page_access_token,
+          fields: 'followers_count,username',
+        })}`,
+        cacheKey,
+      );
+      if (json.followers_count != null) return json.followers_count;
+    } catch {
+      // fall through to page fan_count
+    }
+  }
 
   try {
-    const cacheKey = `ig_followers_${ctx.ig_business_account_id}`;
-    const json = await metaFetch<{ followers_count?: number }>(
-      `${META_GRAPH}/${ctx.ig_business_account_id}?${params}`,
+    const cacheKey = `page_fan_count_${ctx.page_id}`;
+    const json = await metaFetch<{ fan_count?: number; followers_count?: number }>(
+      `${META_GRAPH}/me?${new URLSearchParams({
+        access_token: ctx.page_access_token,
+        fields: 'fan_count,followers_count',
+      })}`,
       cacheKey,
     );
-    return json.followers_count ?? null;
+    return json.fan_count ?? json.followers_count ?? null;
   } catch {
     return null;
   }

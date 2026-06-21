@@ -78,7 +78,7 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
     getLatestKalyoMetrics(),
     getKalyoMetricsHistory(30),
     getTwilioMetrics(30),
-    safeFetch('instagram_reach', () => fetchInstagramInsights(['reach'], 'last_30d')),
+    safeFetch('instagram_reach', () => fetchInstagramInsights(undefined, 'last_30d')),
     safeFetch('meta_spend_today', () => fetchMetaAds('today')),
     safeFetch('ga4_landing', () => getLandingMetrics(30)),
   ]);
@@ -112,12 +112,7 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
 export async function fetchInstagramPageData(): Promise<InstagramPageData> {
   const [followers, insights, media] = await Promise.all([
     safeFetch('ig_followers', () => fetchInstagramFollowerCount()),
-    safeFetch('ig_insights', () =>
-      fetchInstagramInsights(
-        ['reach', 'impressions', 'profile_views', 'accounts_engaged'],
-        'last_30d',
-      ),
-    ),
+    safeFetch('ig_insights', () => fetchInstagramInsights(undefined, 'last_30d')),
     safeFetch('ig_media', () => fetchInstagramMedia()),
   ]);
 
