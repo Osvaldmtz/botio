@@ -28,7 +28,7 @@ function fmtMxn(value: number | null | undefined): string {
 }
 
 export function buildKpiAnalysisPrompt(data: KpiInsightsData): string {
-  const { kalyo, twilio, instagram, metaAds, ga4Landing, ga4App } = data;
+  const { kalyo, twilio, instagram, metaAds, ga4Landing, ga4App, clarity } = data;
 
   const spendMxn = metaAds.spend;
   const spendUsdEquiv = spendMxn / MXN_PER_USD;
@@ -95,6 +95,18 @@ WEB — kalyo.io (landing):
 
 WEB — app.kalyo.io:
 - Usuarios 20d: ${fmtNum(ga4App.users)} | Sesiones: ${fmtNum(ga4App.sessions)} | Engagement: ${fmtNum(ga4App.engagement_rate, 1)}% | Duración promedio: ${fmtNum(ga4App.avg_duration_min, 1)} min
+
+${
+  clarity
+    ? `COMPORTAMIENTO DE USUARIO — Microsoft Clarity (últimos 3 días):
+- Sesiones reales: ${fmtNum(clarity.realSessions)} (bots excluidos: ${fmtNum(clarity.botSessions)}, ${fmtNum(clarity.botRate, 1)}% del tráfico)
+- Scroll depth promedio: ${fmtNum(clarity.scrollDepth, 1)}%
+- Tiempo activo promedio: ${fmtNum(clarity.activeTimeSec)} seg
+- Quick backs: ${fmtNum(clarity.quickBacks, 1)}% (usuario vuelve atrás rápido = contenido no relevante)
+- Rage clicks: ${fmtNum(clarity.rageClicks, 1)}% (frustración con elementos no clickeables)
+- Dead clicks: ${fmtNum(clarity.deadClicks, 1)}% (clicks en zonas sin respuesta)`
+    : 'COMPORTAMIENTO DE USUARIO — Microsoft Clarity: N/D (API no disponible)'
+}
 
 Responde en este formato exacto con estas 4 secciones:
 

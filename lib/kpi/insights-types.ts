@@ -43,5 +43,15 @@ export type KpiInsightsData = {
     engagement_rate: number;
     avg_duration_min: number;
   };
+  clarity: {
+    realSessions: number;
+    botSessions: number;
+    botRate: number;
+    scrollDepth: number;
+    activeTimeSec: number;
+    quickBacks: number;
+    rageClicks: number;
+    deadClicks: number;
+  } | null;
   fetchedAt: string;
 };

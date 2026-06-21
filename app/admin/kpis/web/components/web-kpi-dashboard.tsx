@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Clock, MousePointerClick, TrendingDown, Users } from 'lucide-react';
+import { Bot, Clock, MousePointerClick, ScrollText, TrendingDown, Users, Zap } from 'lucide-react';
+import type { VividAccent } from '@/components/admin/kpis/vivid/palette';
 import type { WebPageData } from '@/lib/kpi/utils';
 import { KpiEmptyState } from '@/components/admin/kpis/kpi-empty-state';
 import { KpiSectionError } from '@/components/admin/kpis/kpi-section-error';
@@ -12,6 +13,92 @@ import { KpiVividTable } from '@/components/admin/kpis/vivid/kpi-vivid-table';
 import { KpiVividPage, sliceByRange } from '@/components/admin/kpis/vivid/kpi-page-shell';
 
 type Props = { data: WebPageData };
+
+function scrollDepthAccent(value: number): VividAccent {
+  if (value < 20) return 'rose';
+  if (value <= 40) return 'amber';
+  return 'emerald';
+}
+
+function pctAccent(value: number, badAbove: number): VividAccent {
+  return value > badAbove ? 'rose' : 'emerald';
+}
+
+function zeroGoodAccent(value: number): VividAccent {
+  return value === 0 ? 'emerald' : 'rose';
+}
+
+function ClaritySection({ clarity, error }: { clarity: WebPageData['clarity']; error: string | null }) {
+  if (error) return <KpiSectionError title="Microsoft Clarity" error={error} />;
+  if (!clarity) {
+    return (
+      <KpiVividPanel title="Microsoft Clarity" accent="violet">
+        <KpiEmptyState description="Configura CLARITY_API_TOKEN y CLARITY_PROJECT_ID" />
+      </KpiVividPanel>
+    );
+  }
+
+  return (
+    <KpiVividPanel title="Microsoft Clarity" subtitle="Comportamiento en kalyo.io" accent="violet">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiVividMetric
+          label="Sesiones reales"
+          value={clarity.realSessions.toLocaleString()}
+          hint="Bots excluidos"
+          icon={Users}
+          accent="sky"
+          compact
+        />
+        <KpiVividMetric
+          label="Sesiones bot"
+          value={clarity.botSessions.toLocaleString()}
+          hint={`${clarity.botRate.toFixed(1)}% del total`}
+          icon={Bot}
+          accent={pctAccent(clarity.botRate, 50)}
+          compact
+        />
+        <KpiVividMetric
+          label="Scroll depth"
+          value={`${clarity.scrollDepth.toFixed(1)}%`}
+          icon={ScrollText}
+          accent={scrollDepthAccent(clarity.scrollDepth)}
+          compact
+        />
+        <KpiVividMetric
+          label="Tiempo activo"
+          value={`${clarity.activeTimeSec} seg`}
+          icon={Clock}
+          accent="indigo"
+          compact
+        />
+        <KpiVividMetric
+          label="Quick backs"
+          value={`${clarity.quickBacks.toFixed(1)}%`}
+          icon={TrendingDown}
+          accent={pctAccent(clarity.quickBacks, 10)}
+          compact
+        />
+        <KpiVividMetric
+          label="Rage clicks"
+          value={`${clarity.rageClicks.toFixed(1)}%`}
+          icon={Zap}
+          accent={zeroGoodAccent(clarity.rageClicks)}
+          compact
+        />
+        <KpiVividMetric
+          label="Dead clicks"
+          value={`${clarity.deadClicks.toFixed(1)}%`}
+          icon={MousePointerClick}
+          accent={zeroGoodAccent(clarity.deadClicks)}
+          compact
+        />
+      </div>
+      <p className="mt-4 text-xs text-fg-muted">
+        Datos de los últimos 3 días · Clarity API · Actualizado cada 6h
+      </p>
+    </KpiVividPanel>
+  );
+}
 
 function fmtDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -84,12 +171,16 @@ export function WebKpiDashboard({ data }: Props) {
     <KpiVividPage
       title="Web KPIs"
       subtitle="GA4 Landing vs App"
-      sources={[{ id: 'ga4', label: 'GA4', ok: !data.error && (data.landing.length > 0 || data.app.length > 0) }]}
+      sources={[
+        { id: 'ga4', label: 'GA4', ok: !data.error && (data.landing.length > 0 || data.app.length > 0) },
+        { id: 'clarity', label: 'Clarity', ok: !data.clarityError && data.clarity != null },
+      ]}
     >
       {({ range }) => (
         <>
           {data.error ? <KpiSectionError title="Google Analytics 4" error={data.error} /> : null}
           <WebContent data={data} range={range} />
+          <ClaritySection clarity={data.clarity} error={data.clarityError} />
         </>
       )}
     </KpiVividPage>

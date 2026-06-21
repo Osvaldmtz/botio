@@ -16,6 +16,7 @@ import {
   getTopPages,
   summarizeGA4Metrics,
 } from '@/lib/ga4-api';
+import { getClarityMetrics } from '@/lib/clarity-api';
 import type { KpiInsightsData } from '@/lib/kpi/insights-types';
 import type {
   ExecutiveSummaryData,
@@ -137,7 +138,7 @@ export async function fetchAdsPageData(): Promise<AdsPageData> {
 }
 
 export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
-  const [kalyo, twilioRows, igFollowers, igInsights, metaAds, landing, app] = await Promise.all([
+  const [kalyo, twilioRows, igFollowers, igInsights, metaAds, landing, app, clarity] = await Promise.all([
     getLatestKalyoMetrics(),
     getTwilioMetrics(30),
     safeFetch('ig_followers', () => fetchInstagramFollowerCount()),
@@ -145,6 +146,7 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
     safeFetch('meta_ads_30d', () => fetchMetaAds('last_30d')),
     safeFetch('ga4_landing', () => getLandingMetrics(30)),
     safeFetch('ga4_app', () => getAppMetrics(20)),
+    safeFetch('clarity', () => getClarityMetrics(3)),
   ]);
 
   const twilio = aggregateTwilio(twilioRows);
@@ -211,6 +213,18 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
       engagement_rate: appSummary.engagementRate,
       avg_duration_min: appSummary.avgDuration / 60,
     },
+    clarity: clarity.data
+      ? {
+          realSessions: clarity.data.realSessions,
+          botSessions: clarity.data.botSessions,
+          botRate: clarity.data.botRate,
+          scrollDepth: clarity.data.scrollDepth,
+          activeTimeSec: clarity.data.activeTimeSec,
+          quickBacks: clarity.data.quickBacks,
+          rageClicks: clarity.data.rageClicks,
+          deadClicks: clarity.data.deadClicks,
+        }
+      : null,
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -219,12 +233,13 @@ export async function fetchWebPageData(): Promise<WebPageData> {
   const landingId = process.env.GA4_LANDING_PROPERTY_ID ?? '531207061';
   const appId = process.env.GA4_APP_PROPERTY_ID ?? '539858946';
 
-  const [landing, app, landingPages, appPages, landingChannels] = await Promise.all([
+  const [landing, app, landingPages, appPages, landingChannels, clarity] = await Promise.all([
     safeFetch('ga4_landing', () => getLandingMetrics(30)),
     safeFetch('ga4_app', () => getAppMetrics(30)),
     safeFetch('ga4_landing_pages', () => getTopPages(landingId, 30)),
     safeFetch('ga4_app_pages', () => getTopPages(appId, 30)),
     safeFetch('ga4_landing_channels', () => getChannelBreakdown(landingId, 30)),
+    safeFetch('clarity', () => getClarityMetrics(3)),
   ]);
 
   const landingRows = landing.data ?? [];
@@ -245,6 +260,19 @@ export async function fetchWebPageData(): Promise<WebPageData> {
     landingPages: landingPages.data ?? [],
     appPages: appPages.data ?? [],
     landingChannels: landingChannels.data ?? [],
+    clarity: clarity.data
+      ? {
+          realSessions: clarity.data.realSessions,
+          botSessions: clarity.data.botSessions,
+          botRate: clarity.data.botRate,
+          scrollDepth: clarity.data.scrollDepth,
+          activeTimeSec: clarity.data.activeTimeSec,
+          quickBacks: clarity.data.quickBacks,
+          rageClicks: clarity.data.rageClicks,
+          deadClicks: clarity.data.deadClicks,
+        }
+      : null,
+    clarityError: clarity.error,
     error,
   };
 }

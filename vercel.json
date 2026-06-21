@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/kalyo-sync",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/clarity-sync",
+      "schedule": "0 7 * * *"
     }
   ]
 }

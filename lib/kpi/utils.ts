@@ -47,6 +47,17 @@ export type WebPageSummary = {
   avgDuration: number;
 };
 
+export type ClarityPageMetrics = {
+  realSessions: number;
+  botSessions: number;
+  botRate: number;
+  scrollDepth: number;
+  activeTimeSec: number;
+  quickBacks: number;
+  rageClicks: number;
+  deadClicks: number;
+};
+
 export type WebPageData = {
   landing: GA4DailyMetric[];
   app: GA4DailyMetric[];
@@ -60,5 +71,7 @@ export type WebPageData = {
     sessions: number;
     engagementRate: number;
   }>;
+  clarity: ClarityPageMetrics | null;
+  clarityError: string | null;
   error: string | null;
 };
