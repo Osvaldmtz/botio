@@ -16,12 +16,14 @@ import {
   getTopPages,
   summarizeGA4Metrics,
 } from '@/lib/ga4-api';
+import type { KpiInsightsData } from '@/lib/kpi/insights-types';
 import type {
   ExecutiveSummaryData,
   InstagramPageData,
   AdsPageData,
   WebPageData,
 } from '@/lib/kpi/utils';
+import { aggregateTwilio } from '@/lib/kpi/utils';
 
 export type { ExecutiveSummaryData, InstagramPageData, AdsPageData, WebPageData } from '@/lib/kpi/utils';
 export { aggregateTwilio } from '@/lib/kpi/utils';
@@ -132,6 +134,80 @@ export async function fetchAdsPageData(): Promise<AdsPageData> {
   ]);
   const error = summary.error ?? daily.error ?? null;
   return { summary: summary.data ?? [], daily: daily.data ?? [], error };
+}
+
+export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
+  const [kalyo, twilioRows, igFollowers, igInsights, metaAds, landing, app] = await Promise.all([
+    getLatestKalyoMetrics(),
+    getTwilioMetrics(30),
+    safeFetch('ig_followers', () => fetchInstagramFollowerCount()),
+    safeFetch('ig_insights', () => fetchInstagramInsights(undefined, 'last_30d')),
+    safeFetch('meta_ads_30d', () => fetchMetaAds('last_30d')),
+    safeFetch('ga4_landing', () => getLandingMetrics(30)),
+    safeFetch('ga4_app', () => getAppMetrics(20)),
+  ]);
+
+  const twilio = aggregateTwilio(twilioRows);
+  const deliveryRate =
+    twilio.total_sent > 0 ? (twilio.delivered / twilio.total_sent) * 100 : 0;
+
+  const insights = igInsights.data ?? [];
+  const reach7d = insights.slice(-7).reduce((sum, p) => sum + p.reach, 0);
+  const impressions7d = insights.slice(-7).reduce((sum, p) => sum + p.impressions, 0);
+  const engagement7d = insights.slice(-7).reduce((sum, p) => sum + p.accounts_engaged, 0);
+  const engagementRate = reach7d > 0 ? (engagement7d / reach7d) * 100 : 0;
+
+  const adsRows = metaAds.data ?? [];
+  const spend = adsRows.reduce((sum, row) => sum + Number(row.spend || 0), 0);
+  const adImpressions = adsRows.reduce((sum, row) => sum + Number(row.impressions || 0), 0);
+  const clicks = adsRows.reduce((sum, row) => sum + Number(row.clicks || 0), 0);
+  const ctr = adImpressions > 0 ? (clicks / adImpressions) * 100 : 0;
+
+  const landingSummary = summarizeGA4Metrics(landing.data ?? []);
+  const appSummary = summarizeGA4Metrics(app.data ?? []);
+
+  return {
+    kalyo: {
+      mrr: kalyo?.mrr ?? null,
+      active_subscribers: kalyo?.active_subscribers ?? null,
+      trialing: kalyo?.trialing ?? null,
+      plan_pro: kalyo?.plan_pro ?? null,
+      plan_max: kalyo?.plan_max ?? null,
+    },
+    twilio: {
+      total_sent: twilio.total_sent,
+      delivered: twilio.delivered,
+      failed: twilio.failed,
+      delivery_rate: deliveryRate,
+      total_cost_usd: twilio.total_cost_usd,
+    },
+    instagram: {
+      followers: igFollowers.data,
+      reach_7d: reach7d,
+      impressions_7d: impressions7d,
+      engagement_7d: engagement7d,
+      engagement_rate: engagementRate,
+    },
+    metaAds: {
+      spend,
+      impressions: adImpressions,
+      clicks,
+      ctr,
+    },
+    ga4Landing: {
+      users: landingSummary.users,
+      sessions: landingSummary.sessions,
+      engagement_rate: landingSummary.engagementRate,
+      bounce_rate: landingSummary.bounceRate,
+    },
+    ga4App: {
+      users: appSummary.users,
+      sessions: appSummary.sessions,
+      engagement_rate: appSummary.engagementRate,
+      avg_duration_min: appSummary.avgDuration / 60,
+    },
+    fetchedAt: new Date().toISOString(),
+  };
 }
 
 export async function fetchWebPageData(): Promise<WebPageData> {

@@ -11,6 +11,7 @@ const ITEMS = [
   { href: '/admin/kpis/ads', label: 'Ads' },
   { href: '/admin/kpis/web', label: 'Web' },
   { href: '/admin/kpis/revenue', label: 'Revenue' },
+  { href: '/admin/kpis/insights', label: 'Análisis IA' },
 ];
 
 export function KpiSubNav() {
