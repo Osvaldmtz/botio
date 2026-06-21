@@ -83,7 +83,7 @@ export function WebKpiDashboard({ data }: Props) {
       {data.error ? <KpiSectionError title="Google Analytics 4" error={data.error} /> : null}
 
       {data.landing.length === 0 && data.app.length === 0 ? (
-        <KpiEmptyState description="Configura GOOGLE_APPLICATION_CREDENTIALS y acceso GA4" />
+        <KpiEmptyState description="Configura GOOGLE_CREDENTIALS_JSON (Vercel) o GOOGLE_APPLICATION_CREDENTIALS (local)" />
       ) : (
         <>
           <section className="rounded-lg border border-bg-border bg-bg p-5">

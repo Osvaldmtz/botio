@@ -1,12 +1,24 @@
 import 'server-only';
 import path from 'path';
 import { BetaAnalyticsDataClient } from '@google-analytics/data';
+import type { JWTInput } from 'google-auth-library';
 import type { GA4ChannelRow, GA4DailyMetric, GA4PageRow } from '@/lib/kpi/types';
 
 type DateRangeInput = {
   startDate: string;
   endDate: string;
 };
+
+function parseCredentialsJson(): JWTInput | null {
+  const raw = process.env.GOOGLE_CREDENTIALS_JSON?.trim();
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as JWTInput;
+  } catch {
+    throw new Error('Invalid GOOGLE_CREDENTIALS_JSON: must be valid JSON');
+  }
+}
 
 function resolveGoogleCredentialsPath(): void {
   const creds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -16,6 +28,11 @@ function resolveGoogleCredentialsPath(): void {
 }
 
 function getClient(): BetaAnalyticsDataClient {
+  const credentials = parseCredentialsJson();
+  if (credentials) {
+    return new BetaAnalyticsDataClient({ credentials });
+  }
+
   resolveGoogleCredentialsPath();
   return new BetaAnalyticsDataClient();
 }
