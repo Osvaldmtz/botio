@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, LogOut, Settings } from 'lucide-react';
+import { BarChart3, ListTodo, LogOut, Settings } from 'lucide-react';
 import { Tabs } from '@/components/ui/tabs';
 import { logoutAction } from '@/app/admin/actions';
 import { NotificationPermissionPrompt } from './notification-permission-prompt';
 import { HotLeadMuteToggle } from './hot-lead-mute-toggle';
+import { TasksNavBadge } from './tasks-nav-badge';
 
 export function AdminHeader() {
   const pathname = usePathname();
@@ -20,6 +21,7 @@ export function AdminHeader() {
     pathname === '/admin/dashboard' || pathname === '/admin';
   const isAmbassadors = pathname?.startsWith('/admin/ambassadors');
   const isKpis = pathname?.startsWith('/admin/kpis');
+  const isTasks = pathname?.startsWith('/admin/tasks');
   const isConversations =
     pathname?.startsWith('/admin/conversations') && !isPipeline;
 
@@ -63,6 +65,17 @@ export function AdminHeader() {
       href: '/admin/experiments',
       label: 'Experimentos',
       active: isExperiments,
+    },
+    {
+      href: '/admin/tasks',
+      label: 'Tareas',
+      active: isTasks,
+      icon: (
+        <span className="inline-flex items-center gap-1">
+          <ListTodo className="h-3.5 w-3.5" strokeWidth={1.5} />
+          <TasksNavBadge />
+        </span>
+      ),
     },
     {
       href: '/admin/kpis',
