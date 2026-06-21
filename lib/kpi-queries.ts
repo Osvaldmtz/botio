@@ -173,6 +173,10 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
       trialing: kalyo?.trialing ?? null,
       plan_pro: kalyo?.plan_pro ?? null,
       plan_max: kalyo?.plan_max ?? null,
+      churned_30d: kalyo?.churned_30d ?? null,
+      churn_rate: kalyo?.churn_rate ?? null,
+      ltv_avg: kalyo?.ltv_avg ?? null,
+      ltv_cac_ratio: kalyo?.ltv_cac_ratio ?? null,
     },
     twilio: {
       total_sent: twilio.total_sent,
