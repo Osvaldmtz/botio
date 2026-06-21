@@ -25,6 +25,8 @@ export type KalyoMetricRow = {
   synced_at: string;
 };
 
+export type MetaAdsCurrency = 'MXN';
+
 export type MetaAdsInsight = {
   spend: string;
   impressions: string;
@@ -35,6 +37,8 @@ export type MetaAdsInsight = {
   reach: string;
   date_start?: string;
   date_stop?: string;
+  /** Ad account currency — act_1105914435027314 operates in MXN */
+  currency?: MetaAdsCurrency;
 };
 
 export type InstagramInsightPoint = {

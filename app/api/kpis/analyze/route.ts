@@ -43,6 +43,11 @@ export async function POST(request: Request) {
     return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400 });
   }
 
+  kpiData = {
+    ...kpiData,
+    metaAds: { ...kpiData.metaAds, currency: 'MXN' },
+  };
+
   const userPrompt = buildKpiAnalysisPrompt(kpiData);
 
   const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {

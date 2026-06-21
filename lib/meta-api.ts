@@ -4,6 +4,12 @@ import type { InstagramInsightPoint, InstagramMediaItem, MetaAdsInsight } from '
 
 const META_GRAPH = 'https://graph.facebook.com/v19.0';
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
+/** Meta ad account act_1105914435027314 bills in Mexican pesos */
+export const META_ADS_CURRENCY = 'MXN' as const;
+
+function withAdsCurrency(rows: MetaAdsInsight[]): MetaAdsInsight[] {
+  return rows.map((row) => ({ ...row, currency: META_ADS_CURRENCY }));
+}
 const IG_CONTEXT_CACHE_KEY = 'ig_context';
 const IG_CONTEXT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -340,7 +346,7 @@ export async function fetchMetaAds(datePreset: string): Promise<MetaAdsInsight[]
   );
 
   if (error) return [];
-  return data?.data ?? [];
+  return withAdsCurrency(data?.data ?? []);
 }
 
 export async function fetchMetaAdsDaily(datePreset = 'last_30d'): Promise<MetaAdsInsight[]> {
@@ -361,7 +367,7 @@ export async function fetchMetaAdsDaily(datePreset = 'last_30d'): Promise<MetaAd
   );
 
   if (error) return [];
-  return data?.data ?? [];
+  return withAdsCurrency(data?.data ?? []);
 }
 
 /** Facebook Page Insights metrics (New Page Experience — replaces deprecated IG metrics). */

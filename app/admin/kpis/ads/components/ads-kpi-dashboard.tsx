@@ -21,7 +21,7 @@ export function AdsKpiDashboard({ data }: Props) {
   return (
     <KpiVividPage
       title="Meta Ads KPIs"
-      subtitle="Spend, impresiones, clicks y CTR"
+      subtitle="Spend (MXN), impresiones, clicks y CTR"
       sources={[{ id: 'meta', label: 'Meta Ads', ok: !data.error && data.summary.length > 0 }]}
     >
       {({ range }) => (
@@ -58,18 +58,18 @@ function AdsContent({ data, range }: { data: AdsPageData; range: 7 | 14 | 30 }) 
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-7">
-        <KpiVividMetric label="Spend 30d" value={`$${spend.toFixed(2)}`} icon={DollarSign} accent="amber" spark={chartData.map((d) => d.spend)} />
+        <KpiVividMetric label="Spend 30d" value={`$${spend.toFixed(2)} MXN`} icon={DollarSign} accent="amber" spark={chartData.map((d) => d.spend)} />
         <KpiVividMetric label="Impressions" value={impressions.toLocaleString()} icon={Eye} accent="violet" />
         <KpiVividMetric label="Clicks" value={clicks.toLocaleString()} icon={MousePointerClick} accent="sky" />
         <KpiVividMetric label="Reach" value={reach.toLocaleString()} icon={Megaphone} accent="fuchsia" />
         <KpiVividMetric label="CTR" value={`${ctr}%`} icon={Percent} accent="emerald" />
-        <KpiVividMetric label="CPM" value={`$${cpm}`} icon={Megaphone} accent="orange" />
-        <KpiVividMetric label="CPC" value={`$${cpc}`} icon={Target} accent="indigo" />
+        <KpiVividMetric label="CPM" value={`$${cpm} MXN`} icon={Megaphone} accent="orange" />
+        <KpiVividMetric label="CPC" value={`$${cpc} MXN`} icon={Target} accent="indigo" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <KpiVividPanel title="Spend diario" subtitle={`${range}d`} accent="amber">
-          <KpiVividAreaChart data={chartData} xKey="date" series={[{ dataKey: 'spend', name: 'Spend USD', color: '#F59E0B' }]} height={240} />
+          <KpiVividAreaChart data={chartData} xKey="date" series={[{ dataKey: 'spend', name: 'Spend MXN', color: '#F59E0B' }]} height={240} />
         </KpiVividPanel>
         <KpiVividPanel title="Impressions + Clicks" accent="violet">
           <KpiVividBarChart
@@ -90,7 +90,7 @@ function AdsContent({ data, range }: { data: AdsPageData; range: 7 | 14 | 30 }) 
           rowKey={(row) => row._id}
           columns={[
             { key: 'p', header: 'Periodo', render: (r) => `${r.date_start ?? '—'} → ${r.date_stop ?? '—'}` },
-            { key: 's', header: 'Spend', render: (r) => <span className="tabular-nums text-amber-600">${Number(r.spend || 0).toFixed(2)}</span> },
+            { key: 's', header: 'Spend (MXN)', render: (r) => <span className="tabular-nums text-amber-600">${Number(r.spend || 0).toFixed(2)} MXN</span> },
             { key: 'i', header: 'Impressions', render: (r) => <span className="tabular-nums">{Number(r.impressions || 0).toLocaleString()}</span> },
             { key: 'c', header: 'Clicks', render: (r) => <span className="tabular-nums">{Number(r.clicks || 0).toLocaleString()}</span> },
             { key: 'ctr', header: 'CTR', render: (r) => <span className="tabular-nums">{Number(r.ctr || 0).toFixed(2)}%</span> },

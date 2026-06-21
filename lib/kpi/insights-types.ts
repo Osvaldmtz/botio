@@ -25,6 +25,7 @@ export type KpiInsightsData = {
     impressions: number;
     clicks: number;
     ctr: number;
+    currency?: 'MXN';
   };
   ga4Landing: {
     users: number;

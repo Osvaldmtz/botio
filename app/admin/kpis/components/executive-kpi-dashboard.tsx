@@ -38,6 +38,11 @@ function fmtUsd(value: number | null | undefined): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
+function fmtMxn(value: number | null | undefined): string {
+  if (value == null) return '—';
+  return `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} MXN`;
+}
+
 function fmtNum(value: number | null | undefined): string {
   if (value == null) return '—';
   return value.toLocaleString('en-US');
@@ -237,7 +242,7 @@ export function ExecutiveKpiDashboard({ data }: Props) {
                 <KpiVividMetric label="Impresiones 7d" value={fmtNum(igImpressions7d)} icon={Eye} accent="violet" />
                 <KpiVividMetric label="Engagement 7d" value={fmtNum(igEngagement7d)} icon={Heart} accent="rose" />
                 <KpiVividMetric label="Profile views 7d" value={fmtNum(igProfileViews7d)} icon={Users} accent="indigo" />
-                <KpiVividMetric label="Meta Spend hoy" value={fmtUsd(data.metaSpendToday)} icon={Megaphone} accent="orange" />
+                <KpiVividMetric label="Meta Spend hoy" value={fmtMxn(data.metaSpendToday)} icon={Megaphone} accent="orange" />
                 <KpiVividMetric label="Sesiones/día avg" value={fmtNum(avgSessionsDay)} icon={MousePointerClick} accent="sky" hint="Landing" />
               </div>
             </div>

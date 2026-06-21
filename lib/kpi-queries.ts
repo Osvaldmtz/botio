@@ -193,6 +193,7 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
       impressions: adImpressions,
       clicks,
       ctr,
+      currency: 'MXN',
     },
     ga4Landing: {
       users: landingSummary.users,
