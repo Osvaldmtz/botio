@@ -17,6 +17,7 @@ import {
   summarizeGA4Metrics,
 } from '@/lib/ga4-api';
 import { getClarityMetrics } from '@/lib/clarity-api';
+import { getSearchConsoleMetrics } from '@/lib/search-console-api';
 import type { KpiInsightsData } from '@/lib/kpi/insights-types';
 import type {
   ExecutiveSummaryData,
@@ -138,16 +139,18 @@ export async function fetchAdsPageData(): Promise<AdsPageData> {
 }
 
 export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
-  const [kalyo, twilioRows, igFollowers, igInsights, metaAds, landing, app, clarity] = await Promise.all([
-    getLatestKalyoMetrics(),
-    getTwilioMetrics(30),
-    safeFetch('ig_followers', () => fetchInstagramFollowerCount()),
-    safeFetch('ig_insights', () => fetchInstagramInsights(undefined, 'last_30d')),
-    safeFetch('meta_ads_30d', () => fetchMetaAds('last_30d')),
-    safeFetch('ga4_landing', () => getLandingMetrics(30)),
-    safeFetch('ga4_app', () => getAppMetrics(20)),
-    safeFetch('clarity', () => getClarityMetrics(3)),
-  ]);
+  const [kalyo, twilioRows, igFollowers, igInsights, metaAds, landing, app, clarity, searchConsole] =
+    await Promise.all([
+      getLatestKalyoMetrics(),
+      getTwilioMetrics(30),
+      safeFetch('ig_followers', () => fetchInstagramFollowerCount()),
+      safeFetch('ig_insights', () => fetchInstagramInsights(undefined, 'last_30d')),
+      safeFetch('meta_ads_30d', () => fetchMetaAds('last_30d')),
+      safeFetch('ga4_landing', () => getLandingMetrics(30)),
+      safeFetch('ga4_app', () => getAppMetrics(20)),
+      safeFetch('clarity', () => getClarityMetrics(3)),
+      safeFetch('search_console', () => getSearchConsoleMetrics()),
+    ]);
 
   const twilio = aggregateTwilio(twilioRows);
   const deliveryRate =
@@ -225,6 +228,20 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
           deadClicks: clarity.data.deadClicks,
         }
       : null,
+    searchConsole:
+      searchConsole.data?.totals && !searchConsole.data.empty
+        ? {
+            clicks: searchConsole.data.totals.clicks,
+            impressions: searchConsole.data.totals.impressions,
+            avgCtr: searchConsole.data.totals.avgCtr,
+            avgPosition: searchConsole.data.totals.avgPosition,
+            topKeyword: searchConsole.data.keywords[0]?.query ?? 'N/D',
+            topKeywordClicks: searchConsole.data.keywords[0]?.clicks ?? 0,
+            topPage: searchConsole.data.pages[0]?.page ?? 'N/D',
+            topPageClicks: searchConsole.data.pages[0]?.clicks ?? 0,
+          }
+        : null,
+    searchConsoleEmpty: searchConsole.data?.empty === true,
     fetchedAt: new Date().toISOString(),
   };
 }

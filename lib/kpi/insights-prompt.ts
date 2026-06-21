@@ -27,8 +27,19 @@ function fmtMxn(value: number | null | undefined): string {
   return `$${fmtNum(value, 2)} MXN`;
 }
 
+function shortenSearchConsolePage(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    if (path.startsWith('/articulos/')) return path;
+    return path || url;
+  } catch {
+    return url;
+  }
+}
+
 export function buildKpiAnalysisPrompt(data: KpiInsightsData): string {
-  const { kalyo, twilio, instagram, metaAds, ga4Landing, ga4App, clarity } = data;
+  const { kalyo, twilio, instagram, metaAds, ga4Landing, ga4App, clarity, searchConsole, searchConsoleEmpty } =
+    data;
 
   const spendMxn = metaAds.spend;
   const spendUsdEquiv = spendMxn / MXN_PER_USD;
@@ -106,6 +117,20 @@ ${
 - Rage clicks: ${fmtNum(clarity.rageClicks, 1)}% (frustración con elementos no clickeables)
 - Dead clicks: ${fmtNum(clarity.deadClicks, 1)}% (clicks en zonas sin respuesta)`
     : 'COMPORTAMIENTO DE USUARIO — Microsoft Clarity: N/D (API no disponible)'
+}
+
+${
+  searchConsole
+    ? `SEO — Google Search Console (últimos 28 días):
+- Clicks orgánicos totales: ${fmtNum(searchConsole.clicks)}
+- Impresiones totales: ${fmtNum(searchConsole.impressions)}
+- CTR promedio: ${fmtNum(searchConsole.avgCtr, 2)}%
+- Posición promedio: #${fmtNum(searchConsole.avgPosition, 1)}
+- Top keyword: ${searchConsole.topKeyword} (${fmtNum(searchConsole.topKeywordClicks)} clicks)
+- Top página: ${shortenSearchConsolePage(searchConsole.topPage)} (${fmtNum(searchConsole.topPageClicks)} clicks)`
+    : searchConsoleEmpty
+      ? 'SEO — Google Search Console: vinculado hoy, datos disponibles en 24-48h.'
+      : 'SEO — Google Search Console: N/D (API no disponible)'
 }
 
 Responde en este formato exacto con estas 4 secciones:

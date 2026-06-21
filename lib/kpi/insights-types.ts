@@ -53,5 +53,16 @@ export type KpiInsightsData = {
     rageClicks: number;
     deadClicks: number;
   } | null;
+  searchConsole: {
+    clicks: number;
+    impressions: number;
+    avgCtr: number;
+    avgPosition: number;
+    topKeyword: string;
+    topKeywordClicks: number;
+    topPage: string;
+    topPageClicks: number;
+  } | null;
+  searchConsoleEmpty: boolean;
   fetchedAt: string;
 };
