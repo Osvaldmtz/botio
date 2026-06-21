@@ -6,6 +6,7 @@ import { KpiMetricCard } from '@/components/admin/kpis/kpi-metric-card';
 import { KpiEmptyState } from '@/components/admin/kpis/kpi-empty-state';
 import { KpiSectionError } from '@/components/admin/kpis/kpi-section-error';
 import { KpiLineChart } from '@/components/admin/kpis/kpi-charts';
+import { RealtimeWidget } from '@/components/admin/kpis/realtime-widget';
 
 function fmtUsd(value: number | null | undefined): string {
   if (value == null) return '—';
@@ -59,6 +60,8 @@ export function ExecutiveKpiDashboard({ data }: Props) {
           ))}
         </div>
       ) : null}
+
+      <RealtimeWidget />
 
       {!hasAnyData ? (
         <KpiEmptyState />

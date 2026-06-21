@@ -177,3 +177,32 @@ export function summarizeGA4Metrics(rows: GA4DailyMetric[]): {
     avgDuration,
   };
 }
+
+export type GA4RealtimePropertyData = {
+  total: number;
+  pages: Array<{ page: string; users: number }>;
+};
+
+export async function getGA4RealtimeUsers(propertyId: string): Promise<GA4RealtimePropertyData> {
+  const client = getClient();
+  const [response] = await client.runRealtimeReport({
+    property: propertyName(propertyId),
+    dimensions: [{ name: 'unifiedScreenName' }],
+    metrics: [{ name: 'activeUsers' }],
+  });
+
+  const pages = (response.rows ?? [])
+    .map((row) => ({
+      page: row.dimensionValues?.[0]?.value?.trim() || '(not set)',
+      users: parseNumber(row.metricValues?.[0]?.value ?? undefined),
+    }))
+    .filter((row) => row.users > 0)
+    .sort((a, b) => b.users - a.users)
+    .slice(0, 5);
+
+  const totalFromTotals = parseNumber(response.totals?.[0]?.metricValues?.[0]?.value ?? undefined);
+  const total =
+    totalFromTotals > 0 ? totalFromTotals : pages.reduce((sum, row) => sum + row.users, 0);
+
+  return { total, pages };
+}
