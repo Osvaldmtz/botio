@@ -19,7 +19,12 @@ export async function GET(request: Request) {
     const summary = await syncKalyoMetrics();
     return Response.json(summary);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : String(error);
     console.error('[cron/kalyo-sync] failed', error);
     return Response.json({ error: message }, { status: 500 });
   }

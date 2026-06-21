@@ -19,16 +19,14 @@ type PsychologistRow = {
 
 type ChurnedPsychologistRow = {
   subscription_status: string | null;
-  canceled_at: string | null;
   updated_at: string | null;
 };
 
 function isChurnedInLast30Days(row: ChurnedPsychologistRow, since: Date): boolean {
   const status = row.subscription_status ?? '';
   if (status !== 'canceled' && status !== 'inactive') return false;
-  const ts = row.canceled_at ?? row.updated_at;
-  if (!ts) return false;
-  return new Date(ts).getTime() >= since.getTime();
+  if (!row.updated_at) return false;
+  return new Date(row.updated_at).getTime() >= since.getTime();
 }
 
 async function resolveCacUsd(activeSubscribers: number): Promise<number> {
@@ -94,7 +92,7 @@ export async function syncKalyoMetrics(): Promise<{
       kalyo.from('psychologists').select('plan, subscription_status'),
       kalyo
         .from('psychologists')
-        .select('subscription_status, canceled_at, updated_at')
+        .select('subscription_status, updated_at')
         .in('subscription_status', ['canceled', 'inactive']),
     ]);
 
