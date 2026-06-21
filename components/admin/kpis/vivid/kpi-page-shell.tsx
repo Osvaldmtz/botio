@@ -3,42 +3,32 @@
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { KpiLayout } from '@/components/admin/kpis/kpi-layout';
-import { KpiJarvisCanvas } from './kpi-jarvis-theme';
-import { KpiControlBar, type ChartRange } from './kpi-control-bar';
+import { KpiToolbar, type ChartRange } from './kpi-toolbar';
 
-export type KpiJarvisPageContext = {
-  range: ChartRange;
-  refreshing: boolean;
-};
-
-type SourceStatus = {
-  id: string;
-  label: string;
-  ok: boolean;
-};
+export type KpiVividPageContext = { range: ChartRange; refreshing: boolean };
 
 type Props = {
   title: string;
   subtitle: string;
-  sources?: SourceStatus[];
-  children: (ctx: KpiJarvisPageContext) => ReactNode;
+  sources?: Array<{ id: string; label: string; ok: boolean }>;
+  children: (ctx: KpiVividPageContext) => ReactNode;
 };
 
-export function KpiJarvisPage({ title, subtitle, sources = [], children }: Props) {
+export function KpiVividPage({ title, subtitle, sources = [], children }: Props) {
   const router = useRouter();
   const [range, setRange] = useState<ChartRange>(30);
   const [refreshing, setRefreshing] = useState(false);
 
-  async function handleRefresh() {
+  function handleRefresh() {
     setRefreshing(true);
     router.refresh();
     window.setTimeout(() => setRefreshing(false), 1200);
   }
 
   return (
-    <KpiLayout title={title} subtitle={subtitle} jarvis>
-      <KpiJarvisCanvas>
-        <KpiControlBar
+    <KpiLayout title={title} subtitle={subtitle}>
+      <div className="space-y-5">
+        <KpiToolbar
           range={range}
           onRangeChange={setRange}
           onRefresh={handleRefresh}
@@ -46,7 +36,7 @@ export function KpiJarvisPage({ title, subtitle, sources = [], children }: Props
           sources={sources}
         />
         {children({ range, refreshing })}
-      </KpiJarvisCanvas>
+      </div>
     </KpiLayout>
   );
 }

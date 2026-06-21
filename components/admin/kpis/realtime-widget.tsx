@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Activity, Globe, MonitorSmartphone } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { KpiJarvisPanel } from './jarvis/kpi-jarvis-theme';
+import { KpiVividPanel } from './vivid/kpi-vivid-panel';
 
 type PropertyRealtime = {
   total: number;
@@ -18,27 +18,34 @@ type RealtimePayload = {
 
 const REFRESH_MS = 30_000;
 
+const ACCENTS = {
+  landing: { icon: 'text-emerald-600', bar: 'bg-emerald-500', bg: 'bg-emerald-50' },
+  app: { icon: 'text-violet-600', bar: 'bg-violet-500', bg: 'bg-violet-50' },
+};
+
 function PropertyColumn({
   domain,
   icon: Icon,
-  accent,
+  variant,
   data,
   unavailable,
 }: {
   domain: string;
   icon: typeof Globe;
-  accent: string;
+  variant: keyof typeof ACCENTS;
   data: PropertyRealtime | null;
   unavailable: boolean;
 }) {
+  const a = ACCENTS[variant];
+
   if (unavailable) {
     return (
-      <div className="min-w-0 flex-1 rounded-lg border border-white/5 bg-slate-950/40 p-4">
+      <div className="min-w-0 flex-1 rounded-xl border border-bg-border bg-bg-subtle/50 p-4">
         <div className="flex items-center gap-2">
-          <Icon className={cn('h-4 w-4', accent)} />
-          <p className="text-sm font-medium text-slate-200">{domain}</p>
+          <Icon className={cn('h-4 w-4', a.icon)} />
+          <p className="text-sm font-semibold text-fg">{domain}</p>
         </div>
-        <p className="mt-3 text-sm text-slate-500">No disponible</p>
+        <p className="mt-3 text-sm text-fg-muted">No disponible</p>
       </div>
     );
   }
@@ -48,34 +55,32 @@ function PropertyColumn({
   const maxUsers = Math.max(...pages.map((p) => p.users), 1);
 
   return (
-    <div className="min-w-0 flex-1 rounded-lg border border-white/5 bg-slate-950/40 p-4">
+    <div className={cn('min-w-0 flex-1 rounded-xl border border-bg-border p-4', a.bg)}>
       <div className="flex items-center gap-2">
-        <Icon className={cn('h-4 w-4', accent)} />
-        <p className="text-sm font-medium text-slate-200">{domain}</p>
+        <Icon className={cn('h-4 w-4', a.icon)} />
+        <p className="text-sm font-semibold text-fg">{domain}</p>
       </div>
       {total === 0 ? (
-        <p className="mt-4 text-sm text-slate-500">Sin actividad en este momento</p>
+        <p className="mt-4 text-sm text-fg-muted">Sin actividad en este momento</p>
       ) : (
         <>
-          <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-white">
+          <p className="mt-3 text-3xl font-bold tabular-nums text-fg">
             {total}
-            <span className="ml-2 text-sm font-normal text-slate-400">usuarios ahora</span>
+            <span className="ml-2 text-sm font-normal text-fg-muted">usuarios ahora</span>
           </p>
           {pages.length > 0 ? (
             <ul className="mt-4 space-y-2">
               {pages.map((row) => (
                 <li key={row.page}>
                   <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-                    <span className="truncate text-slate-400" title={row.page}>
+                    <span className="truncate text-fg-muted" title={row.page}>
                       {row.page}
                     </span>
-                    <span className="shrink-0 font-mono tabular-nums text-slate-200">
-                      {row.users}
-                    </span>
+                    <span className="shrink-0 font-semibold tabular-nums text-fg">{row.users}</span>
                   </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-slate-800">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-white/60">
                     <div
-                      className={cn('h-full rounded-full', accent.replace('text-', 'bg-'))}
+                      className={cn('h-full rounded-full', a.bar)}
                       style={{ width: `${(row.users / maxUsers) * 100}%` }}
                     />
                   </div>
@@ -140,44 +145,36 @@ export function RealtimeWidget({ enabled = true }: Props) {
   const totalLive = (data?.landing.total ?? 0) + (data?.app.total ?? 0);
 
   return (
-    <KpiJarvisPanel
-      title="Pulse · En vivo"
+    <KpiVividPanel
+      title="En vivo"
       subtitle="GA4 Realtime · actualización cada 30s"
-      accent="cyan"
+      accent="sky"
       action={
         <div className="flex items-center gap-2">
-          <span className="relative flex h-2.5 w-2.5">
-            <span
-              className={cn(
-                'absolute inline-flex h-full w-full rounded-full opacity-75',
-                !enabled || error ? 'bg-slate-500' : 'animate-ping bg-emerald-400',
-              )}
-            />
-            <span
-              className={cn(
-                'relative inline-flex h-2.5 w-2.5 rounded-full',
-                !enabled || error ? 'bg-slate-500' : 'bg-emerald-400',
-              )}
-            />
-          </span>
-          <span className="font-mono text-xs text-emerald-300">
-            {enabled ? (error ? 'OFFLINE' : 'LIVE') : 'PAUSED'}
+          <span
+            className={cn(
+              'h-2.5 w-2.5 rounded-full',
+              !enabled || error ? 'bg-fg-tertiary' : 'animate-pulse bg-emerald-500',
+            )}
+          />
+          <span className="text-xs font-semibold text-fg-muted">
+            {enabled ? (error ? 'Offline' : 'Live') : 'Pausado'}
           </span>
         </div>
       }
     >
       {!enabled ? (
-        <p className="text-sm text-slate-500">Stream en vivo pausado desde controles.</p>
+        <p className="text-sm text-fg-muted">Stream en vivo pausado.</p>
       ) : (
         <>
-          <div className="mb-4 flex items-center gap-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
-            <Activity className="h-4 w-4 text-cyan-400" />
-            <span className="text-sm text-slate-300">
+          <div className="mb-4 flex items-center gap-3 rounded-xl bg-sky-50 px-3 py-2">
+            <Activity className="h-4 w-4 text-sky-600" />
+            <span className="text-sm text-fg">
               Tráfico activo total:{' '}
-              <span className="font-mono font-semibold text-cyan-200">{totalLive}</span> usuarios
+              <strong className="tabular-nums text-sky-700">{totalLive}</strong> usuarios
             </span>
             {loading && !data && !error ? (
-              <span className="text-xs text-slate-500">escaneando…</span>
+              <span className="text-xs text-fg-muted">cargando…</span>
             ) : null}
           </div>
 
@@ -185,28 +182,28 @@ export function RealtimeWidget({ enabled = true }: Props) {
             <PropertyColumn
               domain="kalyo.io"
               icon={Globe}
-              accent="text-orange-400"
+              variant="landing"
               data={error ? null : data?.landing ?? null}
               unavailable={error}
             />
             <PropertyColumn
               domain="app.kalyo.io"
               icon={MonitorSmartphone}
-              accent="text-violet-400"
+              variant="app"
               data={error ? null : data?.app ?? null}
               unavailable={error}
             />
           </div>
 
-          <p className="mt-4 font-mono text-[11px] text-slate-500">
+          <p className="mt-4 text-xs text-fg-muted">
             {error
-              ? '▸ Señal no disponible'
+              ? 'Señal no disponible'
               : updatedAt
-                ? `▸ Actualizado hace ${secondsAgo}s · ${new Date(updatedAt).toLocaleTimeString('es-MX')}`
-                : '▸ Sincronizando…'}
+                ? `Actualizado hace ${secondsAgo}s · ${new Date(updatedAt).toLocaleTimeString('es-MX')}`
+                : 'Sincronizando…'}
           </p>
         </>
       )}
-    </KpiJarvisPanel>
+    </KpiVividPanel>
   );
 }

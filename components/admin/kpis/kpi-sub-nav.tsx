@@ -5,27 +5,20 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/cn';
 
 const ITEMS = [
-  { href: '/admin/kpis', label: 'Resumen', exact: true },
-  { href: '/admin/kpis/whatsapp', label: 'WhatsApp' },
-  { href: '/admin/kpis/instagram', label: 'Instagram' },
-  { href: '/admin/kpis/ads', label: 'Ads' },
-  { href: '/admin/kpis/web', label: 'Web' },
-  { href: '/admin/kpis/revenue', label: 'Revenue' },
-  { href: '/admin/kpis/insights', label: 'Análisis IA' },
+  { href: '/admin/kpis', label: 'Resumen', exact: true, color: '#10B981' },
+  { href: '/admin/kpis/whatsapp', label: 'WhatsApp', color: '#F43F5E' },
+  { href: '/admin/kpis/instagram', label: 'Instagram', color: '#D946EF' },
+  { href: '/admin/kpis/ads', label: 'Ads', color: '#F59E0B' },
+  { href: '/admin/kpis/web', label: 'Web', color: '#0EA5E9' },
+  { href: '/admin/kpis/revenue', label: 'Revenue', color: '#6366F1' },
+  { href: '/admin/kpis/insights', label: 'Análisis IA', color: '#8B5CF6' },
 ];
 
-export function KpiSubNav({ jarvis }: { jarvis?: boolean }) {
+export function KpiSubNav() {
   const pathname = usePathname();
 
   return (
-    <nav
-      className={cn(
-        'mb-4 flex flex-wrap gap-1 rounded-xl p-1',
-        jarvis
-          ? 'border border-cyan-500/20 bg-slate-950/80 backdrop-blur-sm'
-          : 'rounded-lg border border-bg-border bg-bg-subtle/50',
-      )}
-    >
+    <nav className="mb-5 flex flex-wrap gap-2">
       {ITEMS.map((item) => {
         const active = item.exact
           ? pathname === item.href
@@ -35,15 +28,12 @@ export function KpiSubNav({ jarvis }: { jarvis?: boolean }) {
             key={item.href}
             href={item.href}
             className={cn(
-              'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-              jarvis
-                ? active
-                  ? 'bg-emerald-500/15 text-emerald-200 shadow-[0_0_16px_rgba(16,185,129,0.25)]'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                : active
-                  ? 'bg-bg text-fg shadow-sm'
-                  : 'text-fg-muted hover:bg-bg hover:text-fg',
+              'rounded-full px-4 py-1.5 text-sm font-semibold transition-all',
+              active
+                ? 'text-white shadow-md'
+                : 'border border-bg-border bg-bg text-fg-muted hover:border-transparent hover:text-fg',
             )}
+            style={active ? { backgroundColor: item.color } : undefined}
           >
             {item.label}
           </Link>
