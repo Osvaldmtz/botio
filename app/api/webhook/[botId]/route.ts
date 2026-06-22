@@ -128,15 +128,20 @@ export async function POST(request: Request, { params }: Params) {
   let numMedia = 0;
   let mediaUrl0 = '';
   let mediaContentType0 = '';
+  const twilioParams: Record<string, string> = {};
 
   try {
     const form = await request.formData();
-    const rawFrom = String(form.get('From') ?? '');
+    form.forEach((value, key) => {
+      twilioParams[key] = String(value);
+    });
+
+    const rawFrom = twilioParams.From ?? '';
     from = normalizePhone(rawFrom) ?? rawFrom;
-    rawBody = String(form.get('Body') ?? '');
-    numMedia = parseInt(String(form.get('NumMedia') ?? '0'), 10) || 0;
-    mediaUrl0 = String(form.get('MediaUrl0') ?? '');
-    mediaContentType0 = String(form.get('MediaContentType0') ?? '');
+    rawBody = twilioParams.Body ?? '';
+    numMedia = parseInt(twilioParams.NumMedia ?? '0', 10) || 0;
+    mediaUrl0 = twilioParams.MediaUrl0 ?? '';
+    mediaContentType0 = twilioParams.MediaContentType0 ?? '';
 
     if (!from) {
       return new Response('Missing From', { status: 400 });
@@ -170,15 +175,10 @@ export async function POST(request: Request, { params }: Params) {
 
   if (!isKalyoForward) {
     const twilioSig = request.headers.get('X-Twilio-Signature') ?? '';
-    const params: Record<string, string> = {};
-    const formForValidation = await request.clone().formData().catch(() => null);
-    formForValidation?.forEach((value, key) => {
-      params[key] = String(value);
-    });
 
     const valid =
       bot.twilio_auth_token &&
-      validateTwilioSignature(bot.twilio_auth_token, request.url, params, twilioSig);
+      validateTwilioSignature(bot.twilio_auth_token, request.url, twilioParams, twilioSig);
 
     if (!valid) {
       console.warn(
