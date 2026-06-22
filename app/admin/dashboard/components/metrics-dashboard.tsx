@@ -51,6 +51,18 @@ type ApiResponse = {
   fetchedAt: string;
 };
 
+type TrafficHealth = {
+  last_user_message_label: string;
+  messages_last_24h: number;
+  avg_messages_per_hour_24h: number;
+  peak_hour_today: string | null;
+  peak_hour_count_today: number;
+  status: 'ok' | 'slow' | 'down';
+  status_emoji: string;
+  status_label: string;
+  user_messages_last_2h: number | null;
+};
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-bg-border bg-bg p-5">
@@ -109,6 +121,7 @@ function TrendChart({ data }: { data: ApiResponse['trends_30d'] }) {
 
 export function MetricsDashboard() {
   const [data, setData] = useState<ApiResponse | null>(null);
+  const [health, setHealth] = useState<TrafficHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [secondsAgo, setSecondsAgo] = useState(0);
@@ -117,12 +130,18 @@ export function MetricsDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/admin/metrics');
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
+      const [metricsRes, healthRes] = await Promise.all([
+        fetch('/api/admin/metrics'),
+        fetch('/api/admin/traffic-health'),
+      ]);
+      if (!metricsRes.ok) {
+        const body = await metricsRes.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${metricsRes.status}`);
       }
-      setData((await res.json()) as ApiResponse);
+      setData((await metricsRes.json()) as ApiResponse);
+      if (healthRes.ok) {
+        setHealth((await healthRes.json()) as TrafficHealth);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -200,6 +219,31 @@ export function MetricsDashboard() {
           },
         ]}
       />
+
+      {health ? (
+        <Section title="🩺 Health Status">
+          <ul className="space-y-2 text-sm">
+            <li>
+              Último mensaje user: {health.last_user_message_label}{' '}
+              {health.status === 'ok' ? '✅' : health.status === 'slow' ? '🟡' : '🔴'}
+            </li>
+            <li>Mensajes últimas 24h: {health.messages_last_24h}</li>
+            <li>Tasa promedio: {health.avg_messages_per_hour_24h} msgs/hora</li>
+            <li>
+              Pico hoy:{' '}
+              {health.peak_hour_today
+                ? `${health.peak_hour_today} (${health.peak_hour_count_today} msgs)`
+                : '—'}
+            </li>
+            <li>
+              Mensajes últimas 2h: {health.user_messages_last_2h ?? '—'}
+            </li>
+            <li className="font-medium">
+              Estado: {health.status_emoji} {health.status_label}
+            </li>
+          </ul>
+        </Section>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Section title="📊 Funnel de conversión (30 días)">
