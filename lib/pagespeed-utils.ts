@@ -1,3 +1,13 @@
+/** Ensures PageSpeed API receives an absolute URL (requires http:// or https://). */
+export function ensureValidUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return 'https://kalyo.io';
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
 export type PageSpeedScores = {
   performance: number;
   seo: number;

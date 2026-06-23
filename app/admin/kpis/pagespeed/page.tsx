@@ -1,7 +1,7 @@
 import 'server-only';
 import { isAdmin } from '@/lib/admin-auth';
 import { LoginForm } from '@/components/admin/login-form';
-import { getPageSpeedHistory, getPageSpeedMetrics } from '@/lib/pagespeed-api';
+import { getPageSpeedHistory, getPageSpeedMetricsCached } from '@/lib/pagespeed-api';
 import type { PageSpeedHistoryRow, PageSpeedMetrics } from '@/lib/pagespeed-utils';
 import { PageSpeedDashboard } from './components/pagespeed-dashboard';
 
@@ -16,7 +16,7 @@ export default async function PageSpeedKpisPage() {
   let history: PageSpeedHistoryRow[] = [];
 
   try {
-    [initial, history] = await Promise.all([getPageSpeedMetrics(), getPageSpeedHistory(30)]);
+    [initial, history] = await Promise.all([getPageSpeedMetricsCached(), getPageSpeedHistory(30)]);
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
     try {
