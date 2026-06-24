@@ -33,6 +33,7 @@ import {
   KpiVividPieChart,
 } from '@/components/admin/kpis/vivid/kpi-vivid-charts';
 import { KpiToolbar, type ChartRange } from '@/components/admin/kpis/vivid/kpi-toolbar';
+import { GscCard } from '@/components/admin/kpis/gsc-card';
 
 function fmtUsd(value: number | null | undefined): string {
   if (value == null) return '—';
@@ -389,6 +390,8 @@ export function ExecutiveKpiDashboard({ data }: Props) {
             </div>
           </>
         )}
+
+        <GscCard />
       </div>
     </KpiLayout>
   );

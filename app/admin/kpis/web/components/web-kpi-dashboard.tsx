@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Bot,
-  CheckCircle2,
   Clock,
   MousePointerClick,
   ScrollText,
@@ -112,20 +111,18 @@ function ClaritySection({ clarity, error }: { clarity: WebPageData['clarity']; e
   );
 }
 
-function SearchConsoleEmptyState() {
+function SearchConsoleEmptyState({ configured }: { configured?: boolean }) {
   return (
     <KpiVividPanel title="Google Search Console" accent="emerald">
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/50 px-6 py-12 text-center">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
           <Search className="h-7 w-7" />
         </div>
-        <h3 className="text-lg font-semibold text-fg">Search Console conectado</h3>
-        <p className="mt-2 max-w-md text-sm text-fg-muted">
-          Los datos aparecerán aquí en 24-48 horas. Search Console fue vinculado hoy con GA4.
-        </p>
-        <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1.5 text-sm font-medium text-emerald-700">
-          <CheckCircle2 className="h-4 w-4" />
-          Vinculación activa · kalyo.io
+        <h3 className="text-lg font-semibold text-fg">Sin datos de Search Console todavía</h3>
+        <p className="mt-2 max-w-lg text-sm text-fg-muted">
+          {configured
+            ? 'La API respondió pero no hay clicks/impresiones en los últimos 28 días para kalyo.io.'
+            : 'Activa la Search Console API en Google Cloud (proyecto kalyo-production), agrega botio-analytics@kalyo-production.iam.gserviceaccount.com como usuario en Search Console, y espera ~1h.'}
         </p>
       </div>
     </KpiVividPanel>
@@ -150,7 +147,9 @@ function SearchConsoleSection({
   }
 
   if (error) return <KpiSectionError title="Google Search Console" error={error} />;
-  if (!metrics || metrics.empty || !metrics.totals) return <SearchConsoleEmptyState />;
+  if (!metrics || metrics.empty || !metrics.totals) {
+    return <SearchConsoleEmptyState configured={metrics?.empty === true} />;
+  }
 
   const { totals, keywords, pages } = metrics;
 

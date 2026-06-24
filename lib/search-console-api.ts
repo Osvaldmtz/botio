@@ -1,7 +1,7 @@
 import 'server-only';
 import { google } from 'googleapis';
-import type { JWTInput } from 'google-auth-library';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { parseGoogleCredentialsJson } from '@/lib/google-credentials';
 
 const CACHE_KEY = 'search_console';
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -47,22 +47,27 @@ type SearchAnalyticsRow = {
   position?: number | null;
 };
 
-function parseCredentialsJson(): JWTInput {
-  const raw = process.env.GOOGLE_CREDENTIALS_JSON?.trim();
-  if (!raw) throw new Error('Missing GOOGLE_CREDENTIALS_JSON');
-
-  try {
-    return JSON.parse(raw) as JWTInput;
-  } catch {
-    throw new Error('Invalid GOOGLE_CREDENTIALS_JSON: must be valid JSON');
-  }
-}
-
 function getAuth() {
   return new google.auth.GoogleAuth({
-    credentials: parseCredentialsJson(),
+    credentials: parseGoogleCredentialsJson(),
     scopes: [SCOPE],
   });
+}
+
+async function resolveSiteUrl(
+  searchconsole: ReturnType<typeof google.searchconsole>,
+): Promise<string> {
+  const configured = process.env.GSC_SITE_URL?.trim();
+  if (configured) return configured;
+
+  const sites = await searchconsole.sites.list();
+  const entries = sites.data.siteEntry ?? [];
+  const preferred =
+    entries.find((s) => s.siteUrl === 'sc-domain:kalyo.io') ??
+    entries.find((s) => s.siteUrl === 'https://kalyo.io/') ??
+    entries.find((s) => s.siteUrl?.includes('kalyo.io'));
+  if (preferred?.siteUrl) return preferred.siteUrl;
+  return SITE_URL;
 }
 
 function getDateRange28d(): { startDate: string; endDate: string } {
@@ -134,20 +139,21 @@ async function writeCache(metrics: SearchConsoleMetrics): Promise<void> {
 async function fetchSearchConsoleRaw(): Promise<SearchConsoleMetrics> {
   const auth = getAuth();
   const searchconsole = google.searchconsole({ version: 'v1', auth });
+  const siteUrl = await resolveSiteUrl(searchconsole);
   const { startDate, endDate } = getDateRange28d();
   const baseRequest = { startDate, endDate, dataState: 'all' as const };
 
   const [keywordsRes, pagesRes, totalsRes] = await Promise.all([
     searchconsole.searchanalytics.query({
-      siteUrl: SITE_URL,
+      siteUrl,
       requestBody: { ...baseRequest, dimensions: ['query'], rowLimit: 20 },
     }),
     searchconsole.searchanalytics.query({
-      siteUrl: SITE_URL,
+      siteUrl,
       requestBody: { ...baseRequest, dimensions: ['page'], rowLimit: 10 },
     }),
     searchconsole.searchanalytics.query({
-      siteUrl: SITE_URL,
+      siteUrl,
       requestBody: baseRequest,
     }),
   ]);

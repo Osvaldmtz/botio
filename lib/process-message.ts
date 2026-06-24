@@ -40,6 +40,7 @@ import {
   applyDemoConfirmationGuard,
   notifyDemoFlowWarning,
 } from '@/lib/demo-response-guard';
+import { applyEscalationNotifyGuard } from '@/lib/escalation-notify-guard';
 import { handleTrialOnboardingMessage } from '@/lib/trial-onboarding-interceptor';
 import { handleObjectionMessage } from '@/lib/objection-interceptor';
 import { trackObjectionOutcome } from '@/lib/objection-outcome-tracker';
@@ -977,6 +978,29 @@ export async function processIncomingMessage(
   if (guardResult.guarded) {
     await notifyDemoFlowWarning(conversation.id);
     replyText = guardResult.replyText;
+  }
+
+  if (isKalyoBotId(bot.id) && !isAmbassadorLead && channel === 'whatsapp') {
+    const escalationGuard = await applyEscalationNotifyGuard({
+      replyText,
+      toolsCalled,
+      toolResults,
+      conversationId: conversation.id,
+      customerPhone: conversation.customer_phone,
+      conversationMessages,
+      userMessage: messageBody,
+      bot,
+    });
+    if (escalationGuard.autoNotified) {
+      toolsCalled = [...toolsCalled, 'notify_sales_team'];
+      toolResults = {
+        ...toolResults,
+        notify_sales_team: escalationGuard.toolResult ?? { status: 'success', auto: true },
+      };
+    }
+    if (escalationGuard.replyText !== replyText) {
+      replyText = escalationGuard.replyText;
+    }
   }
 
   if (isAmbassadorLead && responseContainsLumaLink(replyText)) {
