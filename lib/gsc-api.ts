@@ -1,8 +1,7 @@
 import 'server-only';
+import { google } from 'googleapis';
 import { unstable_cache } from 'next/cache';
 import { getGscSearchConsoleClient } from '@/lib/gsc-oauth';
-
-const SITE_URL = 'https://kalyo.io/';
 
 export type GscTopQuery = {
   query: string;
@@ -59,9 +58,40 @@ function roundPosition(position: number | null | undefined): number {
   return Math.round(Number(position ?? 0) * 10) / 10;
 }
 
+async function resolveSiteUrl(
+  searchconsole: ReturnType<typeof google.searchconsole>,
+): Promise<string> {
+  const configured = process.env.GSC_SITE_URL?.trim();
+  if (configured) return configured;
+
+  const sites = await searchconsole.sites.list();
+  const entries = sites.data.siteEntry ?? [];
+  const preferred =
+    entries.find((s) => s.siteUrl === 'sc-domain:kalyo.io') ??
+    entries.find((s) => s.siteUrl === 'https://kalyo.io/') ??
+    entries.find((s) => s.siteUrl === 'https://kalyo.io') ??
+    entries.find((s) => s.siteUrl?.includes('kalyo.io'));
+
+  if (preferred?.siteUrl) return preferred.siteUrl;
+
+  const accessible = entries.map((s) => s.siteUrl).filter(Boolean);
+  if (accessible.length > 0) {
+    throw new Error(
+      `La cuenta OAuth no tiene acceso a kalyo.io. Propiedades visibles: ${accessible.join(', ')}. ` +
+        'Agrega el usuario de Google OAuth en Search Console → Configuración → Usuarios y permisos.',
+    );
+  }
+
+  throw new Error(
+    'La cuenta OAuth no tiene propiedades en Search Console. ' +
+      'Inicia sesión en search.google.com/search-console con la misma cuenta del refresh token, ' +
+      'verifica acceso a kalyo.io y regenera GOOGLE_REFRESH_TOKEN si hace falta.',
+  );
+}
+
 async function fetchGscMetricsRaw(): Promise<GscMetrics> {
   const searchconsole = getGscSearchConsoleClient();
-  const siteUrl = process.env.GSC_SITE_URL?.trim() || SITE_URL;
+  const siteUrl = await resolveSiteUrl(searchconsole);
   const range28 = getDateRange(28);
   const range7 = getDateRange(7);
   const range14 = getDateRange(14);
