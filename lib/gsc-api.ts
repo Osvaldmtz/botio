@@ -2,34 +2,10 @@ import 'server-only';
 import { google } from 'googleapis';
 import { unstable_cache } from 'next/cache';
 import { getGscSearchConsoleClient } from '@/lib/gsc-oauth';
+import type { GscMetrics, GscPeriodDays } from '@/lib/gsc-types';
 
-export type GscTopQuery = {
-  query: string;
-  clicks: number;
-  position: number;
-};
-
-export type GscTopPage = {
-  page: string;
-  clicks: number;
-  position: number;
-};
-
-export type GscDailyClick = {
-  date: string;
-  clicks: number;
-};
-
-export type GscMetrics = {
-  clicks_28d: number;
-  impressions_28d: number;
-  ctr_28d: number;
-  position_28d: number;
-  top_queries: GscTopQuery[];
-  top_pages: GscTopPage[];
-  daily_clicks: GscDailyClick[];
-  updated_at: string;
-};
+export type { GscDailyClick, GscMetrics, GscPeriodDays, GscTopPage, GscTopQuery } from '@/lib/gsc-types';
+export { GSC_PERIOD_OPTIONS, parseGscPeriod } from '@/lib/gsc-types';
 
 type SearchAnalyticsRow = {
   keys?: string[] | null;
@@ -89,22 +65,20 @@ async function resolveSiteUrl(
   );
 }
 
-async function fetchGscMetricsRaw(): Promise<GscMetrics> {
+async function fetchGscMetricsRaw(period: GscPeriodDays): Promise<GscMetrics> {
   const searchconsole = getGscSearchConsoleClient();
   const siteUrl = await resolveSiteUrl(searchconsole);
-  const range28 = getDateRange(28);
-  const range7 = getDateRange(7);
-  const range14 = getDateRange(14);
+  const range = getDateRange(period);
 
   const [totalsRes, queriesRes, pagesRes, dailyRes] = await Promise.all([
     searchconsole.searchanalytics.query({
       siteUrl,
-      requestBody: { ...range28, dataState: 'all' },
+      requestBody: { ...range, dataState: 'all' },
     }),
     searchconsole.searchanalytics.query({
       siteUrl,
       requestBody: {
-        ...range7,
+        ...range,
         dataState: 'all',
         dimensions: ['query'],
         rowLimit: 5,
@@ -113,7 +87,7 @@ async function fetchGscMetricsRaw(): Promise<GscMetrics> {
     searchconsole.searchanalytics.query({
       siteUrl,
       requestBody: {
-        ...range7,
+        ...range,
         dataState: 'all',
         dimensions: ['page'],
         rowLimit: 5,
@@ -122,10 +96,10 @@ async function fetchGscMetricsRaw(): Promise<GscMetrics> {
     searchconsole.searchanalytics.query({
       siteUrl,
       requestBody: {
-        ...range14,
+        ...range,
         dataState: 'all',
         dimensions: ['date'],
-        rowLimit: 14,
+        rowLimit: period,
       },
     }),
   ]);
@@ -136,10 +110,11 @@ async function fetchGscMetricsRaw(): Promise<GscMetrics> {
   const dailyRows = (dailyRes.data.rows ?? []) as SearchAnalyticsRow[];
 
   return {
-    clicks_28d: totalRow?.clicks ?? 0,
-    impressions_28d: totalRow?.impressions ?? 0,
-    ctr_28d: pct(totalRow?.ctr),
-    position_28d: roundPosition(totalRow?.position),
+    period_days: period,
+    clicks: totalRow?.clicks ?? 0,
+    impressions: totalRow?.impressions ?? 0,
+    ctr: pct(totalRow?.ctr),
+    position: roundPosition(totalRow?.position),
     top_queries: queryRows
       .map((row) => ({
         query: row.keys?.[0] ?? '',
@@ -166,10 +141,12 @@ async function fetchGscMetricsRaw(): Promise<GscMetrics> {
   };
 }
 
-const getGscMetricsCached = unstable_cache(fetchGscMetricsRaw, ['gsc-oauth-metrics'], {
-  revalidate: 3600,
-});
+const gscCacheByPeriod: Record<GscPeriodDays, () => Promise<GscMetrics>> = {
+  7: unstable_cache(() => fetchGscMetricsRaw(7), ['gsc-oauth-metrics', '7'], { revalidate: 3600 }),
+  14: unstable_cache(() => fetchGscMetricsRaw(14), ['gsc-oauth-metrics', '14'], { revalidate: 3600 }),
+  28: unstable_cache(() => fetchGscMetricsRaw(28), ['gsc-oauth-metrics', '28'], { revalidate: 3600 }),
+};
 
-export async function getGscMetrics(): Promise<GscMetrics> {
-  return getGscMetricsCached();
+export async function getGscMetrics(period: GscPeriodDays = 28): Promise<GscMetrics> {
+  return gscCacheByPeriod[period]();
 }
