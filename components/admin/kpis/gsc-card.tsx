@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, MousePointerClick, Search, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { GscMetrics, GscPeriodDays } from '@/lib/gsc-types';
-import { GSC_PERIOD_OPTIONS, parseGscPeriod } from '@/lib/gsc-types';
+import { GSC_PERIOD_OPTIONS } from '@/lib/gsc-types';
 import { KpiEmptyState } from '@/components/admin/kpis/kpi-empty-state';
 import { KpiSectionError } from '@/components/admin/kpis/kpi-section-error';
 import { KpiVividMetric } from '@/components/admin/kpis/vivid/kpi-vivid-metric';
