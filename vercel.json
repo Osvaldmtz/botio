@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/mark-lost-conversations",
+      "schedule": "0 2 * * *"
+    },
+    {
       "path": "/api/cron/trial-followup",
       "schedule": "0 14 * * *"
     },
