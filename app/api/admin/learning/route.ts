@@ -4,7 +4,9 @@ import { isAdmin } from '@/lib/admin-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   fetchLearningMetrics,
+  fetchLearningInsights,
   fetchOutcomeDistribution,
+  fetchPeriodComparison,
   fetchRecentOutcomeConversations,
 } from '@/lib/learning-queries';
 
@@ -19,10 +21,12 @@ export async function GET(request: Request) {
   const outcome = searchParams.get('outcome');
   const source = searchParams.get('source') ?? undefined;
   const since = searchParams.get('since') ?? undefined;
+  const appliedFilter = searchParams.get('applied') as 'all' | 'applied' | 'pending' | null;
 
   try {
     const supabase = createAdminClient();
-    const [distribution, metrics, conversations] = await Promise.all([
+    const [distribution, metrics, conversations, insights, periodComparison] =
+      await Promise.all([
       fetchOutcomeDistribution(supabase),
       fetchLearningMetrics(supabase),
       fetchRecentOutcomeConversations(supabase, {
@@ -31,12 +35,19 @@ export async function GET(request: Request) {
         source,
         since,
       }),
+      fetchLearningInsights(supabase, {
+        applied: appliedFilter ?? 'all',
+        limit: 20,
+      }),
+      fetchPeriodComparison(supabase),
     ]);
 
     return NextResponse.json({
       distribution,
       metrics,
       conversations,
+      insights,
+      period_comparison: periodComparison,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

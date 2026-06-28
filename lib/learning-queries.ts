@@ -152,3 +152,136 @@ export async function fetchRecentOutcomeConversations(
 
   return (data ?? []) as LearningConversationRow[];
 }
+
+export type LearningInsightRow = {
+  id: string;
+  generated_at: string;
+  period_start: string | null;
+  period_end: string | null;
+  total_conversations: number | null;
+  paid_count: number | null;
+  trial_count: number | null;
+  lost_count: number | null;
+  insights: Record<string, unknown> | null;
+  applied: boolean;
+  applied_at: string | null;
+};
+
+export type PeriodStats = {
+  total: number;
+  won: number;
+  lost_no_response: number;
+  conversion_rate: number;
+  no_response_rate: number;
+};
+
+export type PeriodComparison = {
+  current: PeriodStats;
+  previous: PeriodStats;
+  conversion_change: number;
+  lost_no_response_change: number;
+};
+
+function computePeriodStats(
+  rows: Array<{ outcome: string | null }>,
+): PeriodStats {
+  const total = rows.length;
+  const won = rows.filter(
+    (r) => r.outcome === 'paid' || r.outcome === 'trial_activated',
+  ).length;
+  const lostNoResponse = rows.filter((r) => r.outcome === 'lost_no_response').length;
+
+  return {
+    total,
+    won,
+    lost_no_response: lostNoResponse,
+    conversion_rate: total > 0 ? Math.round((won / total) * 1000) / 10 : 0,
+    no_response_rate: total > 0 ? Math.round((lostNoResponse / total) * 1000) / 10 : 0,
+  };
+}
+
+export async function fetchPeriodComparison(
+  supabase: SupabaseClient,
+): Promise<PeriodComparison> {
+  const now = Date.now();
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const currentStart = new Date(now - weekMs).toISOString();
+  const previousStart = new Date(now - 2 * weekMs).toISOString();
+
+  let currentQuery = supabase
+    .from('conversations')
+    .select('outcome')
+    .not('outcome', 'is', null)
+    .gte('outcome_date', currentStart);
+  currentQuery = salesLeadFilter(currentQuery);
+
+  let previousQuery = supabase
+    .from('conversations')
+    .select('outcome')
+    .not('outcome', 'is', null)
+    .gte('outcome_date', previousStart)
+    .lt('outcome_date', currentStart);
+  previousQuery = salesLeadFilter(previousQuery);
+
+  const [{ data: currentRows, error: cErr }, { data: previousRows, error: pErr }] =
+    await Promise.all([currentQuery, previousQuery]);
+
+  if (cErr) throw cErr;
+  if (pErr) throw pErr;
+
+  const current = computePeriodStats(currentRows ?? []);
+  const previous = computePeriodStats(previousRows ?? []);
+
+  return {
+    current,
+    previous,
+    conversion_change: Math.round((current.conversion_rate - previous.conversion_rate) * 10) / 10,
+    lost_no_response_change:
+      Math.round((current.no_response_rate - previous.no_response_rate) * 10) / 10,
+  };
+}
+
+export async function fetchLearningInsights(
+  supabase: SupabaseClient,
+  options?: { applied?: 'all' | 'applied' | 'pending'; limit?: number },
+): Promise<LearningInsightRow[]> {
+  const limit = options?.limit ?? 20;
+
+  let query = supabase
+    .from('learning_insights')
+    .select(
+      'id, generated_at, period_start, period_end, total_conversations, paid_count, trial_count, lost_count, insights, applied, applied_at',
+    )
+    .order('generated_at', { ascending: false })
+    .limit(limit);
+
+  if (options?.applied === 'applied') {
+    query = query.eq('applied', true);
+  } else if (options?.applied === 'pending') {
+    query = query.eq('applied', false);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data ?? []) as LearningInsightRow[];
+}
+
+export async function markLearningInsightApplied(
+  supabase: SupabaseClient,
+  insightId: string,
+): Promise<LearningInsightRow | null> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('learning_insights')
+    .update({ applied: true, applied_at: now })
+    .eq('id', insightId)
+    .select(
+      'id, generated_at, period_start, period_end, total_conversations, paid_count, trial_count, lost_count, insights, applied, applied_at',
+    )
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as LearningInsightRow | null;
+}
+
