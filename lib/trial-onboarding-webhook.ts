@@ -50,6 +50,7 @@ export type TrialOnboardingEnrollInput = {
   phone: string;
   trialStartedAt?: string;
   source?: string;
+  tempPassword?: string;
 };
 
 export type TrialOnboardingEnrollSuccess = {
@@ -68,16 +69,34 @@ export type TrialOnboardingEnrollResult =
   | TrialOnboardingEnrollSuccess
   | TrialOnboardingEnrollFailure;
 
-export function buildImmediateWelcomeMessage(name: string): string {
+export function buildImmediateWelcomeMessage(
+  name: string,
+  options?: { email?: string; tempPassword?: string },
+): string {
   const display = renderName(name) || 'ahí';
+  const credentials =
+    options?.email && options?.tempPassword
+      ? `\n\nTus datos de acceso:\n📧 Email: ${options.email}\n🔑 Contraseña temporal: ${options.tempPassword}\n(Puedes cambiarla después de entrar)\n`
+      : '';
+
   return (
     `¡Hola ${display}! 👋 Soy Sofía, asistente de Kalyo.\n\n` +
-    `Te activaste el trial Pro de 15 días. Aquí estaré para resolverte dudas o ayudarte durante este tiempo.\n\n` +
-    `Tu primer paso:\n` +
+    `Te activaste el trial Pro de 15 días. Aquí estaré para resolverte dudas o ayudarte durante este tiempo.` +
+    credentials +
+    `\nTu primer paso:\n` +
     `1️⃣ Entra a app.kalyo.io/login\n` +
     `2️⃣ Crea tu primer paciente\n` +
     `3️⃣ Aplica una evaluación con IA\n\n` +
     `Cualquier duda, escríbeme. ¡Bienvenido/a! 🎉`
+  );
+}
+
+function buildCredentialsFollowUp(email: string, tempPassword: string): string {
+  return (
+    `Tus datos de acceso a Kalyo:\n` +
+    `📧 Email: ${email}\n` +
+    `🔑 Contraseña temporal: ${tempPassword}\n` +
+    `Entra en app.kalyo.io/login — puedes cambiar la contraseña después.`
   );
 }
 
@@ -141,11 +160,17 @@ export async function sendWelcomeMessage(params: {
   creds: WelcomeMessageCreds;
   templateSid?: string | null;
   twilio?: WelcomeMessageTwilioFns;
+  email?: string;
+  tempPassword?: string;
 }): Promise<WelcomeMessageResult> {
   const { to, name, creds } = params;
   const templateSid = params.templateSid ?? process.env.KALYO_WELCOME_TEMPLATE_SID;
   const twilio = params.twilio ?? defaultWelcomeTwilioFns();
   const displayName = renderName(name) || 'ahí';
+  const welcomeOptions =
+    params.email && params.tempPassword
+      ? { email: params.email, tempPassword: params.tempPassword }
+      : undefined;
 
   if (templateSid) {
     try {
@@ -175,6 +200,22 @@ export async function sendWelcomeMessage(params: {
           sid: result.sid,
           status: status.status,
         });
+
+        if (params.email && params.tempPassword) {
+          try {
+            const credResult = await twilio.sendPlain({
+              accountSid: creds.accountSid,
+              authToken: creds.authToken,
+              from: creds.from,
+              to,
+              body: buildCredentialsFollowUp(params.email, params.tempPassword),
+            });
+            console.log('[welcome-msg] credentials follow-up sent', { sid: credResult.sid });
+          } catch (credErr) {
+            console.error('[welcome-msg] credentials follow-up failed', credErr);
+          }
+        }
+
         return { success: true, method: 'template', sid: result.sid };
       }
     } catch (error) {
@@ -189,7 +230,7 @@ export async function sendWelcomeMessage(params: {
     }
   }
 
-  const textBody = buildImmediateWelcomeMessage(name);
+  const textBody = buildImmediateWelcomeMessage(name, welcomeOptions);
 
   try {
     const result = await twilio.sendPlain({
@@ -460,6 +501,8 @@ export async function enrollTrialFromKalyoWebhook(
       to: phone,
       name,
       creds,
+      email,
+      tempPassword: input.tempPassword,
     });
 
     const welcomeStatus = welcomeResult.success ? 'sent' : 'failed';
@@ -479,7 +522,10 @@ export async function enrollTrialFromKalyoWebhook(
     }
 
     if (welcomeResult.success) {
-      const welcomeBody = buildImmediateWelcomeMessage(name);
+      const welcomeBody = buildImmediateWelcomeMessage(name, {
+        email,
+        tempPassword: input.tempPassword,
+      });
       await supabase.from('messages').insert({
         conversation_id: conversationId,
         role: 'assistant',
@@ -531,6 +577,8 @@ export function validateTrialEnrollBody(body: unknown):
   const trialStartedAt =
     typeof record.trial_started_at === 'string' ? record.trial_started_at.trim() : undefined;
   const source = typeof record.source === 'string' ? record.source.trim() : undefined;
+  const tempPassword =
+    typeof record.temp_password === 'string' ? record.temp_password.trim() : undefined;
 
   if (!email || !email.includes('@')) {
     return { ok: false, error: 'email is required' };
@@ -547,6 +595,13 @@ export function validateTrialEnrollBody(body: unknown):
 
   return {
     ok: true,
-    data: { email, name, phone, trialStartedAt, source },
+    data: {
+      email,
+      name,
+      phone,
+      trialStartedAt,
+      source,
+      tempPassword: tempPassword || undefined,
+    },
   };
 }

@@ -27,6 +27,8 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { buildKalyoOfficialPricingPrompt } from '@/lib/kalyo-pricing-data';
 import { EMBAJADOR_SYSTEM_PROMPT } from '@/lib/embajador-prompt';
+import { activateTrialForLead } from '@/lib/activate-trial-lead';
+import { isTeamOperatorPhone } from '@/lib/team-members';
 
 // --------------------------------------------------------------------------
 // Kalyo-specific Claude wiring shared by both the Twilio and Meta webhooks.
@@ -199,7 +201,7 @@ Crea cuenta nueva en Kalyo + activa trial Pro 15 días. SOLO cuando el usuario p
 Input requerido: email + full_name.
 
 Qué responder según el resultado:
-- success: Entrega link https://app.kalyo.io/login, email, y recuerda que elige su contraseña al entrar por primera vez.
+- success: Entrega link https://app.kalyo.io/login, email y contraseña temporal (campo password del tool). Indica que puede cambiarla después de entrar.
 - success + reactivated (sin password): Cuenta existente con trial reactivado; puede entrar con su password habitual en https://app.kalyo.io/login
 - error "trial_already_used": "Veo que ya tienes cuenta en Kalyo. ¿Quieres que te ayude a hacer login? https://app.kalyo.io/login"
 - error genérico: Discúlpate; el equipo fue notificado.
@@ -500,6 +502,24 @@ For any other topic (pricing, features, onboarding help, support questions, gene
 Always reply in the same language the user is writing in (Spanish, English, etc.).
 `;
 
+const TEAM_OPERATOR_INSTRUCTIONS = `
+
+MODO OPERADOR — equipo Kalyo (prioridad sobre flujo de lead normal)
+
+Estás hablando con un miembro del equipo de Kalyo, no con un psicólogo lead.
+
+Si te piden activar trial para otra persona (onboarding manual), pide:
+1. Email del psicólogo
+2. Nombre completo
+3. WhatsApp del psicólogo (formato +52... o +1...)
+
+Cuando tengas los tres datos, llama admin_activate_trial_for_lead con email, full_name y phone del LEAD (no uses tu propio número).
+
+Responde al operador confirmando: trial activado, welcome enviado al WhatsApp del lead, y fecha de fin de trial. Si welcome_sent es false pero status success, indica que el trial quedó activo pero el welcome ya se había enviado antes.
+
+NO uses create_account_and_activate_trial ni activate_pro_trial para onboardings de terceros — usa solo admin_activate_trial_for_lead.
+`;
+
 const ACTIVATE_PRO_TRIAL_TOOL: Anthropic.Messages.Tool = {
   name: 'activate_pro_trial',
   description:
@@ -533,6 +553,30 @@ const CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL: Anthropic.Messages.Tool = {
       },
     },
     required: ['email', 'full_name'],
+  },
+};
+
+const ADMIN_ACTIVATE_TRIAL_FOR_LEAD_TOOL: Anthropic.Messages.Tool = {
+  name: 'admin_activate_trial_for_lead',
+  description:
+    'Team-only: create Kalyo account + activate 15-day Pro trial for a psychologist and send welcome WhatsApp to their number. Use when a Kalyo team operator asks to onboard someone else (not themselves).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      email: {
+        type: 'string',
+        description: 'Lead psychologist email address.',
+      },
+      full_name: {
+        type: 'string',
+        description: 'Full name of the psychologist.',
+      },
+      phone: {
+        type: 'string',
+        description: 'Lead WhatsApp number in E.164 format (e.g. +525551234567).',
+      },
+    },
+    required: ['email', 'full_name', 'phone'],
   },
 };
 
@@ -669,12 +713,14 @@ export type BuildKalyoOptionsArgs =
       conversationId: string;
       conversationMessages?: ConversationMessage[];
       isAmbassadorLead?: boolean;
+      isTeamMember?: boolean;
     }
   | {
       channel: 'meta';
       bot: KalyoMetaBotRow;
       conversationMessages?: ConversationMessage[];
       isAmbassadorLead?: boolean;
+      isTeamMember?: boolean;
     };
 
 export type BuildKalyoOptionsResult = {
@@ -695,6 +741,7 @@ function buildAccountCreationSuccessMessage(
   fullName: string | undefined,
   trialEndsAt: string,
   reactivated?: boolean,
+  tempPassword?: string,
 ): string {
   const trialDate = formatTrialEndDate(trialEndsAt);
   const name = fullName?.trim();
@@ -708,8 +755,11 @@ Tu trial Pro de 15 días empezó hoy. Termina el ${trialDate}.
 ¿Te ayudo con el setup inicial?`;
   }
 
-  return `${greeting} Tu cuenta está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${email} y la contraseña es la que elijas al entrar por primera vez.
+  const passwordLine = tempPassword
+    ? `\nContraseña temporal: ${tempPassword}\n(Puedes cambiarla después de entrar)\n`
+    : '\n';
 
+  return `${greeting} Tu cuenta está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${email}.${passwordLine}
 Tu trial Pro de 15 días empezó hoy. Termina el ${trialDate}.
 
 ¿Te ayudo con el setup inicial?`;
@@ -853,11 +903,16 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
 
   const { bot, senderFrom, conversationId, conversationMessages = [] } = args;
 
+  const isOperator =
+    Boolean(args.isTeamMember) ||
+    (args.channel === 'twilio' && isTeamOperatorPhone(senderFrom));
+
   const profile = detectPsychologistProfile(conversationMessages);
   console.log(`[profile-detection] conv=${conversationId} profile=${profile}`);
   const profileBlock = buildProfilePromptBlock(profile);
+  const operatorBlock = isOperator ? TEAM_OPERATOR_INSTRUCTIONS : '';
   const systemSuffix =
-    KALYO_INSTRUCTIONS_TWILIO + (profileBlock ? `\n\n${profileBlock}` : '');
+    KALYO_INSTRUCTIONS_TWILIO + operatorBlock + (profileBlock ? `\n\n${profileBlock}` : '');
 
   const creds =
     bot.twilio_account_sid && bot.twilio_auth_token && bot.twilio_whatsapp_number
@@ -868,17 +923,22 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
         }
       : null;
 
+  const tools: Anthropic.Messages.Tool[] = [
+    ACTIVATE_PRO_TRIAL_TOOL,
+    CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL,
+    SCHEDULE_DEMO_TOOL,
+    CHECK_SPECIFIC_TIME_TOOL,
+    CONFIRM_DEMO_SLOT_TOOL,
+    NOTIFY_SALES_TEAM_TOOL,
+  ];
+  if (isOperator) {
+    tools.splice(2, 0, ADMIN_ACTIVATE_TRIAL_FOR_LEAD_TOOL);
+  }
+
   return {
     systemSuffix,
     options: {
-      tools: [
-        ACTIVATE_PRO_TRIAL_TOOL,
-        CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL,
-        SCHEDULE_DEMO_TOOL,
-        CHECK_SPECIFIC_TIME_TOOL,
-        CONFIRM_DEMO_SLOT_TOOL,
-        NOTIFY_SALES_TEAM_TOOL,
-      ],
+      tools,
       toolHandlers: {
         activate_pro_trial: async (input: unknown) => {
           const email =
@@ -940,6 +1000,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
                 fullName,
                 result.trial_ends_at,
                 result.reactivated,
+                result.password,
               ),
             };
           }
@@ -972,6 +1033,63 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             error_detail: result.error_detail,
             bot_message:
               'Tuve un problema creando la cuenta. El equipo ya fue notificado — ¿puedes intentar de nuevo en unos minutos?',
+          };
+        },
+        admin_activate_trial_for_lead: async (input: unknown) => {
+          if (!isOperator) {
+            return {
+              status: 'forbidden',
+              bot_message: 'Esta acción solo está disponible para el equipo de Kalyo.',
+            };
+          }
+
+          const obj =
+            typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+          const email = typeof obj.email === 'string' ? obj.email.trim() : '';
+          const fullName = typeof obj.full_name === 'string' ? obj.full_name.trim() : '';
+          const phone = typeof obj.phone === 'string' ? obj.phone.trim() : '';
+
+          const result = await activateTrialForLead({
+            email,
+            fullName,
+            phone,
+            source: 'admin_via_botio',
+          });
+
+          if (result.status === 'error') {
+            if (result.error === 'trial_already_used') {
+              return {
+                status: 'trial_already_used',
+                bot_message: `Ese email ya tiene trial activo o ya lo usó. Pide al psicólogo entrar en https://app.kalyo.io/login`,
+              };
+            }
+            if (result.error === 'email_exists') {
+              return {
+                status: 'email_exists',
+                bot_message: `El email ya existe en Kalyo. Si necesitas reactivar trial, revisa en Kaly Admin o pide al usuario hacer login.`,
+              };
+            }
+            return {
+              status: 'error',
+              error: result.error,
+              detail: result.detail,
+              bot_message: `No pude activar el trial: ${result.error}. ${result.detail ?? ''}`.trim(),
+            };
+          }
+
+          const trialDate = formatTrialEndDate(result.trial_ends_at);
+          const welcomeNote = result.welcome_sent
+            ? `Welcome enviado a ${result.phone}.`
+            : `Trial activo; el welcome no se reenvió (posible duplicado previo).`;
+
+          return {
+            status: 'success',
+            email: result.email,
+            phone: result.phone,
+            trial_ends_at: result.trial_ends_at,
+            welcome_sent: result.welcome_sent,
+            reactivated: result.reactivated,
+            bot_message: `Listo. Trial Pro activado para ${fullName} (${result.email}) hasta ${trialDate}. ${welcomeNote}`,
           };
         },
         schedule_demo: async (input: unknown) => {

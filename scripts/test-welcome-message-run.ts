@@ -126,6 +126,13 @@ async function testWelcomeBodyMatchesTemplate(): Promise<void> {
   assert(body.includes('¡Hola Roberto!'), 'name interpolated');
   assert(body.includes('1️⃣ Entra a app.kalyo.io/login'), 'steps included');
   assert(body.includes('¡Bienvenido/a! 🎉'), 'closing included');
+
+  const withCreds = buildImmediateWelcomeMessage('Roberto', {
+    email: 'test@kalyo.io',
+    tempPassword: 'Kalyo-2026-ABCD',
+  });
+  assert(withCreds.includes('test@kalyo.io'), 'email in welcome');
+  assert(withCreds.includes('Kalyo-2026-ABCD'), 'temp password in welcome');
 }
 
 async function runTests(): Promise<void> {

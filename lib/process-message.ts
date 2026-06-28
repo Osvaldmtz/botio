@@ -869,6 +869,7 @@ export async function processIncomingMessage(
     conversationId: conversation.id,
     conversationMessages,
     isAmbassadorLead,
+    isTeamMember: Boolean((conversation as Record<string, unknown>).is_team_member),
   });
 
   let systemPrompt =
