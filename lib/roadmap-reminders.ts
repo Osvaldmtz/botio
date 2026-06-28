@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { SALES_CONVERSATIONS_OR, TEAM_MEMBERS_FILTER } from '@/lib/ambassador-filters';
-import { getCachedMRR } from '@/lib/stripe-mrr';
+import { applySalesConversationFilters } from '@/lib/ambassador-filters';
+import { getMRRCached } from '@/lib/stripe-mrr';
 
 export type RoadmapReminderStatus = 'pending' | 'notified' | 'completed' | 'dismissed';
 export type RoadmapTriggerType = 'date' | 'metric' | 'both';
@@ -35,16 +35,12 @@ export type TriggerCheckResult = {
 
 const METRIC_PATTERN = /^([a-z_]+)\s*>=\s*(\d+)$/i;
 
-function salesLeadFilter(query: ReturnType<SupabaseClient['from']>) {
-  return query.or(TEAM_MEMBERS_FILTER).or(SALES_CONVERSATIONS_OR);
-}
-
 async function countConversationsWithOutcome(supabase: SupabaseClient): Promise<number> {
   let query = supabase
     .from('conversations')
     .select('id', { count: 'exact', head: true })
     .not('outcome', 'is', null);
-  query = salesLeadFilter(query);
+  query = applySalesConversationFilters(query);
   const { count, error } = await query;
   if (error) throw error;
   return count ?? 0;
@@ -55,14 +51,14 @@ async function countPaidConversions(supabase: SupabaseClient): Promise<number> {
     .from('conversations')
     .select('id', { count: 'exact', head: true })
     .eq('outcome', 'paid');
-  query = salesLeadFilter(query);
+  query = applySalesConversationFilters(query);
   const { count, error } = await query;
   if (error) throw error;
   return count ?? 0;
 }
 
 async function countActivePaidSubscribers(): Promise<number> {
-  const mrr = await getCachedMRR();
+  const mrr = await getMRRCached();
   if (!mrr.available) return 0;
   return mrr.active_subscriptions;
 }

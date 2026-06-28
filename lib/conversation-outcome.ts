@@ -113,7 +113,7 @@ export async function setConversationOutcome(
   } else {
     const byEmail = input.email ? await findConversationIdsByEmail(supabase, input.email) : [];
     const byPhone = input.phone ? await findConversationIdsByPhone(supabase, input.phone) : [];
-    ids = [...new Set([...byEmail, ...byPhone])];
+    ids = Array.from(new Set([...byEmail, ...byPhone]));
   }
 
   if (ids.length === 0) {

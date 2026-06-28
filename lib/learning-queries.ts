@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { CONVERSATION_OUTCOMES, outcomeLabel } from '@/lib/conversation-outcome';
-import { SALES_CONVERSATIONS_OR, TEAM_MEMBERS_FILTER } from '@/lib/ambassador-filters';
+import { applySalesConversationFilters } from '@/lib/ambassador-filters';
 
 export type OutcomeDistributionItem = {
   outcome: string;
@@ -33,15 +33,11 @@ export type LearningConversationRow = {
   metadata: Record<string, unknown> | null;
 };
 
-function salesLeadFilter(query: ReturnType<SupabaseClient['from']>) {
-  return query.or(TEAM_MEMBERS_FILTER).or(SALES_CONVERSATIONS_OR);
-}
-
 export async function fetchOutcomeDistribution(
   supabase: SupabaseClient,
 ): Promise<OutcomeDistributionItem[]> {
   let query = supabase.from('conversations').select('outcome');
-  query = salesLeadFilter(query);
+  query = applySalesConversationFilters(query);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -82,7 +78,7 @@ export async function fetchOutcomeDistribution(
 
 export async function fetchLearningMetrics(supabase: SupabaseClient): Promise<LearningMetrics> {
   let query = supabase.from('conversations').select('outcome');
-  query = salesLeadFilter(query);
+  query = applySalesConversationFilters(query);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -131,7 +127,7 @@ export async function fetchRecentOutcomeConversations(
     .order('last_message_at', { ascending: false })
     .limit(limit);
 
-  query = salesLeadFilter(query);
+  query = applySalesConversationFilters(query);
 
   if (options?.outcome === '__unmarked__') {
     query = query.is('outcome', null);
@@ -213,7 +209,7 @@ export async function fetchPeriodComparison(
     .select('outcome')
     .not('outcome', 'is', null)
     .gte('outcome_date', currentStart);
-  currentQuery = salesLeadFilter(currentQuery);
+  currentQuery = applySalesConversationFilters(currentQuery);
 
   let previousQuery = supabase
     .from('conversations')
@@ -221,7 +217,7 @@ export async function fetchPeriodComparison(
     .not('outcome', 'is', null)
     .gte('outcome_date', previousStart)
     .lt('outcome_date', currentStart);
-  previousQuery = salesLeadFilter(previousQuery);
+  previousQuery = applySalesConversationFilters(previousQuery);
 
   const [{ data: currentRows, error: cErr }, { data: previousRows, error: pErr }] =
     await Promise.all([currentQuery, previousQuery]);

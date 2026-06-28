@@ -12,6 +12,15 @@ export function isSalesLead(isAmbassador: boolean | null | undefined): boolean {
   return isAmbassador !== true;
 }
 
+/** PostgREST query fragment that supports chained `.or()` filters. */
+export type PostgrestOrFilter = {
+  or: (filters: string) => PostgrestOrFilter;
+};
+
+export function applySalesConversationFilters<T extends PostgrestOrFilter>(query: T): T {
+  return query.or(TEAM_MEMBERS_FILTER).or(SALES_CONVERSATIONS_OR) as T;
+}
+
 export async function fetchAmbassadorConversationIds(
   supabase: SupabaseClient,
 ): Promise<Set<string>> {
