@@ -20,6 +20,7 @@ import { cityToTimezone } from '@/lib/city-to-timezone';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
 import { recordOutcome } from '@/lib/ab-testing';
+import { markTrialActivatedByContact } from '@/lib/conversation-outcome';
 import { detectPsychologistProfile } from '@/lib/profile-detection';
 import { buildProfilePromptBlock } from '@/lib/profile-flows';
 import type { ConversationMessage } from '@/lib/lead-enrichment';
@@ -810,6 +811,16 @@ async function onTrialSuccessSideEffects(
 
   await recordOutcome(supabase, conversationId, 'trial_activated', { email });
   await recordOutcome(supabase, conversationId, 'lead_captured', { source: 'trial' });
+
+  try {
+    await markTrialActivatedByContact(
+      supabase,
+      { conversationId, email, phone: senderFrom },
+      'trial_enroll',
+    );
+  } catch (outcomeErr) {
+    console.error('[trial] conversation outcome mark failed', outcomeErr);
+  }
 
   try {
     await enrollTrialOnboarding(supabase, {

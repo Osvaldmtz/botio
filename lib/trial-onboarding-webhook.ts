@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { renderName } from '@/lib/render-name';
 import { isTeamMember } from '@/lib/team-members';
+import { markTrialActivatedByContact } from '@/lib/conversation-outcome';
 import {
   notifyTrialEnrolled,
   type SendTelegramFn,
@@ -554,6 +555,16 @@ export async function enrollTrialFromKalyoWebhook(
   console.log(
     `[trial-onboarding-webhook] enrolled | id=${row.id} | trial_ends=${endsAt} | email=${email}`,
   );
+
+  try {
+    await markTrialActivatedByContact(supabase, {
+      conversationId,
+      email,
+      phone,
+    });
+  } catch (outcomeErr) {
+    console.error('[trial-onboarding-webhook] outcome mark failed', outcomeErr);
+  }
 
   return {
     success: true,
