@@ -17,6 +17,7 @@ export function AdminHeader() {
   const isOnboarding = pathname?.includes('/trial-onboarding');
   const isObjections = pathname?.includes('/objections');
   const isClosures = pathname?.includes('/analytics/closures');
+  const isLearning = pathname?.startsWith('/admin/learning');
   const isDashboard =
     pathname === '/admin/dashboard' || pathname === '/admin';
   const isAmbassadors = pathname?.startsWith('/admin/ambassadors');
@@ -60,6 +61,11 @@ export function AdminHeader() {
       href: '/admin/analytics/closures',
       label: 'Cierres',
       active: isClosures,
+    },
+    {
+      href: '/admin/learning',
+      label: 'Learning',
+      active: isLearning,
     },
     {
       href: '/admin/experiments',
