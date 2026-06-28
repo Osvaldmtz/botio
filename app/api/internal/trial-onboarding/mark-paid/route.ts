@@ -1,6 +1,7 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { markPaidByEmail } from '@/lib/conversation-outcome';
 import { markTrialUpgradedToPaid } from '@/lib/trial-onboarding-enrollment';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +32,8 @@ export async function POST(request: Request) {
   try {
     const supabase = createAdminClient();
     const updated = await markTrialUpgradedToPaid(supabase, email);
-    return NextResponse.json({ status: 'ok', email, updated });
+    const outcomeUpdated = await markPaidByEmail(supabase, email, 'stripe_webhook');
+    return NextResponse.json({ status: 'ok', email, updated, outcome_updated: outcomeUpdated });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 500 });
