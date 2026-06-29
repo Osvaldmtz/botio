@@ -2,15 +2,23 @@ import 'server-only';
 import { isAdmin } from '@/lib/admin-auth';
 import { LoginForm } from '@/components/admin/login-form';
 import { getKalyoMetricsHistory, getLatestKalyoMetrics } from '@/lib/kpi-queries';
+import { fetchStripeActiveSubscriberCount } from '@/lib/stripe-mrr';
 import { RevenueKpiDashboard } from './components/revenue-kpi-dashboard';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RevenueKpisPage() {
   if (!isAdmin()) return <LoginForm />;
-  const [latest, history] = await Promise.all([
+  const [latest, history, stripeSubs] = await Promise.all([
     getLatestKalyoMetrics(),
     getKalyoMetricsHistory(90),
+    fetchStripeActiveSubscriberCount(),
   ]);
-  return <RevenueKpiDashboard latest={latest} history={history} />;
+  return (
+    <RevenueKpiDashboard
+      latest={latest}
+      history={history}
+      stripeActiveSubscribers={stripeSubs.count}
+    />
+  );
 }

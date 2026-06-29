@@ -1,6 +1,8 @@
 import type { KalyoMetricRow, TwilioMetricRow } from '@/lib/kpi/types';
 import type { GA4DailyMetric, GA4PageRow, InstagramInsightPoint, InstagramMediaItem, MetaAdsInsight } from '@/lib/kpi/types';
 
+export const ACTIVE_SUBSCRIBER_GOAL = 100;
+
 export function aggregateTwilio(rows: TwilioMetricRow[]) {
   return rows.reduce(
     (acc, row) => ({
@@ -23,6 +25,7 @@ export type ExecutiveSummaryData = {
   metaSpendToday: number | null;
   landingSessions30d: number | null;
   landingDaily: GA4DailyMetric[];
+  stripeActiveSubscribers: number | null;
   errors: Record<string, string>;
 };
 

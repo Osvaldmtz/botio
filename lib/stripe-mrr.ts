@@ -151,3 +151,24 @@ export async function getMRRCached(): Promise<MRRMetrics> {
   cacheTime = Date.now();
   return cachedMRR;
 }
+
+/** Active Stripe subscriptions (`status: active`) — no cache, for live dashboard reads. */
+export async function fetchStripeActiveSubscriberCount(): Promise<{
+  count: number | null;
+  error: string | null;
+}> {
+  const secret = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secret) {
+    return { count: null, error: 'STRIPE_SECRET_KEY not configured' };
+  }
+
+  try {
+    const stripe = new Stripe(secret, { apiVersion: '2025-02-24.acacia' });
+    const subs = await listAllActiveSubscriptions(stripe);
+    return { count: subs.length, error: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[stripe-mrr] active subscriber count failed', error);
+    return { count: null, error: message };
+  }
+}

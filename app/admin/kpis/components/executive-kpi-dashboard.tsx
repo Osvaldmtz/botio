@@ -18,7 +18,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { ExecutiveSummaryData } from '@/lib/kpi/utils';
-import { aggregateTwilio } from '@/lib/kpi/utils';
+import { ACTIVE_SUBSCRIBER_GOAL, aggregateTwilio } from '@/lib/kpi/utils';
 import { KpiLayout } from '@/components/admin/kpis/kpi-layout';
 import { KpiEmptyState } from '@/components/admin/kpis/kpi-empty-state';
 import { KpiSectionError } from '@/components/admin/kpis/kpi-section-error';
@@ -79,7 +79,7 @@ export function ExecutiveKpiDashboard({ data }: Props) {
       ? Math.round(data.landingDaily.reduce((s, r) => s + r.sessions, 0) / data.landingDaily.length)
       : null;
 
-  const subs = data.kalyo?.active_subscribers ?? 0;
+  const subs = data.stripeActiveSubscribers ?? 0;
   const mrr = Number(data.kalyo?.mrr ?? 0);
   const arpu = subs > 0 ? mrr / subs : null;
   const costPerMsg =
@@ -171,6 +171,7 @@ export function ExecutiveKpiDashboard({ data }: Props) {
 
   const sources = [
     { id: 'kalyo', label: 'Kalyo', ok: data.kalyo != null },
+    { id: 'stripe', label: 'Stripe', ok: data.stripeActiveSubscribers != null },
     { id: 'meta', label: 'Meta', ok: !data.errors.meta },
     { id: 'ga4', label: 'GA4', ok: !data.errors.ga4 },
     { id: 'ig', label: 'Instagram', ok: !data.errors.instagram },
@@ -224,7 +225,17 @@ export function ExecutiveKpiDashboard({ data }: Props) {
               <KpiVividSectionTitle accent="emerald">Revenue</KpiVividSectionTitle>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <KpiVividMetric label="MRR" value={fmtUsd(mrr)} icon={DollarSign} accent="emerald" spark={mrrChart.map((r) => r.mrr)} />
-                <KpiVividMetric label="Suscriptores" value={fmtNum(subs)} icon={Users} accent="sky" />
+                <KpiVividMetric
+                  label="Suscriptores"
+                  value={data.stripeActiveSubscribers != null ? fmtNum(subs) : '—'}
+                  icon={Users}
+                  accent="sky"
+                  progress={
+                    data.stripeActiveSubscribers != null
+                      ? { current: subs, goal: ACTIVE_SUBSCRIBER_GOAL }
+                      : undefined
+                  }
+                />
                 <KpiVividMetric label="Trials" value={fmtNum(data.kalyo?.trialing)} icon={FlaskConical} accent="violet" />
                 <KpiVividMetric label="Plan Pro" value={fmtNum(data.kalyo?.plan_pro)} icon={Layers} accent="indigo" />
                 <KpiVividMetric label="Plan Max" value={fmtNum(data.kalyo?.plan_max)} icon={Layers} accent="fuchsia" />

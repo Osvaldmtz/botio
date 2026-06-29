@@ -23,17 +23,32 @@ import { KpiVividPanel } from '@/components/admin/kpis/vivid/kpi-vivid-panel';
 import { KpiVividAreaChart, KpiVividLineChart, KpiVividPieChart } from '@/components/admin/kpis/vivid/kpi-vivid-charts';
 import { KpiVividTable } from '@/components/admin/kpis/vivid/kpi-vivid-table';
 import { KpiVividPage, sliceByRange } from '@/components/admin/kpis/vivid/kpi-page-shell';
+import { ACTIVE_SUBSCRIBER_GOAL } from '@/lib/kpi/utils';
 
-type Props = { latest: KalyoMetricRow | null; history: KalyoMetricRow[] };
+type Props = {
+  latest: KalyoMetricRow | null;
+  history: KalyoMetricRow[];
+  stripeActiveSubscribers: number | null;
+};
 
-export function RevenueKpiDashboard({ latest, history }: Props) {
+export function RevenueKpiDashboard({ latest, history, stripeActiveSubscribers }: Props) {
   return (
     <KpiVividPage
       title="Revenue KPIs"
       subtitle="MRR, churn, LTV y mix de planes"
-      sources={[{ id: 'kalyo', label: 'Kalyo', ok: latest != null || history.length > 0 }]}
+      sources={[
+        { id: 'kalyo', label: 'Kalyo', ok: latest != null || history.length > 0 },
+        { id: 'stripe', label: 'Stripe', ok: stripeActiveSubscribers != null },
+      ]}
     >
-      {({ range }) => <RevenueContent latest={latest} history={history} range={range} />}
+      {({ range }) => (
+        <RevenueContent
+          latest={latest}
+          history={history}
+          range={range}
+          stripeActiveSubscribers={stripeActiveSubscribers}
+        />
+      )}
     </KpiVividPage>
   );
 }
@@ -42,10 +57,12 @@ function RevenueContent({
   latest,
   history,
   range,
+  stripeActiveSubscribers,
 }: {
   latest: KalyoMetricRow | null;
   history: KalyoMetricRow[];
   range: 7 | 14 | 30;
+  stripeActiveSubscribers: number | null;
 }) {
   const pro = latest?.plan_pro ?? 0;
   const max = latest?.plan_max ?? 0;
@@ -53,7 +70,8 @@ function RevenueContent({
   const proPct = total > 0 ? ((pro / total) * 100).toFixed(1) : '0';
   const maxPct = total > 0 ? ((max / total) * 100).toFixed(1) : '0';
   const mrr = Number(latest?.mrr ?? 0);
-  const subs = latest?.active_subscribers ?? 0;
+  const activeSubs = stripeActiveSubscribers ?? 0;
+  const kalyoSubs = latest?.active_subscribers ?? 0;
   const churned30d = latest?.churned_30d ?? 0;
   const churnRate = Number(latest?.churn_rate ?? 0);
 
@@ -61,10 +79,10 @@ function RevenueContent({
     () =>
       computeLtvDerived({
         mrr,
-        active_subscribers: subs,
+        active_subscribers: kalyoSubs,
         churn_rate: churnRate,
       }),
-    [mrr, subs, churnRate],
+    [mrr, kalyoSubs, churnRate],
   );
 
   const storedLtvAvg = latest?.ltv_avg != null ? Number(latest.ltv_avg) : ltv.ltv_avg;
@@ -110,7 +128,17 @@ function RevenueContent({
           accent="emerald"
           spark={mrrChart.map((d) => d.mrr)}
         />
-        <KpiVividMetric label="Suscriptores" value={(latest?.active_subscribers ?? 0).toLocaleString()} icon={Users} accent="sky" />
+        <KpiVividMetric
+          label="Suscriptores"
+          value={stripeActiveSubscribers != null ? activeSubs.toLocaleString() : '—'}
+          icon={Users}
+          accent="sky"
+          progress={
+            stripeActiveSubscribers != null
+              ? { current: activeSubs, goal: ACTIVE_SUBSCRIBER_GOAL }
+              : undefined
+          }
+        />
         <KpiVividMetric label="Trialing" value={(latest?.trialing ?? 0).toLocaleString()} icon={FlaskConical} accent="violet" />
         <KpiVividMetric label="Pro / Max" value={`${pro} / ${max}`} icon={Layers} accent="indigo" />
         <KpiVividMetric label="ARPU" value={ltv.avg_mrr_per_subscriber > 0 ? `$${ltv.avg_mrr_per_subscriber.toFixed(0)}` : '—'} icon={TrendingUp} accent="amber" />

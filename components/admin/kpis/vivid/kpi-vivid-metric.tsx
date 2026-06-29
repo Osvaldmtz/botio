@@ -12,6 +12,7 @@ type Props = {
   accent?: VividAccent;
   spark?: number[];
   compact?: boolean;
+  progress?: { current: number; goal: number };
 };
 
 export function KpiVividMetric({
@@ -22,9 +23,14 @@ export function KpiVividMetric({
   accent = 'emerald',
   spark,
   compact,
+  progress,
 }: Props) {
   const c = VIVID[accent];
   const maxSpark = spark?.length ? Math.max(...spark, 1) : 1;
+  const progressPct =
+    progress && progress.goal > 0
+      ? Math.round((progress.current / progress.goal) * 100)
+      : null;
 
   return (
     <div
@@ -61,6 +67,19 @@ export function KpiVividMetric({
           </div>
         ) : null}
       </div>
+      {progress && progressPct != null ? (
+        <div className="relative mt-3">
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/25">
+            <div
+              className="h-full rounded-full bg-white/85 transition-all"
+              style={{ width: `${Math.min(100, progressPct)}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-xs text-white/75">
+            {progress.current}/{progress.goal} — {progressPct}% de la meta
+          </p>
+        </div>
+      ) : null}
       {spark && spark.length > 1 ? (
         <div className="relative mt-3 flex h-7 items-end gap-0.5">
           {spark.map((v, i) => (

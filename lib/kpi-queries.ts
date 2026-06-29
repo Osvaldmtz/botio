@@ -26,6 +26,7 @@ import type {
   WebPageData,
 } from '@/lib/kpi/utils';
 import { aggregateTwilio } from '@/lib/kpi/utils';
+import { fetchStripeActiveSubscriberCount } from '@/lib/stripe-mrr';
 
 export type { ExecutiveSummaryData, InstagramPageData, AdsPageData, WebPageData } from '@/lib/kpi/utils';
 export { aggregateTwilio } from '@/lib/kpi/utils';
@@ -78,19 +79,22 @@ async function safeFetch<T>(
 }
 
 export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
-  const [kalyoLatest, kalyoHistory, twilio, igInsights, metaToday, landing] = await Promise.all([
-    getLatestKalyoMetrics(),
-    getKalyoMetricsHistory(30),
-    getTwilioMetrics(30),
-    safeFetch('instagram_reach', () => fetchInstagramInsights(undefined, 'last_30d')),
-    safeFetch('meta_spend_today', () => fetchMetaAds('today')),
-    safeFetch('ga4_landing', () => getLandingMetrics(30)),
-  ]);
+  const [kalyoLatest, kalyoHistory, twilio, igInsights, metaToday, landing, stripeSubs] =
+    await Promise.all([
+      getLatestKalyoMetrics(),
+      getKalyoMetricsHistory(30),
+      getTwilioMetrics(30),
+      safeFetch('instagram_reach', () => fetchInstagramInsights(undefined, 'last_30d')),
+      safeFetch('meta_spend_today', () => fetchMetaAds('today')),
+      safeFetch('ga4_landing', () => getLandingMetrics(30)),
+      fetchStripeActiveSubscriberCount(),
+    ]);
 
   const errors: Record<string, string> = {};
   if (igInsights.error) errors.instagram = igInsights.error;
   if (metaToday.error) errors.meta = metaToday.error;
   if (landing.error) errors.ga4 = landing.error;
+  if (stripeSubs.error) errors.stripe = stripeSubs.error;
 
   const igReach7d = (igInsights.data ?? []).slice(-7).reduce((sum, p) => sum + p.reach, 0);
   const metaSpendToday = (metaToday.data ?? []).reduce(
@@ -109,6 +113,7 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
     metaSpendToday: metaToday.data ? metaSpendToday : null,
     landingSessions30d: landing.data ? landingSessions30d : null,
     landingDaily,
+    stripeActiveSubscribers: stripeSubs.count,
     errors,
   };
 }
