@@ -26,7 +26,7 @@ import type {
   WebPageData,
 } from '@/lib/kpi/utils';
 import { aggregateTwilio } from '@/lib/kpi/utils';
-import { fetchStripeActiveSubscriberCount } from '@/lib/stripe-mrr';
+import { fetchStripeActiveSubscriberCount, getMRRCached } from '@/lib/stripe-mrr';
 
 export type { ExecutiveSummaryData, InstagramPageData, AdsPageData, WebPageData } from '@/lib/kpi/utils';
 export { aggregateTwilio } from '@/lib/kpi/utils';
@@ -79,7 +79,7 @@ async function safeFetch<T>(
 }
 
 export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
-  const [kalyoLatest, kalyoHistory, twilio, igInsights, metaToday, landing, stripeSubs] =
+  const [kalyoLatest, kalyoHistory, twilio, igInsights, metaToday, landing, stripeSubs, stripeMrr] =
     await Promise.all([
       getLatestKalyoMetrics(),
       getKalyoMetricsHistory(30),
@@ -88,6 +88,7 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
       safeFetch('meta_spend_today', () => fetchMetaAds('today')),
       safeFetch('ga4_landing', () => getLandingMetrics(30)),
       fetchStripeActiveSubscriberCount(),
+      getMRRCached(),
     ]);
 
   const errors: Record<string, string> = {};
@@ -95,6 +96,9 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
   if (metaToday.error) errors.meta = metaToday.error;
   if (landing.error) errors.ga4 = landing.error;
   if (stripeSubs.error) errors.stripe = stripeSubs.error;
+  if (stripeMrr.error) {
+    errors.stripe = errors.stripe ? `${errors.stripe}; ${stripeMrr.error}` : stripeMrr.error;
+  }
 
   const igReach7d = (igInsights.data ?? []).slice(-7).reduce((sum, p) => sum + p.reach, 0);
   const metaSpendToday = (metaToday.data ?? []).reduce(
@@ -114,6 +118,7 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
     landingSessions30d: landing.data ? landingSessions30d : null,
     landingDaily,
     stripeActiveSubscribers: stripeSubs.count,
+    stripeMrr: stripeMrr.available ? stripeMrr.current_mrr_usd : null,
     errors,
   };
 }

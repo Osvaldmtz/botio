@@ -80,8 +80,8 @@ export function ExecutiveKpiDashboard({ data }: Props) {
       : null;
 
   const subs = data.stripeActiveSubscribers ?? 0;
-  const mrr = Number(data.kalyo?.mrr ?? 0);
-  const arpu = subs > 0 ? mrr / subs : null;
+  const mrr = data.stripeMrr;
+  const arpu = subs > 0 && mrr != null ? mrr / subs : null;
   const costPerMsg =
     waAgg.total_sent > 0 ? waAgg.total_cost_usd / waAgg.total_sent : null;
 
@@ -171,7 +171,7 @@ export function ExecutiveKpiDashboard({ data }: Props) {
 
   const sources = [
     { id: 'kalyo', label: 'Kalyo', ok: data.kalyo != null },
-    { id: 'stripe', label: 'Stripe', ok: data.stripeActiveSubscribers != null },
+    { id: 'stripe', label: 'Stripe', ok: data.stripeActiveSubscribers != null || data.stripeMrr != null },
     { id: 'meta', label: 'Meta', ok: !data.errors.meta },
     { id: 'ga4', label: 'GA4', ok: !data.errors.ga4 },
     { id: 'ig', label: 'Instagram', ok: !data.errors.instagram },

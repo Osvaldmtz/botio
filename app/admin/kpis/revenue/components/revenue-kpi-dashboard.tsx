@@ -29,16 +29,17 @@ type Props = {
   latest: KalyoMetricRow | null;
   history: KalyoMetricRow[];
   stripeActiveSubscribers: number | null;
+  stripeMrr: number | null;
 };
 
-export function RevenueKpiDashboard({ latest, history, stripeActiveSubscribers }: Props) {
+export function RevenueKpiDashboard({ latest, history, stripeActiveSubscribers, stripeMrr }: Props) {
   return (
     <KpiVividPage
       title="Revenue KPIs"
       subtitle="MRR, churn, LTV y mix de planes"
       sources={[
         { id: 'kalyo', label: 'Kalyo', ok: latest != null || history.length > 0 },
-        { id: 'stripe', label: 'Stripe', ok: stripeActiveSubscribers != null },
+        { id: 'stripe', label: 'Stripe', ok: stripeActiveSubscribers != null || stripeMrr != null },
       ]}
     >
       {({ range }) => (
@@ -47,6 +48,7 @@ export function RevenueKpiDashboard({ latest, history, stripeActiveSubscribers }
           history={history}
           range={range}
           stripeActiveSubscribers={stripeActiveSubscribers}
+          stripeMrr={stripeMrr}
         />
       )}
     </KpiVividPage>
@@ -58,18 +60,20 @@ function RevenueContent({
   history,
   range,
   stripeActiveSubscribers,
+  stripeMrr,
 }: {
   latest: KalyoMetricRow | null;
   history: KalyoMetricRow[];
   range: 7 | 14 | 30;
   stripeActiveSubscribers: number | null;
+  stripeMrr: number | null;
 }) {
   const pro = latest?.plan_pro ?? 0;
   const max = latest?.plan_max ?? 0;
   const total = pro + max;
   const proPct = total > 0 ? ((pro / total) * 100).toFixed(1) : '0';
   const maxPct = total > 0 ? ((max / total) * 100).toFixed(1) : '0';
-  const mrr = Number(latest?.mrr ?? 0);
+  const kalyoMrr = Number(latest?.mrr ?? 0);
   const activeSubs = stripeActiveSubscribers ?? 0;
   const kalyoSubs = latest?.active_subscribers ?? 0;
   const churned30d = latest?.churned_30d ?? 0;
@@ -78,11 +82,11 @@ function RevenueContent({
   const ltv = useMemo(
     () =>
       computeLtvDerived({
-        mrr,
+        mrr: kalyoMrr,
         active_subscribers: kalyoSubs,
         churn_rate: churnRate,
       }),
-    [mrr, kalyoSubs, churnRate],
+    [kalyoMrr, kalyoSubs, churnRate],
   );
 
   const storedLtvAvg = latest?.ltv_avg != null ? Number(latest.ltv_avg) : ltv.ltv_avg;
@@ -123,7 +127,7 @@ function RevenueContent({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <KpiVividMetric
           label="MRR"
-          value={latest?.mrr != null ? `$${Number(latest.mrr).toLocaleString()}` : '—'}
+          value={stripeMrr != null ? `$${stripeMrr.toLocaleString()}` : '—'}
           icon={DollarSign}
           accent="emerald"
           spark={mrrChart.map((d) => d.mrr)}
