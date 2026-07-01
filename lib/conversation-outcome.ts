@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SALES_CONVERSATIONS_OR, TEAM_MEMBERS_FILTER } from '@/lib/ambassador-filters';
+import { incrementTrialTrackingFailureCount } from '@/lib/trial-tracking-metrics';
 
 export const CONVERSATION_OUTCOMES = [
   'paid',
@@ -181,15 +182,48 @@ export async function markTrialActivatedByContact(
   supabase: SupabaseClient,
   params: { email?: string; phone?: string; conversationId?: string },
   source: OutcomeSource = 'trial_enroll',
-): Promise<number> {
-  const result = await setConversationOutcome(supabase, {
-    conversationId: params.conversationId,
-    email: params.email,
-    phone: params.phone,
-    outcome: 'trial_activated',
-    source,
-  });
-  return result.updated;
+): Promise<boolean> {
+  const email = params.email?.trim().toLowerCase() ?? '';
+  const phone = params.phone?.trim() ?? '';
+
+  try {
+    const result = await setConversationOutcome(supabase, {
+      conversationId: params.conversationId,
+      email: params.email,
+      phone: params.phone,
+      outcome: 'trial_activated',
+      source,
+    });
+
+    if (result.updated > 0) {
+      return true;
+    }
+
+    if (params.conversationId) {
+      const { data: row } = await supabase
+        .from('conversations')
+        .select('outcome')
+        .eq('id', params.conversationId)
+        .maybeSingle();
+      if (row?.outcome === 'trial_activated') {
+        return true;
+      }
+    }
+
+    const message = `Trial tracking: outcome not updated (updated=0) | email=${email || '—'} | phone=${phone || '—'} | conv=${params.conversationId ?? '—'}`;
+    console.error(`[trial-tracking] markTrialActivatedByContact failed | ${message}`);
+    incrementTrialTrackingFailureCount();
+    const { sendTelegramAlert } = await import('@/lib/telegram');
+    await sendTelegramAlert(`⚠️ Trial tracking failed: ${email || phone || params.conversationId} — outcome not updated`);
+    return false;
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('[trial-tracking] markTrialActivatedByContact failed', error);
+    incrementTrialTrackingFailureCount();
+    const { sendTelegramAlert } = await import('@/lib/telegram');
+    await sendTelegramAlert(`⚠️ Trial tracking failed: ${email || phone || 'unknown'} — ${errMsg}`);
+    return false;
+  }
 }
 
 export async function markLostNoResponseConversations(
