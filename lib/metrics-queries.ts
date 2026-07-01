@@ -78,7 +78,7 @@ function last30Days(): string {
 
 function buildTrendDays(
   convRows: Array<{ created_at: string }>,
-  trialRows: Array<{ trial_started_at: string }>,
+  trialRows: Array<{ outcome_date: string }>,
   paidRows: Array<{ paid_at: string }>,
 ): TrendDay[] {
   const days: TrendDay[] = [];
@@ -90,7 +90,7 @@ function buildTrendDays(
     days.push({
       date: key,
       leads: convRows.filter((r) => dayKey(r.created_at) === key).length,
-      trials: trialRows.filter((r) => dayKey(r.trial_started_at) === key).length,
+      trials: trialRows.filter((r) => dayKey(r.outcome_date) === key).length,
       paid: paidRows.filter((r) => dayKey(r.paid_at) === key).length,
     });
   }
@@ -103,7 +103,8 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
   const [
     convRes,
     convAllRes,
-    trialRes,
+    trialOutcomeRes,
+    onboardingRes,
     objectionRes,
     closureRes,
     hotRes,
@@ -113,15 +114,22 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
     supabase
       .from('conversations')
       .select(
-        'id, created_at, channel, lead_score, lead_captured, pipeline_stage, closure_reason',
+        'id, created_at, channel, lead_score, lead_captured, pipeline_stage, closure_reason, outcome, outcome_date',
       )
       .gte('created_at', since)
       .or(SALES_CONVERSATIONS_OR)
       .or(TEAM_MEMBERS_FILTER),
     supabase.from('conversations').select('id', { count: 'exact', head: true }).gte('created_at', since),
     supabase
+      .from('conversations')
+      .select('id, outcome_date, channel')
+      .eq('outcome', 'trial_activated')
+      .gte('outcome_date', since)
+      .or(SALES_CONVERSATIONS_OR)
+      .or(TEAM_MEMBERS_FILTER),
+    supabase
       .from('trial_onboarding_messages')
-      .select('id, trial_started_at, upgraded_to_paid_at, conversation_id')
+      .select('id, upgraded_to_paid_at, conversation_id')
       .gte('trial_started_at', since),
     supabase
       .from('detected_objections')
@@ -149,7 +157,8 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
 
   if (convRes.error) throw new Error(convRes.error.message);
   if (convAllRes.error) throw new Error(convAllRes.error.message);
-  if (trialRes.error) throw new Error(trialRes.error.message);
+  if (trialOutcomeRes.error) throw new Error(trialOutcomeRes.error.message);
+  if (onboardingRes.error) throw new Error(onboardingRes.error.message);
   if (objectionRes.error) throw new Error(objectionRes.error.message);
   if (closureRes.error) throw new Error(closureRes.error.message);
   if (hotRes.error) throw new Error(hotRes.error.message);
@@ -160,7 +169,10 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
   );
 
   const convs = convRes.data ?? [];
-  const trials = (trialRes.data ?? []).filter(
+  const trialOutcomes = (trialOutcomeRes.data ?? []).filter(
+    (t) => !ambassadorIds.has(t.id as string),
+  );
+  const onboardingUpgrades = (onboardingRes.data ?? []).filter(
     (t) => !t.conversation_id || !ambassadorIds.has(t.conversation_id as string),
   );
   const objections = (objectionRes.data ?? []).filter(
@@ -175,17 +187,17 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
       (c.lead_score ?? 0) >= 40 ||
       ['qualified', 'trial', 'paid'].includes(c.pipeline_stage ?? ''),
   ).length;
-  const trialsActivated = trials.length;
+  const trialsActivated = trialOutcomes.length;
   const paidFromClosure = convs.filter((c) => c.closure_reason === 'converted').length;
   const paidFromPipeline = convs.filter((c) => c.pipeline_stage === 'paid').length;
-  const paidFromTrial = trials.filter((t) => t.upgraded_to_paid_at).length;
+  const paidFromTrial = onboardingUpgrades.filter((t) => t.upgraded_to_paid_at).length;
   const paidIds = new Set<string>();
   for (const c of convs) {
     if (c.closure_reason === 'converted' || c.pipeline_stage === 'paid') {
       paidIds.add(c.id as string);
     }
   }
-  for (const t of trials) {
+  for (const t of onboardingUpgrades) {
     if (t.upgraded_to_paid_at && t.conversation_id) paidIds.add(t.conversation_id as string);
   }
   const paid = paidIds.size || Math.max(paidFromClosure, paidFromPipeline, paidFromTrial);
@@ -208,19 +220,13 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
   const by_channel: Record<string, ChannelStats> = {};
   for (const ch of channels) {
     const chConvs = convs.filter((c) => (c.channel ?? 'whatsapp') === ch);
-    const chTrialIds = new Set(
-      trials
-        .filter((t) => chConvs.some((c) => c.id === t.conversation_id))
-        .map((t) => t.conversation_id),
-    );
+    const chTrials = trialOutcomes.filter((t) => (t.channel ?? 'whatsapp') === ch).length;
     const chPaid = chConvs.filter(
       (c) => c.closure_reason === 'converted' || c.pipeline_stage === 'paid',
     ).length;
     by_channel[ch] = {
       leads: chConvs.length,
-      trials: chTrialIds.size || trials.filter((t) =>
-        chConvs.some((c) => c.id === t.conversation_id),
-      ).length,
+      trials: chTrials,
       paid: chPaid,
     };
   }
@@ -254,7 +260,7 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
   }
 
   const paidTrendRows = [
-    ...trials
+    ...onboardingUpgrades
       .filter((t) => t.upgraded_to_paid_at)
       .map((t) => ({ paid_at: t.upgraded_to_paid_at as string })),
     ...closures
@@ -264,7 +270,7 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
 
   const trends_30d = buildTrendDays(
     convs.map((c) => ({ created_at: c.created_at as string })),
-    trials.map((t) => ({ trial_started_at: t.trial_started_at as string })),
+    trialOutcomes.map((t) => ({ outcome_date: t.outcome_date as string })),
     paidTrendRows,
   );
 
