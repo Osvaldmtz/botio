@@ -12,9 +12,12 @@ import {
 const PRO_PRICE_USD = 29;
 const MAX_PRICE_USD = 39;
 
+const EXCLUDED_TRIAL_STATUSES = new Set(['active', 'canceled', 'inactive']);
+
 type PsychologistRow = {
   plan: string;
   subscription_status: string | null;
+  trial_ends_at: string | null;
 };
 
 type ChurnedPsychologistRow = {
@@ -27,6 +30,13 @@ function isChurnedInLast30Days(row: ChurnedPsychologistRow, since: Date): boolea
   if (status !== 'canceled' && status !== 'inactive') return false;
   if (!row.updated_at) return false;
   return new Date(row.updated_at).getTime() >= since.getTime();
+}
+
+function isActiveTrial(row: PsychologistRow): boolean {
+  const status = row.subscription_status ?? '';
+  if (EXCLUDED_TRIAL_STATUSES.has(status)) return false;
+  if (!row.trial_ends_at) return false;
+  return new Date(row.trial_ends_at).getTime() > Date.now();
 }
 
 async function resolveCacUsd(activeSubscribers: number): Promise<number> {
@@ -89,7 +99,7 @@ export async function syncKalyoMetrics(): Promise<{
 
   const [{ data: activeRows, error }, { data: churnCandidates, error: churnError }] =
     await Promise.all([
-      kalyo.from('psychologists').select('plan, subscription_status'),
+      kalyo.from('psychologists').select('plan, subscription_status, trial_ends_at'),
       kalyo
         .from('psychologists')
         .select('subscription_status, updated_at')
@@ -107,11 +117,12 @@ export async function syncKalyoMetrics(): Promise<{
   let plan_max = 0;
 
   for (const row of rows) {
-    const status = row.subscription_status ?? '';
-    if (status === 'trialing') {
+    if (isActiveTrial(row)) {
       trialing += 1;
       continue;
     }
+
+    const status = row.subscription_status ?? '';
     if (status !== 'active') continue;
 
     active_subscribers += 1;
