@@ -9,6 +9,11 @@ export type KpiInsightsData = {
     churn_rate: number | null;
     ltv_avg: number | null;
     ltv_cac_ratio: number | null;
+    ltv_cac_ratio_alltime: number | null;
+    cac_usd: number | null;
+    cac_usd_alltime: number | null;
+    new_subscribers_30d: number | null;
+    total_paying_customers: number | null;
   };
   twilio: {
     total_sent: number;

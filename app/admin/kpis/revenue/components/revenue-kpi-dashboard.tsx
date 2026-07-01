@@ -14,6 +14,7 @@ import {
 import type { KalyoMetricRow } from '@/lib/kpi/types';
 import {
   computeLtvDerived,
+  formatLtvCacRatio,
   formatLtvMonthsLabel,
   getLtvCacRatioCardHealth,
 } from '@/lib/kpi/ltv-utils';
@@ -79,20 +80,29 @@ function RevenueContent({
   const churned30d = latest?.churned_30d ?? 0;
   const churnRate = Number(latest?.churn_rate ?? 0);
 
+  const storedCacUsd =
+    latest?.cac_usd != null ? Number(latest.cac_usd) : null;
+  const storedCacAlltime =
+    latest?.cac_usd_alltime != null ? Number(latest.cac_usd_alltime) : null;
+
   const ltv = useMemo(
     () =>
       computeLtvDerived({
         mrr: kalyoMrr,
         active_subscribers: kalyoSubs,
         churn_rate: churnRate,
+        cac_usd: storedCacUsd,
       }),
-    [kalyoMrr, kalyoSubs, churnRate],
+    [kalyoMrr, kalyoSubs, churnRate, storedCacUsd],
   );
 
   const storedLtvAvg = latest?.ltv_avg != null ? Number(latest.ltv_avg) : ltv.ltv_avg;
   const storedRatio =
     latest?.ltv_cac_ratio != null ? Number(latest.ltv_cac_ratio) : ltv.ltv_cac_ratio;
+  const storedRatioAlltime =
+    latest?.ltv_cac_ratio_alltime != null ? Number(latest.ltv_cac_ratio_alltime) : null;
   const ratioHealth = getLtvCacRatioCardHealth(storedRatio);
+  const newSubs30d = latest?.new_subscribers_30d ?? null;
 
   const filtered = useMemo(() => sliceByRange(history, range), [history, range]);
   const mrrChart = filtered.map((row) => ({
@@ -171,11 +181,28 @@ function RevenueContent({
           accent="violet"
         />
         <KpiVividMetric
-          label="Ratio LTV:CAC"
-          value={`${storedRatio.toFixed(1)}x`}
+          label="Ratio LTV:CAC (30d)"
+          value={formatLtvCacRatio(storedRatio)}
           hint={ratioHealth.hint}
           icon={Scale}
           accent={ratioHealth.accent}
+        />
+        <KpiVividMetric
+          label="Ratio LTV:CAC (all-time)"
+          value={formatLtvCacRatio(storedRatioAlltime)}
+          hint={
+            storedRatioAlltime != null && storedRatioAlltime > 0
+              ? 'Gasto total Meta / clientes de por vida'
+              : 'Sin datos históricos'
+          }
+          icon={Scale}
+          accent={
+            storedRatioAlltime != null && storedRatioAlltime > 3
+              ? 'emerald'
+              : storedRatioAlltime != null && storedRatioAlltime >= 1
+                ? 'amber'
+                : 'rose'
+          }
         />
         <KpiVividMetric
           label="Payback period"
@@ -184,7 +211,13 @@ function RevenueContent({
               ? `${ltv.payback_months.toFixed(1)} meses`
               : '—'
           }
-          hint={`CAC ~$${ltv.cac_usd.toFixed(0)} USD`}
+          hint={
+            storedCacUsd != null
+              ? `CAC 30d ~$${storedCacUsd.toFixed(0)} USD${newSubs30d != null && newSubs30d > 0 ? ` · ${newSubs30d} nuevos` : ''}`
+              : storedCacAlltime != null
+                ? `CAC hist. ~$${storedCacAlltime.toFixed(0)} USD`
+                : 'Sin CAC calculado'
+          }
           icon={Clock}
           accent="sky"
         />

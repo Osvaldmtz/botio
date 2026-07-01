@@ -192,6 +192,11 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
       churn_rate: kalyo?.churn_rate ?? null,
       ltv_avg: kalyo?.ltv_avg ?? null,
       ltv_cac_ratio: kalyo?.ltv_cac_ratio ?? null,
+      ltv_cac_ratio_alltime: kalyo?.ltv_cac_ratio_alltime ?? null,
+      cac_usd: kalyo?.cac_usd ?? null,
+      cac_usd_alltime: kalyo?.cac_usd_alltime ?? null,
+      new_subscribers_30d: kalyo?.new_subscribers_30d ?? null,
+      total_paying_customers: kalyo?.total_paying_customers ?? null,
     },
     twilio: {
       total_sent: twilio.total_sent,

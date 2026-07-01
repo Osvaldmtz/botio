@@ -4,8 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getKalyoClient } from '@/lib/kalyo-supabase';
 import { fetchMetaAds } from '@/lib/meta-api';
 import {
-  DEFAULT_CAC_USD,
   MXN_PER_USD,
+  computeLtvCacRatio,
   computeLtvDerived,
 } from '@/lib/kpi/ltv-utils';
 
@@ -25,6 +25,15 @@ type ChurnedPsychologistRow = {
   updated_at: string | null;
 };
 
+type CacMetrics = {
+  cac_usd_30d: number | null;
+  cac_usd_alltime: number | null;
+  new_subscribers_30d: number;
+  total_paying_customers: number;
+  ad_spend_30d_mxn: number;
+  ad_spend_alltime_mxn: number;
+};
+
 function isChurnedInLast30Days(row: ChurnedPsychologistRow, since: Date): boolean {
   const status = row.subscription_status ?? '';
   if (status !== 'canceled' && status !== 'inactive') return false;
@@ -39,18 +48,39 @@ function isActiveTrial(row: PsychologistRow): boolean {
   return new Date(row.trial_ends_at).getTime() > Date.now();
 }
 
-async function resolveCacUsd(activeSubscribers: number): Promise<number> {
-  if (activeSubscribers <= 0) return DEFAULT_CAC_USD;
-  try {
-    const ads = await fetchMetaAds('last_30d');
-    const spendMxn = ads.reduce((sum, row) => sum + Number(row.spend || 0), 0);
-    if (spendMxn > 0) {
-      return spendMxn / MXN_PER_USD / activeSubscribers;
-    }
-  } catch (err) {
-    console.warn('[kalyo-metrics] Meta Ads unavailable for CAC, using default', err);
-  }
-  return DEFAULT_CAC_USD;
+function sumMetaSpend(rows: { spend?: string }[]): number {
+  return rows.reduce((sum, row) => sum + Number(row.spend || 0), 0);
+}
+
+function cacFromSpend(spendMxn: number, customers: number): number | null {
+  if (spendMxn <= 0 || customers <= 0) return null;
+  return spendMxn / MXN_PER_USD / customers;
+}
+
+async function getActiveSubscribers30dAgo(
+  botio: ReturnType<typeof createAdminClient>,
+  fallback: number,
+): Promise<number> {
+  const date30dAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
+
+  const { data: snap30d } = await botio
+    .from('kalyo_metrics')
+    .select('active_subscribers')
+    .lte('date', date30dAgo)
+    .order('date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (snap30d?.active_subscribers != null) return snap30d.active_subscribers;
+
+  const { data: firstSnap } = await botio
+    .from('kalyo_metrics')
+    .select('active_subscribers')
+    .order('date', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return firstSnap?.active_subscribers ?? fallback;
 }
 
 async function getActiveSubscribersStartOfMonth(
@@ -77,6 +107,42 @@ async function getActiveSubscribersStartOfMonth(
   return firstInMonth?.active_subscribers ?? fallback;
 }
 
+async function resolveCacMetrics(input: {
+  active_subscribers: number;
+  churned_30d: number;
+  churned_alltime: number;
+  active_subscribers_30d_ago: number;
+}): Promise<CacMetrics> {
+  const new_subscribers_30d = Math.max(
+    0,
+    input.active_subscribers - input.active_subscribers_30d_ago + input.churned_30d,
+  );
+  const total_paying_customers = input.active_subscribers + input.churned_alltime;
+
+  let ad_spend_30d_mxn = 0;
+  let ad_spend_alltime_mxn = 0;
+
+  try {
+    const [ads30, adsAll] = await Promise.all([
+      fetchMetaAds('last_30d'),
+      fetchMetaAds('maximum'),
+    ]);
+    ad_spend_30d_mxn = sumMetaSpend(ads30);
+    ad_spend_alltime_mxn = sumMetaSpend(adsAll);
+  } catch (err) {
+    console.warn('[kalyo-metrics] Meta Ads unavailable for CAC', err);
+  }
+
+  return {
+    cac_usd_30d: cacFromSpend(ad_spend_30d_mxn, new_subscribers_30d),
+    cac_usd_alltime: cacFromSpend(ad_spend_alltime_mxn, total_paying_customers),
+    new_subscribers_30d,
+    total_paying_customers,
+    ad_spend_30d_mxn,
+    ad_spend_alltime_mxn,
+  };
+}
+
 export async function syncKalyoMetrics(): Promise<{
   date: string;
   mrr: number;
@@ -87,27 +153,41 @@ export async function syncKalyoMetrics(): Promise<{
   churned_30d: number;
   churn_rate: number;
   ltv_avg: number;
-  ltv_cac_ratio: number;
+  ltv_cac_ratio: number | null;
+  ltv_cac_ratio_alltime: number | null;
   avg_mrr_per_subscriber: number;
   avg_ltv_months: number | null;
   ltv_pro: number;
   ltv_max: number;
-  cac_usd: number;
+  cac_usd: number | null;
+  cac_usd_alltime: number | null;
+  new_subscribers_30d: number;
+  total_paying_customers: number;
+  ad_spend_30d_mxn: number;
+  ad_spend_alltime_mxn: number;
 }> {
   const kalyo = getKalyoClient();
   const since30d = subDays(new Date(), 30);
 
-  const [{ data: activeRows, error }, { data: churnCandidates, error: churnError }] =
-    await Promise.all([
-      kalyo.from('psychologists').select('plan, subscription_status, trial_ends_at'),
-      kalyo
-        .from('psychologists')
-        .select('subscription_status, updated_at')
-        .in('subscription_status', ['canceled', 'inactive']),
-    ]);
+  const [
+    { data: activeRows, error },
+    { data: churnCandidates, error: churnError },
+    { count: churnedAlltime, error: churnAllError },
+  ] = await Promise.all([
+    kalyo.from('psychologists').select('plan, subscription_status, trial_ends_at'),
+    kalyo
+      .from('psychologists')
+      .select('subscription_status, updated_at')
+      .in('subscription_status', ['canceled', 'inactive']),
+    kalyo
+      .from('psychologists')
+      .select('*', { count: 'exact', head: true })
+      .in('subscription_status', ['canceled', 'inactive']),
+  ]);
 
   if (error) throw error;
   if (churnError) throw churnError;
+  if (churnAllError) throw churnAllError;
 
   const rows = (activeRows ?? []) as PsychologistRow[];
   let mrr = 0;
@@ -144,13 +224,10 @@ export async function syncKalyoMetrics(): Promise<{
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
   const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
 
-  const [{ data: prev }, activeStart] = await Promise.all([
+  const [{ data: prev }, activeStart, activeSubscribers30dAgo] = await Promise.all([
     botio.from('kalyo_metrics').select('active_subscribers').eq('date', yesterday).maybeSingle(),
-    getActiveSubscribersStartOfMonth(
-      botio,
-      monthStart,
-      active_subscribers + churned_30d,
-    ),
+    getActiveSubscribersStartOfMonth(botio, monthStart, active_subscribers + churned_30d),
+    getActiveSubscribers30dAgo(botio, active_subscribers),
   ]);
 
   const prevActive = prev?.active_subscribers ?? active_subscribers;
@@ -161,13 +238,21 @@ export async function syncKalyoMetrics(): Promise<{
   const churn_rate =
     activeStart > 0 ? Number(((churned_30d / activeStart) * 100).toFixed(2)) : 0;
 
-  const cac_usd = await resolveCacUsd(active_subscribers);
+  const cac = await resolveCacMetrics({
+    active_subscribers,
+    churned_30d,
+    churned_alltime: churnedAlltime ?? 0,
+    active_subscribers_30d_ago: activeSubscribers30dAgo,
+  });
+
   const ltv = computeLtvDerived({
     mrr: Number(mrr.toFixed(2)),
     active_subscribers,
     churn_rate,
-    cac_usd,
+    cac_usd: cac.cac_usd_30d,
   });
+
+  const ltv_cac_ratio_alltime = computeLtvCacRatio(ltv.ltv_avg, cac.cac_usd_alltime);
 
   const payload = {
     date: today,
@@ -181,7 +266,17 @@ export async function syncKalyoMetrics(): Promise<{
     churned_30d,
     churn_rate,
     ltv_avg: Number(ltv.ltv_avg.toFixed(2)),
-    ltv_cac_ratio: Number(ltv.ltv_cac_ratio.toFixed(2)),
+    ltv_cac_ratio:
+      ltv.ltv_cac_ratio != null ? Number(ltv.ltv_cac_ratio.toFixed(2)) : null,
+    ltv_cac_ratio_alltime:
+      ltv_cac_ratio_alltime != null ? Number(ltv_cac_ratio_alltime.toFixed(2)) : null,
+    cac_usd: cac.cac_usd_30d != null ? Number(cac.cac_usd_30d.toFixed(2)) : null,
+    cac_usd_alltime:
+      cac.cac_usd_alltime != null ? Number(cac.cac_usd_alltime.toFixed(2)) : null,
+    new_subscribers_30d: cac.new_subscribers_30d,
+    total_paying_customers: cac.total_paying_customers,
+    ad_spend_30d_mxn: Number(cac.ad_spend_30d_mxn.toFixed(2)),
+    ad_spend_alltime_mxn: Number(cac.ad_spend_alltime_mxn.toFixed(2)),
     synced_at: new Date().toISOString(),
   };
 
@@ -196,6 +291,5 @@ export async function syncKalyoMetrics(): Promise<{
     avg_ltv_months: ltv.avg_ltv_months,
     ltv_pro: Number(ltv.ltv_pro.toFixed(2)),
     ltv_max: Number(ltv.ltv_max.toFixed(2)),
-    cac_usd: Number(ltv.cac_usd.toFixed(2)),
   };
 }

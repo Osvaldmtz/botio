@@ -1,6 +1,5 @@
 import type { KpiInsightsData } from '@/lib/kpi/insights-types';
 import {
-  DEFAULT_CAC_USD,
   MXN_PER_USD,
   computeLtvDerived,
   formatLtvMonthsLabel,
@@ -51,16 +50,19 @@ export function buildKpiAnalysisPrompt(data: KpiInsightsData): string {
     mrr,
     active_subscribers: subscribers,
     churn_rate: churnRate,
-    cac_usd:
-      subscribers > 0 && spendMxn > 0
-        ? spendUsdEquiv / subscribers
-        : DEFAULT_CAC_USD,
+    cac_usd: kalyo.cac_usd,
   });
 
   const ltvAvg = kalyo.ltv_avg != null ? Number(kalyo.ltv_avg) : ltv.ltv_avg;
   const ltvCacRatio =
     kalyo.ltv_cac_ratio != null ? Number(kalyo.ltv_cac_ratio) : ltv.ltv_cac_ratio;
-  const cacUsd = ltv.cac_usd;
+  const ltvCacRatioAlltime =
+    kalyo.ltv_cac_ratio_alltime != null ? Number(kalyo.ltv_cac_ratio_alltime) : null;
+  const cacUsd = kalyo.cac_usd != null ? Number(kalyo.cac_usd) : ltv.cac_usd;
+  const cacUsdAlltime =
+    kalyo.cac_usd_alltime != null ? Number(kalyo.cac_usd_alltime) : null;
+  const newSubs30d = kalyo.new_subscribers_30d ?? null;
+  const totalPayingCustomers = kalyo.total_paying_customers ?? null;
   const payback =
     ltv.payback_months != null ? ltv.payback_months.toFixed(1) : 'N/D';
 
@@ -73,13 +75,15 @@ Cada suscriptor representa ingresos RECURRENTES, no una venta única.
 Métricas de valor de largo plazo:
 - Plan Pro: $29 USD/mes | Plan Max: $39 USD/mes
 - LTV promedio actual: ${fmtMoney(ltvAvg)} (basado en churn rate de ${fmtNum(churnRate, 1)}%)
-- Ratio LTV:CAC actual: ${fmtNum(ltvCacRatio, 1)}x
-- CAC actual: ~${fmtMoney(cacUsd)} (Meta Ads MXN convertido)
+- Ratio LTV:CAC (30d, primario): ${fmtNum(ltvCacRatio, 1)}x
+- Ratio LTV:CAC (all-time): ${ltvCacRatioAlltime != null ? `${fmtNum(ltvCacRatioAlltime, 1)}x` : 'N/D'}
+- CAC 30d: ~${fmtMoney(cacUsd)} (gasto Meta 30d / clientes nuevos 30d: ${fmtNum(newSubs30d)})
+- CAC histórico: ~${fmtMoney(cacUsdAlltime)} (gasto Meta total / ${fmtNum(totalPayingCustomers)} clientes de por vida)
 - Payback period: ~${payback} meses
 
-REGLA DE INTERPRETACIÓN: Un CAC de ${fmtMoney(cacUsd)} es SALUDABLE si el LTV supera $200 USD (ratio 3x mínimo). Con churn bajo, cada suscriptor puede valer $500-800 USD en ingresos totales. NO recomendar pausar ads basándose solo en MRR mensual vs gasto mensual — evaluar siempre en términos de LTV vs CAC.
+REGLA DE INTERPRETACIÓN: Usa SIEMPRE el ratio LTV:CAC (30d) como métrica primaria de decisión operativa. El ratio all-time es contexto histórico y puede inflarse si el denominador incluye toda la base acumulada. Un CAC 30d de ${fmtMoney(cacUsd)} es saludable si LTV:CAC (30d) supera 3x. NO recomendar pausar ads basándose solo en MRR mensual vs gasto mensual — evaluar siempre en términos de LTV vs CAC (30d).
 
-Al analizar ROI de Meta Ads: comparar CAC (${fmtMoney(cacUsd)}) contra LTV (${fmtMoney(ltvAvg)}), no contra MRR mensual (${fmtMoney(subscribers > 0 ? mrr / subscribers : null)}/suscriptor). El negocio es rentable si LTV:CAC > 3x.`;
+Al analizar ROI de Meta Ads: comparar CAC 30d (${fmtMoney(cacUsd)}) contra LTV (${fmtMoney(ltvAvg)}), no contra MRR mensual (${fmtMoney(subscribers > 0 ? mrr / subscribers : null)}/suscriptor). El negocio es rentable si LTV:CAC (30d) > 3x.`;
 
   return `${saasContext}
 
@@ -98,8 +102,8 @@ INSTAGRAM @kalyo_app:
 META ADS:
 IMPORTANTE: El gasto de Meta Ads está en pesos mexicanos (${metaCurrency}). La cuenta opera en México. Para comparar con MRR en USD usar tipo de cambio ~${MXN_PER_USD} MXN/USD. Gasto equivalente en USD: ~${fmtMoney(spendUsdEquiv)}.
 - Gasto 30d: ${fmtMxn(spendMxn)} | Impresiones: ${fmtNum(metaAds.impressions)} | Clicks: ${fmtNum(metaAds.clicks)} | CTR: ${fmtNum(metaAds.ctr, 2)}%
-- CAC en MXN: ${subscribers > 0 ? `${fmtMxn(spendMxn / subscribers)} por suscriptor` : 'N/D'} (~${subscribers > 0 ? `${fmtMoney(spendUsdEquiv / subscribers)} USD` : 'N/D'} por suscriptor)
-- ROI real (LTV basis): cada ${fmtMoney(cacUsd)} invertidos genera ~${fmtMoney(ltvAvg)} de valor total = ${fmtNum(ltvCacRatio, 1)}x ROI
+- CAC 30d: ${newSubs30d != null && newSubs30d > 0 ? `${fmtMxn(spendMxn / newSubs30d)} por cliente nuevo (${fmtNum(newSubs30d)} en 30d)` : 'N/D'} (~${fmtMoney(cacUsd)} USD)
+- ROI real (LTV basis, 30d): cada ${fmtMoney(cacUsd)} invertidos genera ~${fmtMoney(ltvAvg)} de valor total = ${fmtNum(ltvCacRatio, 1)}x ROI (all-time: ${ltvCacRatioAlltime != null ? `${fmtNum(ltvCacRatioAlltime, 1)}x` : 'N/D'})
 
 WEB — kalyo.io (landing):
 - Usuarios 30d: ${fmtNum(ga4Landing.users)} | Sesiones: ${fmtNum(ga4Landing.sessions)} | Engagement: ${fmtNum(ga4Landing.engagement_rate, 1)}% | Bounce: ${fmtNum(ga4Landing.bounce_rate, 1)}%

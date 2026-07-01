@@ -213,7 +213,11 @@ export function ExecutiveKpiDashboard({ data }: Props) {
         {data.kalyo ? (
           <BusinessHealthCard
             ltvCacRatio={data.kalyo.ltv_cac_ratio}
+            ltvCacRatioAlltime={data.kalyo.ltv_cac_ratio_alltime}
             ltvAvg={data.kalyo.ltv_avg}
+            cacUsd={data.kalyo.cac_usd}
+            cacUsdAlltime={data.kalyo.cac_usd_alltime}
+            newSubscribers30d={data.kalyo.new_subscribers_30d}
           />
         ) : null}
 

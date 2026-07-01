@@ -10,10 +10,18 @@ export type LtvDerived = {
   ltv_pro: number;
   ltv_max: number;
   ltv_avg: number;
-  ltv_cac_ratio: number;
-  cac_usd: number;
+  ltv_cac_ratio: number | null;
+  cac_usd: number | null;
   payback_months: number | null;
 };
+
+export function computeLtvCacRatio(
+  ltvAvg: number,
+  cacUsd: number | null | undefined,
+): number | null {
+  if (cacUsd == null || cacUsd <= 0 || ltvAvg <= 0) return null;
+  return ltvAvg / cacUsd;
+}
 
 export function computeAvgLtvMonths(churnRate: number): number | null {
   if (churnRate <= 0) return null;
@@ -35,7 +43,9 @@ export function computeLtvDerived(input: {
   mrr: number;
   active_subscribers: number;
   churn_rate: number;
-  cac_usd?: number;
+  cac_usd?: number | null;
+  /** When true and cac_usd is missing, falls back to DEFAULT_CAC_USD (legacy UI only). */
+  fallbackDefaultCac?: boolean;
 }): LtvDerived {
   const subs = input.active_subscribers;
   const avg_mrr_per_subscriber = subs > 0 ? input.mrr / subs : 0;
@@ -44,10 +54,17 @@ export function computeLtvDerived(input: {
   const ltv_pro = months * PRO_PRICE_USD;
   const ltv_max = months * MAX_PRICE_USD;
   const ltv_avg = months * avg_mrr_per_subscriber;
-  const cac_usd = input.cac_usd ?? DEFAULT_CAC_USD;
-  const ltv_cac_ratio = cac_usd > 0 ? ltv_avg / cac_usd : 0;
+  const cac_usd =
+    input.cac_usd != null
+      ? input.cac_usd
+      : input.fallbackDefaultCac
+        ? DEFAULT_CAC_USD
+        : null;
+  const ltv_cac_ratio = computeLtvCacRatio(ltv_avg, cac_usd);
   const payback_months =
-    avg_mrr_per_subscriber > 0 ? cac_usd / avg_mrr_per_subscriber : null;
+    cac_usd != null && avg_mrr_per_subscriber > 0
+      ? cac_usd / avg_mrr_per_subscriber
+      : null;
 
   return {
     avg_mrr_per_subscriber,
@@ -110,11 +127,19 @@ export function getLtvCacHealth(ratio: number | null | undefined): LtvCacHealth 
   };
 }
 
-export function getLtvCacRatioCardHealth(ratio: number): {
+export function getLtvCacRatioCardHealth(ratio: number | null | undefined): {
   accent: 'emerald' | 'amber' | 'rose';
   hint: string;
 } {
-  if (ratio > 3) return { accent: 'emerald', hint: 'Objetivo SaaS: >3x' };
-  if (ratio >= 1) return { accent: 'amber', hint: 'Por debajo del objetivo 3x' };
-  return { accent: 'rose', hint: 'LTV menor que CAC' };
+  if (ratio == null || Number.isNaN(ratio) || ratio <= 0) {
+    return { accent: 'amber', hint: 'Sin adquisiciones en ventana 30d' };
+  }
+  if (ratio > 3) return { accent: 'emerald', hint: 'Objetivo SaaS: >3x (30d)' };
+  if (ratio >= 1) return { accent: 'amber', hint: 'Por debajo del objetivo 3x (30d)' };
+  return { accent: 'rose', hint: 'LTV menor que CAC (30d)' };
+}
+
+export function formatLtvCacRatio(ratio: number | null | undefined): string {
+  if (ratio == null || Number.isNaN(ratio) || ratio <= 0) return '—';
+  return `${ratio.toFixed(1)}x`;
 }
