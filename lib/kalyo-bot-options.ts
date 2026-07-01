@@ -3,10 +3,8 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { GenerateReplyOptions } from '@/lib/claude';
 import { activateProTrial } from '@/lib/kalyo';
 import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
-import { setPipelineStageTrial } from '@/lib/pipeline-utils';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { savePendingDemoSlots } from '@/lib/demo-conversation';
-import { enrollTrialOnboarding } from '@/lib/trial-onboarding-enrollment';
 import {
   formatSlotsForBot,
   getAvailableSlots, // DEPRECATED: 13 jun 2026 — reemplazado por Calendly direct link
@@ -20,7 +18,7 @@ import { cityToTimezone } from '@/lib/city-to-timezone';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
 import { recordOutcome } from '@/lib/ab-testing';
-import { markTrialActivatedByContact } from '@/lib/conversation-outcome';
+import { ensureTrialTrackingConsistency } from '@/lib/trial-tracking-consistency';
 import { detectPsychologistProfile } from '@/lib/profile-detection';
 import { buildProfilePromptBlock } from '@/lib/profile-flows';
 import type { ConversationMessage } from '@/lib/lead-enrichment';
@@ -788,14 +786,6 @@ async function onTrialSuccessSideEffects(
   }
 
   const supabase = createAdminClient();
-  const { data: convRow, error: fetchErr } = await supabase
-    .from('conversations')
-    .select('pipeline_stage')
-    .eq('id', conversationId)
-    .maybeSingle();
-  if (fetchErr) {
-    console.error('[trial] failed to load conversation', fetchErr);
-  }
 
   const { error } = await supabase
     .from('conversations')
@@ -803,36 +793,17 @@ async function onTrialSuccessSideEffects(
     .eq('id', conversationId);
   if (error) console.error('[trial] failed to mark lead_captured', error);
 
-  try {
-    await setPipelineStageTrial(supabase, conversationId, convRow?.pipeline_stage ?? null);
-  } catch (trialStageErr) {
-    console.error('[trial] pipeline stage update failed', trialStageErr);
-  }
+  await ensureTrialTrackingConsistency(supabase, {
+    conversationId,
+    email,
+    phone: senderFrom,
+    source: 'trial_enroll',
+    trialEndsAt: options?.trialEndsAt,
+    trialUserName: options?.trialUserName,
+    recordAbOutcome: true,
+  });
 
-  await recordOutcome(supabase, conversationId, 'trial_activated', { email });
   await recordOutcome(supabase, conversationId, 'lead_captured', { source: 'trial' });
-
-  try {
-    await markTrialActivatedByContact(
-      supabase,
-      { conversationId, email, phone: senderFrom },
-      'trial_enroll',
-    );
-  } catch (outcomeErr) {
-    console.error('[trial] conversation outcome mark failed', outcomeErr);
-  }
-
-  try {
-    await enrollTrialOnboarding(supabase, {
-      customerPhone: senderFrom,
-      trialUserEmail: email,
-      trialUserName: options?.trialUserName,
-      conversationId,
-      trialEndsAt: options?.trialEndsAt,
-    });
-  } catch (enrollErr) {
-    console.error('[trial-onboarding] enroll after activation failed', enrollErr);
-  }
 }
 
 function isKalyoBot(botId: string): boolean {
@@ -967,6 +938,15 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               'trial_activated_via_botio',
               { trialEndsAt: result.expires_at },
             );
+          } else if (result.status === 'already_active') {
+            const supabase = createAdminClient();
+            await ensureTrialTrackingConsistency(supabase, {
+              conversationId,
+              email,
+              phone: senderFrom,
+              source: 'already_active_sync',
+              trialEndsAt: result.expires_at,
+            });
           }
 
           return result;
