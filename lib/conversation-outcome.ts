@@ -1,45 +1,23 @@
+import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SALES_CONVERSATIONS_OR, TEAM_MEMBERS_FILTER } from '@/lib/ambassador-filters';
 import { incrementTrialTrackingFailureCount } from '@/lib/trial-tracking-metrics';
+import { alertTrialTrackingFailure } from '@/lib/trial-outcome-alert';
+import {
+  CONVERSATION_OUTCOMES,
+  type ConversationOutcome,
+  type OutcomeSource,
+  isConversationOutcome,
+  outcomeLabel,
+} from '@/lib/conversation-outcome-labels';
 
-export const CONVERSATION_OUTCOMES = [
-  'paid',
-  'trial_activated',
-  'lost_no_response',
-  'lost_objection',
-  'lost_competitor',
-  'lost_price',
-  'unsubscribed',
-] as const;
-
-export type ConversationOutcome = (typeof CONVERSATION_OUTCOMES)[number];
-
-export type OutcomeSource =
-  | 'stripe_webhook'
-  | 'trial_enroll'
-  | 'cron_30days'
-  | 'admin_manual'
-  | string;
-
-const OUTCOME_LABELS: Record<ConversationOutcome, string> = {
-  paid: 'Pagó suscripción',
-  trial_activated: 'Trial activado',
-  lost_no_response: 'Sin respuesta (30d)',
-  lost_objection: 'Objeción no superada',
-  lost_competitor: 'Eligió competencia',
-  lost_price: 'Precio barrera',
-  unsubscribed: 'Pidió no contacto',
+export {
+  CONVERSATION_OUTCOMES,
+  type ConversationOutcome,
+  type OutcomeSource,
+  isConversationOutcome,
+  outcomeLabel,
 };
-
-export function isConversationOutcome(value: string): value is ConversationOutcome {
-  return (CONVERSATION_OUTCOMES as readonly string[]).includes(value);
-}
-
-export function outcomeLabel(outcome: string | null | undefined): string {
-  if (!outcome) return 'Sin marcar';
-  if (isConversationOutcome(outcome)) return OUTCOME_LABELS[outcome];
-  return outcome;
-}
 
 function canAutoUpdateOutcome(
   current: string | null | undefined,
@@ -210,18 +188,18 @@ export async function markTrialActivatedByContact(
       }
     }
 
-    const message = `Trial tracking: outcome not updated (updated=0) | email=${email || '—'} | phone=${phone || '—'} | conv=${params.conversationId ?? '—'}`;
+    const message = `outcome not updated | email=${email || '—'} | phone=${phone || '—'} | conv=${params.conversationId ?? '—'}`;
     console.error(`[trial-tracking] markTrialActivatedByContact failed | ${message}`);
     incrementTrialTrackingFailureCount();
-    const { sendTelegramAlert } = await import('@/lib/telegram');
-    await sendTelegramAlert(`⚠️ Trial tracking failed: ${email || phone || params.conversationId} — outcome not updated`);
+    await alertTrialTrackingFailure(
+      `${email || phone || params.conversationId} — outcome not updated`,
+    );
     return false;
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error('[trial-tracking] markTrialActivatedByContact failed', error);
     incrementTrialTrackingFailureCount();
-    const { sendTelegramAlert } = await import('@/lib/telegram');
-    await sendTelegramAlert(`⚠️ Trial tracking failed: ${email || phone || 'unknown'} — ${errMsg}`);
+    await alertTrialTrackingFailure(`${email || phone || 'unknown'} — ${errMsg}`);
     return false;
   }
 }

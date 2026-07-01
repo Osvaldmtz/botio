@@ -4,9 +4,8 @@ import {
   determineStage,
   type PipelineConversation,
   type PipelineMessage,
-  type PipelineStage,
 } from '@/lib/pipeline';
-import { movePipelineStage, setPipelineStageTrial } from '@/lib/pipeline-stage-mutations';
+import { movePipelineStage } from '@/lib/pipeline-stage-mutations';
 
 export {
   PIPELINE_STAGES,

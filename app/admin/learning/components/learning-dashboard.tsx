@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { KpiVividPieChart } from '@/components/admin/kpis/vivid/kpi-vivid-charts';
-import { CONVERSATION_OUTCOMES, outcomeLabel } from '@/lib/conversation-outcome';
+import { CONVERSATION_OUTCOMES, outcomeLabel } from '@/lib/conversation-outcome-labels';
 
 type DistributionItem = {
   outcome: string;
