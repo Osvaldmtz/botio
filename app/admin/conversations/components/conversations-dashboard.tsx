@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   ConversationSummary,
   DashboardStats,
+  DayViewFilter,
 } from '../lib/conversation-queries';
 import { sortConversationsWithHotPriority } from '../lib/conversation-sort';
 import { AdminShell } from '@/components/admin/admin-shell';
 import { ConversationFilters, type FilterState } from './conversation-filters';
 import { ConversationStats } from './conversation-stats';
+import { ConversationDayViewTabs } from './conversation-day-view-tabs';
 import { ConversationList } from './conversation-list';
 import { ConversationDetailPanel } from './conversation-detail';
 import { HotLeadsAlertBanner } from './hot-leads-alert-banner';
@@ -24,6 +26,12 @@ type InitialData = {
 
 const POLL_INTERVAL_MS = 10_000;
 
+const DAY_VIEW_LABELS: Record<DayViewFilter, string> = {
+  active_today: 'activas hoy',
+  new_today: 'nuevas hoy',
+  all: 'todas',
+};
+
 function buildQuery(filters: FilterState): string {
   const params = new URLSearchParams();
   if (filters.status !== 'all') params.set('status', filters.status);
@@ -31,10 +39,13 @@ function buildQuery(filters: FilterState): string {
   if (filters.hotUnattended) params.set('hotUnattended', 'true');
   if (filters.channel !== 'all') params.set('channel', filters.channel);
   if (filters.search.trim()) params.set('search', filters.search.trim());
-  if (filters.dateRange !== 'all') params.set('dateRange', filters.dateRange);
+  if (filters.dayView !== 'active_today') params.set('dayView', filters.dayView);
+  if (filters.dayView === 'all') {
+    if (filters.dateRange !== 'all') params.set('dateRange', filters.dateRange);
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+  }
   if (filters.botId) params.set('botId', filters.botId);
-  if (filters.from) params.set('from', filters.from);
-  if (filters.to) params.set('to', filters.to);
   if (filters.leadType && filters.leadType !== 'sales') {
     params.set('leadType', filters.leadType);
   }
@@ -59,6 +70,7 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
     channel: 'all',
     search: '',
     dateRange: 'all',
+    dayView: 'active_today',
     botId: '',
     from: '',
     to: '',
@@ -67,6 +79,16 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
 
   const handleFilterChange = useCallback((patch: Partial<FilterState>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const handleDayViewChange = useCallback((dayView: DayViewFilter) => {
+    setFilters((prev) => ({
+      ...prev,
+      dayView,
+      dateRange: dayView === 'all' ? prev.dateRange : 'all',
+      from: dayView === 'all' ? prev.from : '',
+      to: dayView === 'all' ? prev.to : '',
+    }));
   }, []);
 
   const queryString = useMemo(() => buildQuery(filters), [filters]);
@@ -108,7 +130,7 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
   return (
     <AdminShell
       title="Conversaciones"
-      subtitle={`${conversations.length} resultado(s) · polling cada 10s`}
+      subtitle={`${conversations.length} ${DAY_VIEW_LABELS[filters.dayView]} · polling cada 10s`}
       aside={
         selectedId ? (
           <ConversationDetailPanel
@@ -127,10 +149,22 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
             hotUnattended: true,
             status: 'all',
             closure: 'all',
+            dayView: 'all',
           }))
         }
       />
-      <ConversationStats stats={stats} />
+      <ConversationStats
+        stats={stats}
+        dayView={filters.dayView}
+        onDayViewChange={handleDayViewChange}
+      />
+      <div className="mt-4">
+        <ConversationDayViewTabs
+          value={filters.dayView}
+          stats={stats}
+          onChange={handleDayViewChange}
+        />
+      </div>
       <ConversationFilters
         filters={filters}
         bots={bots}

@@ -5,6 +5,7 @@ import type {
   ClosureFilter,
   ConversationStatusFilter,
   DateRangeFilter,
+  DayViewFilter,
 } from '../lib/conversation-queries';
 import type { LeadTypeFilter } from '@/lib/ambassador-filters';
 import { CLOSURE_REASONS, CLOSURE_REASON_UI } from '@/lib/conversation-closure-constants';
@@ -20,6 +21,7 @@ export type FilterState = {
   channel: ChannelFilter;
   search: string;
   dateRange: DateRangeFilter;
+  dayView: DayViewFilter;
   botId: string;
   from: string;
   to: string;
@@ -192,17 +194,23 @@ export function ConversationFilters({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {DATE_CHIPS.map((chip) => (
-          <Chip
-            key={chip.id}
-            active={filters.dateRange === chip.id}
-            onClick={() => onChange({ dateRange: chip.id })}
-          >
-            {chip.label}
-          </Chip>
-        ))}
+        {filters.dayView === 'all' ? (
+          DATE_CHIPS.map((chip) => (
+            <Chip
+              key={chip.id}
+              active={filters.dateRange === chip.id}
+              onClick={() => onChange({ dateRange: chip.id })}
+            >
+              {chip.label}
+            </Chip>
+          ))
+        ) : (
+          <span className="text-xs text-fg-muted">
+            Filtro de fecha disponible en la vista &quot;Todas&quot;
+          </span>
+        )}
 
-        {filters.dateRange === 'custom' ? (
+        {filters.dayView === 'all' && filters.dateRange === 'custom' ? (
           <div className="flex items-center gap-2">
             <Input
               type="date"

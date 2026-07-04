@@ -17,7 +17,7 @@ export default async function ConversationsPage() {
   const supabase = createAdminClient();
 
   const [conversations, stats, bots] = await Promise.all([
-    fetchConversations(supabase, { leadType: 'sales' }),
+    fetchConversations(supabase, { leadType: 'sales', dayView: 'active_today' }),
     fetchDashboardStats(supabase),
     fetchBots(supabase),
   ]);

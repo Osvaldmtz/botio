@@ -27,6 +27,8 @@ export type ClosureFilter =
 
 export type DateRangeFilter = 'today' | 'yesterday' | '7d' | 'custom' | 'all';
 
+export type DayViewFilter = 'active_today' | 'new_today' | 'all';
+
 export type ConversationFilters = {
   botId?: string;
   channel?: ChannelFilter;
@@ -35,6 +37,7 @@ export type ConversationFilters = {
   closure?: ClosureFilter;
   hotUnattended?: boolean;
   dateRange?: DateRangeFilter;
+  dayView?: DayViewFilter;
   from?: string;
   to?: string;
   leadType?: LeadTypeFilter;
@@ -103,6 +106,10 @@ export type ConversationDetail = ConversationSummary & {
 
 function formatMexicoDate(date: Date): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: MEXICO_TZ }).format(date);
+}
+
+export function getMexicoTodayBounds(): { start: string; end: string } {
+  return mexicoDayBounds(formatMexicoDate(new Date()));
 }
 
 function mexicoDayBounds(dateStr: string): { start: string; end: string } {
@@ -213,9 +220,18 @@ export async function fetchConversations(
       .gte('last_message_at', since24h);
   }
 
-  const { start, end } = resolveDateBounds(filters);
-  if (start) q = q.gte('last_message_at', start);
-  if (end) q = q.lte('last_message_at', end);
+  const dayView = filters.dayView ?? 'active_today';
+  if (dayView === 'active_today') {
+    const { start, end } = getMexicoTodayBounds();
+    q = q.gte('last_message_at', start).lte('last_message_at', end);
+  } else if (dayView === 'new_today') {
+    const { start, end } = getMexicoTodayBounds();
+    q = q.gte('created_at', start).lte('created_at', end);
+  } else {
+    const { start, end } = resolveDateBounds(filters);
+    if (start) q = q.gte('last_message_at', start);
+    if (end) q = q.lte('last_message_at', end);
+  }
 
   const search = filters.search?.trim();
   if (search) {
@@ -274,7 +290,7 @@ export async function fetchDashboardStats(
   supabase: SupabaseClient,
   botId?: string,
 ): Promise<DashboardStats> {
-  const todayBounds = mexicoDayBounds(formatMexicoDate(new Date()));
+  const todayBounds = getMexicoTodayBounds();
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
   let todayQuery = supabase

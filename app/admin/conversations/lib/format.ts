@@ -1,6 +1,16 @@
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+const MEXICO_TZ = 'America/Mexico_City';
+
+export function formatMexicoDate(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: MEXICO_TZ }).format(date);
+}
+
+export function isCreatedTodayMexico(createdAt: string): boolean {
+  return formatMexicoDate(new Date(createdAt)) === formatMexicoDate(new Date());
+}
+
 export function formatRelativeTime(iso: string | null): string {
   if (!iso) return '—';
   return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: es });

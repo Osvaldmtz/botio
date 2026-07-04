@@ -11,6 +11,7 @@ import {
   type ConversationFilters,
   type ConversationStatusFilter,
   type DateRangeFilter,
+  type DayViewFilter,
 } from '@/app/admin/conversations/lib/conversation-queries';
 import type { LeadTypeFilter } from '@/lib/ambassador-filters';
 import { isClosureReason } from '@/lib/conversation-closure';
@@ -39,6 +40,10 @@ function parseFilters(searchParams: URLSearchParams): ConversationFilters {
   const leadType: LeadTypeFilter =
     leadTypeParam === 'all' || leadTypeParam === 'ambassadors' ? leadTypeParam : 'sales';
 
+  const dayViewParam = searchParams.get('dayView');
+  const dayView: DayViewFilter =
+    dayViewParam === 'new_today' || dayViewParam === 'all' ? dayViewParam : 'active_today';
+
   return {
     botId: searchParams.get('botId') ?? undefined,
     channel: validChannel,
@@ -47,6 +52,7 @@ function parseFilters(searchParams: URLSearchParams): ConversationFilters {
     closure,
     hotUnattended: searchParams.get('hotUnattended') === 'true',
     dateRange: dateRange ?? 'all',
+    dayView,
     from: searchParams.get('from') ?? undefined,
     to: searchParams.get('to') ?? undefined,
     leadType,

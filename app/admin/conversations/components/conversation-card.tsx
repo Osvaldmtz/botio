@@ -9,6 +9,7 @@ import {
   conversationStatus,
   extractLeadName,
   formatRelativeTime,
+  isCreatedTodayMexico,
   isHotLead,
   isNewHotLead,
   statusToneToBadge,
@@ -31,6 +32,7 @@ export function ConversationCard({ conversation, selected, onSelect }: Props) {
   const hot = isHotLead(conversation.lead_score);
   const hotNew = isNewHotLead(conversation.created_at, conversation.lead_score);
   const hotWithoutMessages = hot && conversation.message_count === 0;
+  const createdToday = isCreatedTodayMexico(conversation.created_at);
 
   return (
     <button
@@ -56,6 +58,9 @@ export function ConversationCard({ conversation, selected, onSelect }: Props) {
             <Badge tone={channel.tone}>
               {channel.emoji} {channel.label}
             </Badge>
+            {createdToday ? (
+              <Badge tone="info">Nueva</Badge>
+            ) : null}
             {hot ? (
               <Badge tone="hot">🔥 HOT{conversation.lead_score !== null ? ` ${conversation.lead_score}` : ''}</Badge>
             ) : null}
