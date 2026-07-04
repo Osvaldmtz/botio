@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isAmbassadorConversation, isAmbassadorFlowsEnabled } from '@/lib/ambassador-filters';
 import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { renderName } from '@/lib/render-name';
 import { isTeamMember } from '@/lib/team-members';
@@ -329,8 +330,10 @@ async function createKalyoConversation(
 
   if (existing?.id) {
     if (
-      existing.is_ambassador === true ||
-      (existing.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
+      isAmbassadorConversation({
+        is_ambassador: existing.is_ambassador,
+        metadata: existing.metadata as Record<string, unknown> | null,
+      })
     ) {
       console.log(
         `[trial-onboarding] skip enroll | reason=is_ambassador | conv=${existing.id} | phone=${params.phone}`,
@@ -427,19 +430,24 @@ export async function enrollTrialFromKalyoWebhook(
     `[trial-onboarding-webhook] received | email=${email} | phone=${phone} | source=${source}`,
   );
 
-  const { data: ambassadorByPhone } = await supabase
-    .from('conversations')
-    .select('id, is_ambassador, metadata')
-    .eq('customer_phone', phone)
-    .eq('is_ambassador', true)
-    .maybeSingle();
+  if (isAmbassadorFlowsEnabled()) {
+    const { data: ambassadorByPhone } = await supabase
+      .from('conversations')
+      .select('id, is_ambassador, metadata')
+      .eq('customer_phone', phone)
+      .eq('is_ambassador', true)
+      .maybeSingle();
 
-  if (
-    ambassadorByPhone?.is_ambassador === true ||
-    (ambassadorByPhone?.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
-  ) {
-    console.log(`[trial-onboarding] skip enroll | reason=is_ambassador | phone=${phone}`);
-    return { success: false, reason: 'is_ambassador' };
+    if (
+      ambassadorByPhone &&
+      isAmbassadorConversation({
+        is_ambassador: ambassadorByPhone.is_ambassador,
+        metadata: ambassadorByPhone.metadata as Record<string, unknown> | null,
+      })
+    ) {
+      console.log(`[trial-onboarding] skip enroll | reason=is_ambassador | phone=${phone}`);
+      return { success: false, reason: 'is_ambassador' };
+    }
   }
 
   if (isTeamMember(email)) {

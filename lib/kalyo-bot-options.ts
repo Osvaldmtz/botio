@@ -26,6 +26,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { buildKalyoOfficialPricingPrompt } from '@/lib/kalyo-pricing-data';
 import { EMBAJADOR_SYSTEM_PROMPT } from '@/lib/embajador-prompt';
+import { isAmbassadorFlowsEnabled } from '@/lib/ambassador-filters';
 import { activateTrialForLead } from '@/lib/activate-trial-lead';
 import { isTeamOperatorPhone } from '@/lib/team-members';
 
@@ -824,7 +825,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
     return { systemSuffix: '', options: {} };
   }
 
-  if (args.isAmbassadorLead) {
+  if (args.isAmbassadorLead && isAmbassadorFlowsEnabled()) {
     return {
       systemSuffix: `\n\n${EMBAJADOR_SYSTEM_PROMPT}`,
       options: {

@@ -62,6 +62,7 @@ import {
   notifyAmbassadorLead,
   shouldMarkAmbassadorLead,
 } from '@/lib/ambassador-handler';
+import { isAmbassadorFlowsEnabled } from '@/lib/ambassador-filters';
 import { responseContainsLumaLink } from '@/lib/embajador-faqs';
 
 const HISTORY_LIMIT = 20;
@@ -371,6 +372,7 @@ export async function processIncomingMessage(
 
     await trackObjectionOutcome(supabase, conversation.id, messageBody);
 
+    if (isAmbassadorFlowsEnabled()) {
     let ambassadorState = await loadAmbassadorState(supabase, conversation.id);
     isAmbassadorLead = ambassadorState.isAmbassadorLead;
     // Capture pre-mark state to detect first-time ambassador identification this turn.
@@ -440,6 +442,7 @@ export async function processIncomingMessage(
           source: 'ambassador_handler',
         };
       }
+    }
     }
 
     const purchaseIntent = await handlePurchaseIntentMessage({

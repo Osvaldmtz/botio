@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import type {
   ConversationSummary,
   DashboardStats,
@@ -43,7 +42,6 @@ function buildQuery(filters: FilterState): string {
 }
 
 export function ConversationsDashboard({ initial }: { initial: InitialData }) {
-  const router = useRouter();
   const [conversations, setConversations] = useState(
     sortConversationsWithHotPriority(initial.conversations),
   );
@@ -67,16 +65,9 @@ export function ConversationsDashboard({ initial }: { initial: InitialData }) {
     leadType: 'sales',
   });
 
-  const handleFilterChange = useCallback(
-    (patch: Partial<FilterState>) => {
-      if (patch.leadType === 'ambassadors') {
-        router.push('/admin/ambassadors');
-        return;
-      }
-      setFilters((prev) => ({ ...prev, ...patch }));
-    },
-    [router],
-  );
+  const handleFilterChange = useCallback((patch: Partial<FilterState>) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+  }, []);
 
   const queryString = useMemo(() => buildQuery(filters), [filters]);
 

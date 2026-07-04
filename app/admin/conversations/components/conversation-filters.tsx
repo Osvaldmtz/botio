@@ -56,7 +56,6 @@ const CHANNEL_CHIPS: Array<{ id: ChannelFilter; label: string }> = [
 const LEAD_TYPE_CHIPS: Array<{ id: LeadTypeFilter; label: string }> = [
   { id: 'sales', label: 'Solo ventas' },
   { id: 'all', label: 'Todos' },
-  { id: 'ambassadors', label: 'Solo embajadores' },
 ];
 
 const DATE_CHIPS: Array<{ id: DateRangeFilter; label: string }> = [

@@ -4,7 +4,7 @@ import {
   fetchAmbassadorMetrics,
   type AmbassadorMetrics,
 } from '@/lib/ambassador-admin-queries';
-import { SALES_CONVERSATIONS_OR, TEAM_MEMBERS_FILTER } from '@/lib/ambassador-filters';
+import { SALES_CONVERSATIONS_OR, TEAM_MEMBERS_FILTER, isAmbassadorFlowsEnabled } from '@/lib/ambassador-filters';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -49,7 +49,7 @@ export type MetricsBundle = {
   closure_breakdown: Record<string, number>;
   trends_30d: TrendDay[];
   unattended_hot_leads: number;
-  ambassadors: AmbassadorMetrics;
+  ambassadors?: AmbassadorMetrics;
   /** Total conversations in 30d including ambassadors (for before/after reporting). */
   total_conversations_30d_including_ambassadors: number;
 };
@@ -99,6 +99,7 @@ function buildTrendDays(
 
 export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<MetricsBundle> {
   const since = last30Days();
+  const ambassadorFlowsEnabled = isAmbassadorFlowsEnabled();
 
   const [
     convRes,
@@ -152,7 +153,7 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
       .or(SALES_CONVERSATIONS_OR)
       .or(TEAM_MEMBERS_FILTER),
     supabase.from('conversations').select('id').eq('is_ambassador', true),
-    fetchAmbassadorMetrics(supabase),
+    ambassadorFlowsEnabled ? fetchAmbassadorMetrics(supabase) : Promise.resolve(null),
   ]);
 
   if (convRes.error) throw new Error(convRes.error.message);
@@ -281,7 +282,7 @@ export async function fetchMetricsBundle(supabase: SupabaseClient): Promise<Metr
     closure_breakdown,
     trends_30d,
     unattended_hot_leads: hotRes.count ?? 0,
-    ambassadors,
+    ...(ambassadors ? { ambassadors } : {}),
     total_conversations_30d_including_ambassadors: convAllRes.count ?? leads,
   };
 }

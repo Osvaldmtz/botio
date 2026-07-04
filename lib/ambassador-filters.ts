@@ -1,5 +1,21 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/** Re-enable ambassador bot + admin with ENABLE_AMBASSADOR_FLOWS=true in Vercel. */
+export function isAmbassadorFlowsEnabled(): boolean {
+  return process.env.ENABLE_AMBASSADOR_FLOWS === 'true';
+}
+
+export function isAmbassadorConversation(row: {
+  is_ambassador?: boolean | null;
+  metadata?: Record<string, unknown> | null;
+}): boolean {
+  if (!isAmbassadorFlowsEnabled()) return false;
+  return (
+    row.is_ambassador === true ||
+    row.metadata?.is_ambassador_lead === true
+  );
+}
+
 /** PostgREST filter: sales leads only (excludes is_ambassador = true). */
 export const SALES_CONVERSATIONS_OR = 'is_ambassador.is.null,is_ambassador.eq.false';
 

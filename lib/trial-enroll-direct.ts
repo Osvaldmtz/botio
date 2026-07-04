@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isAmbassadorConversation } from '@/lib/ambassador-filters';
 import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { isTeamMember } from '@/lib/team-members';
 import { markTrialActivatedByContact } from '@/lib/conversation-outcome';
@@ -261,8 +262,11 @@ async function upsertKalyoConversation(
   }
 
   if (
-    existing?.is_ambassador === true ||
-    (existing?.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
+    existing &&
+    isAmbassadorConversation({
+      is_ambassador: existing.is_ambassador,
+      metadata: existing.metadata as Record<string, unknown> | null,
+    })
   ) {
     return { ok: false, error: 'phone belongs to ambassador lead' };
   }

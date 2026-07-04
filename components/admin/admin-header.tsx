@@ -21,7 +21,6 @@ export function AdminHeader() {
   const isRoadmap = pathname?.startsWith('/admin/roadmap');
   const isDashboard =
     pathname === '/admin/dashboard' || pathname === '/admin';
-  const isAmbassadors = pathname?.startsWith('/admin/ambassadors');
   const isKpis = pathname?.startsWith('/admin/kpis');
   const isTasks = pathname?.startsWith('/admin/tasks');
   const isConversations =
@@ -94,11 +93,6 @@ export function AdminHeader() {
       label: 'KPIs',
       active: isKpis,
       icon: <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.5} />,
-    },
-    {
-      href: '/admin/ambassadors',
-      label: '🎓 Embajadores',
-      active: isAmbassadors,
     },
   ];
 

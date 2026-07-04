@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isAmbassadorConversation } from '@/lib/ambassador-filters';
 
 export type ObjectionType =
   | 'price'
@@ -226,9 +227,12 @@ export async function detectObjection(
     .maybeSingle();
 
   if (
-    convRow?.is_ambassador === true ||
     convRow?.is_team_member === true ||
-    (convRow?.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
+    (convRow &&
+      isAmbassadorConversation({
+        is_ambassador: convRow.is_ambassador,
+        metadata: convRow.metadata as Record<string, unknown> | null,
+      }))
   ) {
     return null;
   }

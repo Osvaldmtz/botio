@@ -133,6 +133,7 @@ async function runLeadFollowup(): Promise<Response> {
         conversation_id: conv.id,
         role: 'assistant',
         content: body,
+        metadata: { source: 'lead_followup' },
       });
 
       const followupAt = new Date().toISOString();

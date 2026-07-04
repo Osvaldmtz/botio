@@ -143,7 +143,7 @@ const EMBAJADOR_RE =
   /embajador|programa de afiliados|afiliad[oa]|webinar|comisi[oó]n|ingreso extra|ganar dinero/i;
 
 function detectIntent(text: string): string {
-  if (EMBAJADOR_RE.test(text)) return 'Embajadores';
+  if (isAmbassadorFlowsEnabled() && EMBAJADOR_RE.test(text)) return 'Embajadores';
   if (SUPPORT_RE.test(text)) return 'Soporte';
   if (DEMO_RE.test(text)) return 'Demo';
   if (VOCATIONAL_RE.test(text)) return 'Vocacional';
@@ -189,6 +189,7 @@ function recommendedActionFromScore(score: number): string {
 }
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isAmbassadorConversation, isAmbassadorFlowsEnabled } from '@/lib/ambassador-filters';
 import { notifyHotLeadIfNew } from '@/lib/hot-lead-notifier';
 
 export function enrichLead(input: LeadEnrichmentInput): EnrichedLead {
@@ -266,9 +267,12 @@ export async function enrichAndNotifyLead(
     .maybeSingle();
 
   if (
-    convRow?.is_ambassador === true ||
     convRow?.is_team_member === true ||
-    (convRow?.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
+    (convRow &&
+      isAmbassadorConversation({
+        is_ambassador: convRow.is_ambassador,
+        metadata: convRow.metadata as Record<string, unknown> | null,
+      }))
   ) {
     console.log(
       `[lead-enrichment] skip | reason=${convRow?.is_team_member ? 'is_team_member' : 'is_ambassador'} | conv=${params.conversationId}`,

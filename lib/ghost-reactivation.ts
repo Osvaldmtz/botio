@@ -1,6 +1,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isAdPrefillMessage } from '@/lib/conversation-utils';
+import { isAmbassadorConversation } from '@/lib/ambassador-filters';
 import { normalizeStage } from '@/lib/pipeline';
 import { getAppBaseUrl, getQstashClient } from '@/lib/qstash-client';
 import { sendWhatsApp } from '@/lib/twilio';
@@ -122,7 +123,12 @@ export async function isGhostReactivationEligible(
     return { eligible: false, reason: 'conversation_not_found' };
   }
 
-  if (conv.is_ambassador === true) {
+  if (
+    isAmbassadorConversation({
+      is_ambassador: conv.is_ambassador,
+      metadata: conv.metadata as Record<string, unknown> | null,
+    })
+  ) {
     return { eligible: false, reason: 'ambassador' };
   }
 

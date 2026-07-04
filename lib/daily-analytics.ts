@@ -1,6 +1,7 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isEngagementMetricMessage } from '@/lib/message-metrics-filters';
 
 const ANALYSIS_MODEL = 'claude-sonnet-4-6';
 const MAX_CONVERSATIONS_FOR_AI = 100;
@@ -160,6 +161,9 @@ function buildSnapshot(
   createdToday: boolean,
 ): ConversationSnapshot {
   const userMsgs = messages.filter((m) => m.role === 'user');
+  const engagementMsgs = messages.filter(
+    (m) => m.role === 'user' || isEngagementMetricMessage(m),
+  );
   const first = userMsgs[0]?.content ?? '';
   const last = userMsgs[userMsgs.length - 1]?.content ?? '';
 
@@ -171,7 +175,7 @@ function buildSnapshot(
     intent: conv.lead_intent,
     signals: parseSignals(conv.lead_signals),
     lead_captured: conv.lead_captured,
-    total_messages: messages.length,
+    total_messages: engagementMsgs.length,
     user_messages: userMsgs.length,
     first_user_message: first.slice(0, 200),
     last_user_message: last.slice(0, 200),
@@ -285,8 +289,12 @@ export async function generateDailyReport(
 
   if (msgError) throw msgError;
 
+  const engagementDayMessages = ((dayMessages ?? []) as MessageRow[]).filter(
+    (m) => m.role === 'user' || isEngagementMetricMessage(m),
+  );
+
   const activeConvIds = Array.from(
-    new Set((dayMessages ?? []).map((m) => m.conversation_id)),
+    new Set(engagementDayMessages.map((m) => m.conversation_id)),
   );
   if (activeConvIds.length === 0) {
     const empty: DailyReport = {

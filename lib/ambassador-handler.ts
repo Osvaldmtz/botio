@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isAmbassadorConversation, isAmbassadorFlowsEnabled } from '@/lib/ambassador-filters';
 import { detectAmbassadorIntent, isLikelyClientPsychologist } from '@/lib/intent-detector';
 import { matchesAmbassadorFaqSignal } from '@/lib/embajador-faqs';
 import { buildAmbassadorReply } from '@/lib/ambassador-messages';
@@ -34,8 +35,10 @@ export async function loadAmbassadorState(
   const metadata = (data?.metadata as Record<string, unknown> | null) ?? {};
 
   return {
-    isAmbassadorLead:
-      data?.is_ambassador === true || metadata.is_ambassador_lead === true,
+    isAmbassadorLead: isAmbassadorConversation({
+      is_ambassador: data?.is_ambassador,
+      metadata,
+    }),
     webinarLinkSentAt: (data?.webinar_link_sent_at as string | null) ?? null,
     webinarRegistered: Boolean(data?.webinar_registered),
     metadata,
@@ -48,6 +51,7 @@ export function shouldMarkAmbassadorLead(
   state: AmbassadorConversationState,
   messageBody: string,
 ): boolean {
+  if (!isAmbassadorFlowsEnabled()) return false;
   if (state.isAmbassadorLead) return false;
 
   if (isLikelyClientPsychologist(messageBody)) {

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isAmbassadorConversation } from '@/lib/ambassador-filters';
 
 export type ExperimentScope = 'first_message' | string;
 
@@ -349,9 +350,12 @@ export async function ensureConversationAssignments(
     .maybeSingle();
 
   if (
-    convRow?.is_ambassador === true ||
     convRow?.is_team_member === true ||
-    (convRow?.metadata as Record<string, unknown> | null)?.is_ambassador_lead === true
+    (convRow &&
+      isAmbassadorConversation({
+        is_ambassador: convRow.is_ambassador,
+        metadata: convRow.metadata as Record<string, unknown> | null,
+      }))
   ) {
     console.log(`[ab-testing] skip assignment | reason=${convRow?.is_team_member ? 'is_team_member' : 'is_ambassador'} | conv=${conversationId}`);
     return [];
