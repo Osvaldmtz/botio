@@ -1,11 +1,48 @@
 import 'server-only';
 import { google } from 'googleapis';
 import { unstable_cache } from 'next/cache';
-import { getGscSearchConsoleClient } from '@/lib/gsc-oauth';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { parseGoogleCredentialsJson } from '@/lib/google-credentials';
 import type { GscMetrics, GscPeriodDays } from '@/lib/gsc-types';
 
 export type { GscDailyClick, GscMetrics, GscPeriodDays, GscTopPage, GscTopQuery } from '@/lib/gsc-types';
 export { GSC_PERIOD_OPTIONS, parseGscPeriod } from '@/lib/gsc-types';
+
+const SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+const DEFAULT_SITE_URL = 'https://kalyo.io/';
+const SEARCH_CONSOLE_CACHE_KEY = 'search_console';
+const SEARCH_CONSOLE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+export type SearchConsoleKeyword = {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+};
+
+export type SearchConsolePage = {
+  page: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+};
+
+export type SearchConsoleTotals = {
+  clicks: number;
+  impressions: number;
+  avgCtr: number;
+  avgPosition: number;
+};
+
+export type SearchConsoleMetrics = {
+  keywords: SearchConsoleKeyword[];
+  pages: SearchConsolePage[];
+  totals: SearchConsoleTotals | null;
+  updated_at: string;
+  empty?: boolean;
+};
 
 type SearchAnalyticsRow = {
   keys?: string[] | null;
@@ -14,6 +51,14 @@ type SearchAnalyticsRow = {
   ctr?: number | null;
   position?: number | null;
 };
+
+function getSearchConsoleClient() {
+  const auth = new google.auth.GoogleAuth({
+    credentials: parseGoogleCredentialsJson(),
+    scopes: [SCOPE],
+  });
+  return google.searchconsole({ version: 'v1', auth });
+}
 
 function getDateRange(days: number): { startDate: string; endDate: string } {
   const end = new Date();
@@ -53,20 +98,36 @@ async function resolveSiteUrl(
   const accessible = entries.map((s) => s.siteUrl).filter(Boolean);
   if (accessible.length > 0) {
     throw new Error(
-      `La cuenta OAuth no tiene acceso a kalyo.io. Propiedades visibles: ${accessible.join(', ')}. ` +
-        'Agrega el usuario de Google OAuth en Search Console → Configuración → Usuarios y permisos.',
+      `La service account no tiene acceso a kalyo.io. Propiedades visibles: ${accessible.join(', ')}. ` +
+        'Agrega botio-analytics@kalyo-production.iam.gserviceaccount.com en Search Console → Usuarios y permisos.',
     );
   }
 
-  throw new Error(
-    'La cuenta OAuth no tiene propiedades en Search Console. ' +
-      'Inicia sesión en search.google.com/search-console con la misma cuenta del refresh token, ' +
-      'verifica acceso a kalyo.io y regenera GOOGLE_REFRESH_TOKEN si hace falta.',
-  );
+  return DEFAULT_SITE_URL;
+}
+
+function mapKeywordRow(row: SearchAnalyticsRow): SearchConsoleKeyword {
+  return {
+    query: row.keys?.[0] ?? '',
+    clicks: row.clicks ?? 0,
+    impressions: row.impressions ?? 0,
+    ctr: pct(row.ctr),
+    position: roundPosition(row.position),
+  };
+}
+
+function mapPageRow(row: SearchAnalyticsRow): SearchConsolePage {
+  return {
+    page: row.keys?.[0] ?? '',
+    clicks: row.clicks ?? 0,
+    impressions: row.impressions ?? 0,
+    ctr: pct(row.ctr),
+    position: roundPosition(row.position),
+  };
 }
 
 async function fetchGscMetricsRaw(period: GscPeriodDays): Promise<GscMetrics> {
-  const searchconsole = getGscSearchConsoleClient();
+  const searchconsole = getSearchConsoleClient();
   const siteUrl = await resolveSiteUrl(searchconsole);
   const range = getDateRange(period);
 
@@ -142,11 +203,106 @@ async function fetchGscMetricsRaw(period: GscPeriodDays): Promise<GscMetrics> {
 }
 
 const gscCacheByPeriod: Record<GscPeriodDays, () => Promise<GscMetrics>> = {
-  7: unstable_cache(() => fetchGscMetricsRaw(7), ['gsc-oauth-metrics', '7'], { revalidate: 3600 }),
-  14: unstable_cache(() => fetchGscMetricsRaw(14), ['gsc-oauth-metrics', '14'], { revalidate: 3600 }),
-  28: unstable_cache(() => fetchGscMetricsRaw(28), ['gsc-oauth-metrics', '28'], { revalidate: 3600 }),
+  7: unstable_cache(() => fetchGscMetricsRaw(7), ['gsc-metrics', '7'], { revalidate: 3600 }),
+  14: unstable_cache(() => fetchGscMetricsRaw(14), ['gsc-metrics', '14'], { revalidate: 3600 }),
+  28: unstable_cache(() => fetchGscMetricsRaw(28), ['gsc-metrics', '28'], { revalidate: 3600 }),
 };
 
 export async function getGscMetrics(period: GscPeriodDays = 28): Promise<GscMetrics> {
   return gscCacheByPeriod[period]();
+}
+
+async function readSearchConsoleCache(): Promise<SearchConsoleMetrics | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from('meta_cache')
+    .select('payload, expires_at')
+    .eq('cache_key', SEARCH_CONSOLE_CACHE_KEY)
+    .maybeSingle();
+
+  if (!data?.payload || !data.expires_at) return null;
+  if (new Date(data.expires_at).getTime() <= Date.now()) return null;
+  return data.payload as SearchConsoleMetrics;
+}
+
+async function writeSearchConsoleCache(metrics: SearchConsoleMetrics): Promise<void> {
+  const supabase = createAdminClient();
+  const expiresAt = new Date(Date.now() + SEARCH_CONSOLE_CACHE_TTL_MS).toISOString();
+  await supabase.from('meta_cache').upsert(
+    {
+      cache_key: SEARCH_CONSOLE_CACHE_KEY,
+      payload: metrics as unknown as Record<string, unknown>,
+      cached_at: new Date().toISOString(),
+      expires_at: expiresAt,
+    },
+    { onConflict: 'cache_key' },
+  );
+}
+
+async function fetchSearchConsoleRaw(): Promise<SearchConsoleMetrics> {
+  const searchconsole = getSearchConsoleClient();
+  const siteUrl = await resolveSiteUrl(searchconsole);
+  const { startDate, endDate } = getDateRange(28);
+  const baseRequest = { startDate, endDate, dataState: 'all' as const };
+
+  const [keywordsRes, pagesRes, totalsRes] = await Promise.all([
+    searchconsole.searchanalytics.query({
+      siteUrl,
+      requestBody: { ...baseRequest, dimensions: ['query'], rowLimit: 20 },
+    }),
+    searchconsole.searchanalytics.query({
+      siteUrl,
+      requestBody: { ...baseRequest, dimensions: ['page'], rowLimit: 10 },
+    }),
+    searchconsole.searchanalytics.query({
+      siteUrl,
+      requestBody: baseRequest,
+    }),
+  ]);
+
+  const keywordRows = (keywordsRes.data.rows ?? []) as SearchAnalyticsRow[];
+  const pageRows = (pagesRes.data.rows ?? []) as SearchAnalyticsRow[];
+  const totalRows = (totalsRes.data.rows ?? []) as SearchAnalyticsRow[];
+
+  const hasData =
+    keywordRows.length > 0 ||
+    pageRows.length > 0 ||
+    (totalRows[0]?.clicks ?? 0) > 0 ||
+    (totalRows[0]?.impressions ?? 0) > 0;
+
+  if (!hasData) {
+    return {
+      keywords: [],
+      pages: [],
+      totals: null,
+      updated_at: new Date().toISOString(),
+      empty: true,
+    };
+  }
+
+  const totalRow = totalRows[0];
+  return {
+    keywords: keywordRows.map(mapKeywordRow).sort((a, b) => b.clicks - a.clicks),
+    pages: pageRows.map(mapPageRow).sort((a, b) => b.clicks - a.clicks),
+    totals: {
+      clicks: totalRow?.clicks ?? 0,
+      impressions: totalRow?.impressions ?? 0,
+      avgCtr: pct(totalRow?.ctr),
+      avgPosition: roundPosition(totalRow?.position),
+    },
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export async function getSearchConsoleMetrics(options?: {
+  skipCache?: boolean;
+}): Promise<SearchConsoleMetrics> {
+  if (!options?.skipCache) {
+    const cached = await readSearchConsoleCache();
+    if (cached) return cached;
+  }
+
+  const metrics = await fetchSearchConsoleRaw();
+  await writeSearchConsoleCache(metrics);
+  return metrics;
 }
