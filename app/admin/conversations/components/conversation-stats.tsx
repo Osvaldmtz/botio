@@ -11,7 +11,8 @@ export function ConversationStats({ stats }: Props) {
   return (
     <StatsHeader
       items={[
-        { key: 'today', label: 'Conversaciones hoy', value: String(stats.conversationsToday) },
+        { key: 'today', label: 'Activas hoy', value: String(stats.conversationsToday) },
+        { key: 'new', label: 'Nuevas hoy', value: String(stats.newConversationsToday) },
         { key: 'hot', label: 'Hot leads hoy', value: String(stats.hotLeadsToday) },
         { key: 'active', label: 'Activas última hora', value: String(stats.activeLastHour) },
         {

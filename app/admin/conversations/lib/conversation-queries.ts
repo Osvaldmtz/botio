@@ -79,6 +79,7 @@ export type ConversationSummary = {
 
 export type DashboardStats = {
   conversationsToday: number;
+  newConversationsToday: number;
   hotLeadsToday: number;
   activeLastHour: number;
   unanswered: number;
@@ -331,6 +332,7 @@ export async function fetchDashboardStats(
 
   return {
     conversationsToday,
+    newConversationsToday: newToday ?? 0,
     hotLeadsToday,
     activeLastHour,
     unanswered,
