@@ -21,9 +21,27 @@ type ConversationRow = {
   enriched_at?: string | null;
 };
 
+export function normalizeLeadSignals(signals: unknown): string[] {
+  if (Array.isArray(signals)) {
+    return signals.filter((s): s is string => typeof s === 'string');
+  }
+  return [];
+}
+
+export function mergeLeadSignalsPreservingHotAlerts(
+  enrichedSignals: string[],
+  existingSignals: unknown,
+): string[] {
+  const hotAlertSignals = normalizeLeadSignals(existingSignals).filter((s) =>
+    s.startsWith(HOT_ALERT_PREFIX),
+  );
+  return [...enrichedSignals, ...hotAlertSignals];
+}
+
 export function parseHotAlertAt(signals: string[] | null | undefined): Date | null {
-  if (!signals?.length) return null;
-  for (const signal of signals) {
+  const normalized = normalizeLeadSignals(signals);
+  if (!normalized.length) return null;
+  for (const signal of normalized) {
     if (signal.startsWith(HOT_ALERT_PREFIX)) {
       const iso = signal.slice(HOT_ALERT_PREFIX.length);
       const date = new Date(iso);
@@ -126,7 +144,7 @@ export async function sendHotLeadAlert(params: {
     return { sent: false, reason: 'score_below_threshold' };
   }
 
-  const signals = Array.isArray(conversation.lead_signals) ? conversation.lead_signals : [];
+  const signals = normalizeLeadSignals(conversation.lead_signals);
 
   if (!params.force && !shouldSendHotAlert(signals)) {
     console.log(`[hot-lead-alert] skipped — already sent for conv=${conversation.id}`);
@@ -166,10 +184,18 @@ export async function sendHotLeadAlert(params: {
       `${HOT_ALERT_PREFIX}${new Date().toISOString()}`,
     ];
 
-    await supabase
+    const { error: persistError } = await supabase
       .from('conversations')
       .update({ lead_signals: updatedSignals })
       .eq('id', conversation.id);
+
+    if (persistError) {
+      console.error(
+        `[hot-lead-alert] failed to persist hot_alert signal | conv=${conversation.id}`,
+        persistError,
+      );
+      return { sent: false, reason: 'persist_failed' };
+    }
 
     console.log(
       `[telegram-notify] hot lead alert sent | conv=${conversation.id} score=${enrichment.score}`,

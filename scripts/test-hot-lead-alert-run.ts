@@ -2,7 +2,12 @@ import { dirname, join } from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { enrichLead, enrichAndNotifyLead, type ConversationMessage } from '../lib/lead-enrichment';
-import { notifyHotLeadIfNew, notifyHotLeadFromConversation } from '../lib/hot-lead-notifier';
+import {
+  notifyHotLeadIfNew,
+  notifyHotLeadFromConversation,
+  normalizeLeadSignals,
+  shouldSendHotAlert,
+} from '../lib/hot-lead-notifier';
 
 function loadEnvLocal(): void {
   const envPath = join(process.cwd(), '.env.local');
@@ -200,6 +205,41 @@ async function main(): Promise<void> {
   });
   assert(telegramSent.length === 0, 'second call should NOT duplicate alert');
   console.log('[test] idempotency OK');
+
+  await supabase.from('hot_lead_alert_queue').upsert(
+    {
+      conversation_id: conversationId,
+      lead_score: hot.score,
+    },
+    { onConflict: 'conversation_id' },
+  );
+  await supabase
+    .from('hot_lead_alert_queue')
+    .update({ processed_at: null })
+    .eq('conversation_id', conversationId);
+
+  const { data: convSignals } = await supabase
+    .from('conversations')
+    .select('lead_signals')
+    .eq('id', conversationId)
+    .single();
+  assert(
+    !shouldSendHotAlert(normalizeLeadSignals(convSignals?.lead_signals)),
+    'cron pre-check should skip already-alerted conversation',
+  );
+
+  await supabase
+    .from('hot_lead_alert_queue')
+    .update({ processed_at: new Date().toISOString() })
+    .eq('conversation_id', conversationId);
+
+  const { data: queueAfterSkip } = await supabase
+    .from('hot_lead_alert_queue')
+    .select('processed_at')
+    .eq('conversation_id', conversationId)
+    .single();
+  assert(!!queueAfterSkip?.processed_at, 'cron should mark skipped queue item as processed');
+  console.log('[test] cron queue idempotency OK');
 
   const webchatId = await ensureConversation('webchat');
   await seedMessages(webchatId, hotMessages);
