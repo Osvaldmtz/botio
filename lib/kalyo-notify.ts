@@ -3,6 +3,7 @@ import { sendWhatsApp } from '@/lib/twilio';
 import { normalizePhone } from '@/lib/phone';
 import { sendLeadTelegram } from '@/lib/telegram-notify';
 import { enrichLead, type ConversationMessage, type EnrichedLead } from '@/lib/lead-enrichment';
+import { mergeLeadSignalsPreservingHotAlerts } from '@/lib/hot-lead-notifier';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export type NotifySalesInput = {
@@ -73,6 +74,25 @@ async function persistLeadEnrichment(
   enriched: EnrichedLead,
 ): Promise<void> {
   const supabase = createAdminClient();
+  const { data: existing, error: readError } = await supabase
+    .from('conversations')
+    .select('lead_signals')
+    .eq('id', conversationId)
+    .maybeSingle();
+
+  if (readError) {
+    console.error('[kalyo-notify] failed to read lead_signals before persist', {
+      conversationId,
+      error: readError,
+    });
+    return;
+  }
+
+  const mergedSignals = mergeLeadSignalsPreservingHotAlerts(
+    enriched.signals,
+    existing?.lead_signals,
+  );
+
   const { error } = await supabase
     .from('conversations')
     .update({
@@ -81,7 +101,7 @@ async function persistLeadEnrichment(
       lead_country: enriched.country,
       lead_city: enriched.city ?? null,
       lead_intent: enriched.intent,
-      lead_signals: enriched.signals,
+      lead_signals: mergedSignals,
       enriched_at: new Date().toISOString(),
     })
     .eq('id', conversationId);
