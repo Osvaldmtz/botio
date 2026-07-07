@@ -1,44 +1,13 @@
 import 'server-only';
 import Stripe from 'stripe';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { markPaidByEmail } from '@/lib/conversation-outcome';
+import {
+  handleActiveSubscriptionPaid,
+  handleInvoicePaymentSucceeded,
+} from '@/lib/stripe-paid-webhook';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-async function handleSubscriptionCreated(
-  stripe: Stripe,
-  subscription: Stripe.Subscription,
-): Promise<number> {
-  if (subscription.status === 'trialing') {
-    console.log('[stripe-webhook] skip paid outcome | reason=trialing subscription');
-    return 0;
-  }
-
-  if (subscription.status !== 'active') {
-    console.log(
-      `[stripe-webhook] skip paid outcome | reason=status_${subscription.status}`,
-    );
-    return 0;
-  }
-
-  const customerId =
-    typeof subscription.customer === 'string'
-      ? subscription.customer
-      : subscription.customer?.id;
-
-  if (!customerId) return 0;
-
-  const customer = await stripe.customers.retrieve(customerId);
-  if (customer.deleted || !customer.email) return 0;
-
-  const supabase = createAdminClient();
-  const updated = await markPaidByEmail(supabase, customer.email, 'stripe_webhook');
-  console.log(
-    `[stripe-webhook] subscription.created | email=${customer.email} | updated=${updated}`,
-  );
-  return updated;
-}
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -65,17 +34,40 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  if (event.type === 'customer.subscription.created') {
-    try {
-      const updated = await handleSubscriptionCreated(
+  const supabase = createAdminClient();
+
+  try {
+    if (event.type === 'customer.subscription.created') {
+      const updated = await handleActiveSubscriptionPaid(
+        supabase,
         stripe,
         event.data.object as Stripe.Subscription,
+        event.type,
       );
       return Response.json({ received: true, outcome_updated: updated });
-    } catch (err) {
-      console.error('[stripe-webhook] subscription.created handler failed', err);
-      return Response.json({ error: 'Handler failed' }, { status: 500 });
     }
+
+    if (event.type === 'customer.subscription.updated') {
+      const updated = await handleActiveSubscriptionPaid(
+        supabase,
+        stripe,
+        event.data.object as Stripe.Subscription,
+        event.type,
+      );
+      return Response.json({ received: true, outcome_updated: updated });
+    }
+
+    if (event.type === 'invoice.payment_succeeded') {
+      const updated = await handleInvoicePaymentSucceeded(
+        supabase,
+        stripe,
+        event.data.object as Stripe.Invoice,
+      );
+      return Response.json({ received: true, outcome_updated: updated });
+    }
+  } catch (err) {
+    console.error(`[stripe-webhook] ${event.type} handler failed`, err);
+    return Response.json({ error: 'Handler failed' }, { status: 500 });
   }
 
   return Response.json({ received: true });

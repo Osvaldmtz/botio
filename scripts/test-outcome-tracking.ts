@@ -5,7 +5,9 @@ import {
   CONVERSATION_OUTCOMES,
   setConversationOutcome,
   markPaidByEmail,
+  processCustomerPaid,
 } from '../lib/conversation-outcome';
+import { emailToWebOnlyPhone, isWebOnlyPhone } from '../lib/web-only-phone';
 import { enrollTrialFromKalyoWebhook } from '../lib/trial-onboarding-webhook';
 import {
   fetchLearningMetrics,
@@ -104,6 +106,68 @@ async function testStripePaidMark(): Promise<void> {
   assert(data?.outcome === 'paid', 'outcome should be paid');
   assert(data?.outcome_source === 'stripe_webhook', 'source should be stripe_webhook');
   console.log('✓ Stripe paid marks conversation');
+}
+
+async function testPaidViaTrialOnboardingFallback(): Promise<void> {
+  const phone = `+5299908${runId}`;
+  const email = `outcome-onboarding-${runId}@kalyo-test.local`;
+
+  const result = await enrollTrialFromKalyoWebhook(
+    { email, name: 'Onboarding Paid Test', phone, source: 'outcome_test' },
+    { supabase, skipWhatsApp: true },
+  );
+  assert(result.success === true, 'trial enroll should succeed');
+  createdConvIds.push(result.conversation_id);
+
+  await supabase
+    .from('conversations')
+    .update({ outcome: 'trial_activated', outcome_source: 'trial_enroll' })
+    .eq('id', result.conversation_id);
+
+  await supabase
+    .from('conversations')
+    .update({ metadata: {} })
+    .eq('id', result.conversation_id);
+
+  const updated = await markPaidByEmail(supabase, email, 'stripe_webhook');
+  assert(updated === 1, 'paid should resolve conversation via trial_onboarding fallback');
+
+  const { data } = await supabase
+    .from('conversations')
+    .select('outcome')
+    .eq('id', result.conversation_id)
+    .single();
+  assert(data?.outcome === 'paid', 'trial onboarding conv should be paid');
+
+  await supabase.from('trial_onboarding_messages').delete().eq('trial_user_email', email);
+  console.log('✓ Paid resolves conversation via trial_onboarding fallback');
+}
+
+async function testProcessCustomerPaidCreatesWebOnlyConversation(): Promise<void> {
+  const email = `outcome-webonly-${runId}@kalyo-test.local`;
+  const webPhone = emailToWebOnlyPhone(email);
+  assert(isWebOnlyPhone(webPhone), 'web-only phone uses +999 prefix');
+
+  const result = await processCustomerPaid(supabase, email, 'kalyo_upgrade', {
+    name: 'Web Only Client',
+  });
+  assert(result.conversation_created === true, 'should create web-only conversation');
+  assert(result.outcome_updated === 1, 'should mark outcome paid');
+
+  const { data } = await supabase
+    .from('conversations')
+    .select('id, customer_phone, outcome, channel, metadata')
+    .eq('customer_phone', webPhone)
+    .maybeSingle();
+
+  assert(data?.outcome === 'paid', 'web-only conv should be paid');
+  assert(data?.channel === 'web', 'web-only conv channel should be web');
+  const meta = data?.metadata as Record<string, unknown> | null;
+  assert(meta?.customer_email === email, 'email stored in metadata');
+  assert(meta?.web_only === true, 'web_only flag set');
+
+  if (data?.id) createdConvIds.push(data.id as string);
+  console.log('✓ processCustomerPaid creates web-only conversation when missing');
 }
 
 async function testTrialEnrollMark(): Promise<void> {
@@ -210,6 +274,8 @@ async function runTests(): Promise<void> {
   await cleanup();
 
   await testStripePaidMark();
+  await testPaidViaTrialOnboardingFallback();
+  await testProcessCustomerPaidCreatesWebOnlyConversation();
   await testTrialEnrollMark();
   await testCronLostMark();
   await testManualOutcome();

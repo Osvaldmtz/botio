@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { SALES_CONVERSATIONS_OR, TEAM_MEMBERS_FILTER } from '@/lib/ambassador-filters';
 import { incrementTrialTrackingFailureCount } from '@/lib/trial-tracking-metrics';
 import { alertTrialTrackingFailure } from '@/lib/trial-outcome-alert';
+import { emailToWebOnlyPhone } from '@/lib/web-only-phone';
 import {
   CONVERSATION_OUTCOMES,
   type ConversationOutcome,
@@ -50,6 +51,57 @@ export async function findConversationIdsByEmail(
   return (data ?? []).map((row) => row.id as string);
 }
 
+async function findConversationIdsFromTrialOnboarding(
+  supabase: SupabaseClient,
+  email: string,
+): Promise<string[]> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return [];
+
+  const { data, error } = await supabase
+    .from('trial_onboarding_messages')
+    .select('conversation_id')
+    .eq('trial_user_email', normalized)
+    .not('conversation_id', 'is', null);
+
+  if (error) {
+    console.error('[conversation-outcome] trial onboarding lookup failed', error);
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      (data ?? [])
+        .map((row) => row.conversation_id as string | null)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+}
+
+export async function findConversationIdsForContact(
+  supabase: SupabaseClient,
+  params: { email?: string; phone?: string },
+): Promise<string[]> {
+  const ids = new Set<string>();
+
+  if (params.email) {
+    for (const id of await findConversationIdsByEmail(supabase, params.email)) {
+      ids.add(id);
+    }
+    for (const id of await findConversationIdsFromTrialOnboarding(supabase, params.email)) {
+      ids.add(id);
+    }
+  }
+
+  if (params.phone) {
+    for (const id of await findConversationIdsByPhone(supabase, params.phone)) {
+      ids.add(id);
+    }
+  }
+
+  return Array.from(ids);
+}
+
 export async function findConversationIdsByPhone(
   supabase: SupabaseClient,
   phone: string,
@@ -90,9 +142,10 @@ export async function setConversationOutcome(
   if (input.conversationId) {
     ids = [input.conversationId];
   } else {
-    const byEmail = input.email ? await findConversationIdsByEmail(supabase, input.email) : [];
-    const byPhone = input.phone ? await findConversationIdsByPhone(supabase, input.phone) : [];
-    ids = Array.from(new Set([...byEmail, ...byPhone]));
+    ids = await findConversationIdsForContact(supabase, {
+      email: input.email,
+      phone: input.phone,
+    });
   }
 
   if (ids.length === 0) {
@@ -154,6 +207,95 @@ export async function markPaidByEmail(
     source,
   });
   return result.updated;
+}
+
+const DEFAULT_KALYO_BOT_ID = '64f6eed2-1522-48fe-a2c6-f858b767df06';
+
+async function ensureConversationForPaid(
+  supabase: SupabaseClient,
+  email: string,
+  name?: string | null,
+): Promise<string> {
+  const normalized = email.trim().toLowerCase();
+  const existing = await findConversationIdsForContact(supabase, { email: normalized });
+  if (existing.length > 0) return existing[0];
+
+  const botId = process.env.KALYO_BOT_ID ?? DEFAULT_KALYO_BOT_ID;
+  const phone = emailToWebOnlyPhone(normalized);
+  const displayName = name?.trim() || normalized.split('@')[0];
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .insert({
+      bot_id: botId,
+      customer_phone: phone,
+      channel: 'web',
+      lead_score: 50,
+      lead_captured: true,
+      metadata: {
+        source: 'kalyo_web',
+        customer_email: normalized,
+        customer_name: displayName,
+        web_only: true,
+      },
+      last_message_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    const { data: existingConv } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('bot_id', botId)
+      .eq('customer_phone', phone)
+      .maybeSingle();
+
+    if (existingConv?.id) return existingConv.id as string;
+    throw error;
+  }
+
+  console.log(
+    `[conversation-outcome] created web-only conversation | email=${normalized} | conv=${data.id}`,
+  );
+  return data.id as string;
+}
+
+export type ProcessCustomerPaidResult = {
+  outcome_updated: number;
+  onboarding_updated: number;
+  conversation_created: boolean;
+};
+
+/** Marks trial onboarding + conversation outcome paid; creates web-only conv if needed. */
+export async function processCustomerPaid(
+  supabase: SupabaseClient,
+  email: string,
+  source: OutcomeSource = 'stripe_webhook',
+  options?: { name?: string | null },
+): Promise<ProcessCustomerPaidResult> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !normalized.includes('@')) {
+    return { outcome_updated: 0, onboarding_updated: 0, conversation_created: false };
+  }
+
+  const { markTrialUpgradedToPaid } = await import('@/lib/trial-onboarding-enrollment');
+  const onboardingUpdated = await markTrialUpgradedToPaid(supabase, normalized);
+
+  const hadConversation =
+    (await findConversationIdsForContact(supabase, { email: normalized })).length > 0;
+
+  if (!hadConversation) {
+    await ensureConversationForPaid(supabase, normalized, options?.name);
+  }
+
+  const outcomeUpdated = await markPaidByEmail(supabase, normalized, source);
+
+  return {
+    outcome_updated: outcomeUpdated,
+    onboarding_updated: onboardingUpdated,
+    conversation_created: !hadConversation,
+  };
 }
 
 export async function markTrialActivatedByContact(

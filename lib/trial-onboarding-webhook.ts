@@ -3,7 +3,8 @@ import { isAmbassadorConversation, isAmbassadorFlowsEnabled } from '@/lib/ambass
 import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { renderName } from '@/lib/render-name';
 import { isTeamMember } from '@/lib/team-members';
-import { markTrialActivatedByContact } from '@/lib/conversation-outcome';
+import { markTrialActivatedByContact, findConversationIdsByEmail } from '@/lib/conversation-outcome';
+import { emailToWebOnlyPhone, isWebOnlyPhone } from '@/lib/web-only-phone';
 import {
   notifyTrialEnrolled,
   type SendTelegramFn,
@@ -49,7 +50,7 @@ export type WelcomeMessageTwilioFns = {
 export type TrialOnboardingEnrollInput = {
   email: string;
   name: string;
-  phone: string;
+  phone?: string;
   trialStartedAt?: string;
   source?: string;
   tempPassword?: string;
@@ -321,6 +322,54 @@ async function createKalyoConversation(
 ): Promise<string> {
   const botId = process.env.KALYO_BOT_ID ?? DEFAULT_KALYO_BOT_ID;
 
+  const byEmail = await findConversationIdsByEmail(supabase, params.email);
+  if (byEmail.length > 0) {
+    const existingId = byEmail[0];
+    const { data: existing } = await supabase
+      .from('conversations')
+      .select('id, pipeline_stage, is_ambassador, metadata')
+      .eq('id', existingId)
+      .maybeSingle();
+
+    if (existing?.id) {
+      if (
+        isAmbassadorConversation({
+          is_ambassador: existing.is_ambassador,
+          metadata: existing.metadata as Record<string, unknown> | null,
+        })
+      ) {
+        throw new Error('is_ambassador');
+      }
+
+      await supabase
+        .from('conversations')
+        .update({
+          lead_score: 50,
+          lead_temperature: 'warm',
+          lead_intent: 'Trial activated',
+          lead_signals: ['dio email', 'registró trial via Kalyo'],
+          lead_captured: true,
+          metadata: {
+            ...((existing.metadata as Record<string, unknown> | null) ?? {}),
+            source: params.source,
+            customer_email: params.email,
+            customer_name: params.name,
+          },
+          last_message_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+
+      try {
+        const { setPipelineStageTrial } = await import('@/lib/pipeline-utils');
+        await setPipelineStageTrial(supabase, existing.id as string, existing.pipeline_stage ?? null);
+      } catch (err) {
+        console.error('[trial-onboarding-webhook] pipeline stage update failed', err);
+      }
+
+      return existing.id as string;
+    }
+  }
+
   const { data: existing } = await supabase
     .from('conversations')
     .select('id, pipeline_stage, is_ambassador, metadata')
@@ -423,14 +472,15 @@ export async function enrollTrialFromKalyoWebhook(
   const supabase = await resolveSupabaseClient(options?.supabase);
   const email = input.email.trim().toLowerCase();
   const name = input.name.trim();
-  const phone = normalizePhoneForDB(input.phone.trim());
+  const rawPhone = input.phone?.trim() ?? '';
+  const phone = rawPhone ? normalizePhoneForDB(rawPhone) : emailToWebOnlyPhone(email);
   const source = input.source?.trim() || 'kalyo_web';
 
   console.log(
-    `[trial-onboarding-webhook] received | email=${email} | phone=${phone} | source=${source}`,
+    `[trial-onboarding-webhook] received | email=${email} | phone=${phone} | web_only=${isWebOnlyPhone(phone)} | source=${source}`,
   );
 
-  if (isAmbassadorFlowsEnabled()) {
+  if (isAmbassadorFlowsEnabled() && !isWebOnlyPhone(phone)) {
     const { data: ambassadorByPhone } = await supabase
       .from('conversations')
       .select('id, is_ambassador, metadata')
@@ -505,7 +555,7 @@ export async function enrollTrialFromKalyoWebhook(
   const creds = await loadKalyoTwilioCreds(supabase);
   let welcomeResult: WelcomeMessageResult | null = null;
 
-  if (!options?.skipWhatsApp && creds) {
+  if (!options?.skipWhatsApp && creds && !isWebOnlyPhone(phone)) {
     welcomeResult = await sendWelcomeMessage({
       to: phone,
       name,
@@ -605,10 +655,7 @@ export function validateTrialEnrollBody(body: unknown):
   if (!name) {
     return { ok: false, error: 'name is required' };
   }
-  if (!phone) {
-    return { ok: false, error: 'phone is required' };
-  }
-  if (!isValidPhone(phone)) {
+  if (phone && !isValidPhone(phone)) {
     return { ok: false, error: 'phone must be valid E.164 format' };
   }
 
@@ -617,7 +664,7 @@ export function validateTrialEnrollBody(body: unknown):
     data: {
       email,
       name,
-      phone,
+      phone: phone || undefined,
       trialStartedAt,
       source,
       tempPassword: tempPassword || undefined,

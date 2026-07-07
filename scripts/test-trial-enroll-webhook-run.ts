@@ -5,6 +5,7 @@ import {
   enrollTrialFromKalyoWebhook,
   validateTrialEnrollBody,
 } from '../lib/trial-onboarding-webhook';
+import { emailToWebOnlyPhone, isWebOnlyPhone } from '../lib/web-only-phone';
 
 function loadEnvLocal(): void {
   const envPath = join(process.cwd(), '.env.local');
@@ -74,6 +75,12 @@ async function runTests(): Promise<void> {
     phone: '551234',
   });
   assert(!badPhone.ok, 'invalid phone rejected by validator');
+
+  const noPhoneValid = validateTrialEnrollBody({
+    email: `no-phone-${Date.now()}@kalyo-test.local`,
+    name: 'Web Only',
+  });
+  assert(noPhoneValid.ok, 'missing phone accepted for web-only enroll');
 
   const result = await enrollTrialFromKalyoWebhook(
     {
@@ -160,6 +167,26 @@ async function runTests(): Promise<void> {
 
   await supabase.from('trial_onboarding_messages').delete().eq('trial_user_email', expiredEmail);
   console.log('  ✓ expired trial re-enrollment correctly blocked');
+
+  const webOnlyEmail = `enroll-webonly-${Date.now()}@kalyo-test.local`;
+  const webOnlyResult = await enrollTrialFromKalyoWebhook(
+    { email: webOnlyEmail, name: 'Rosa Web Only', source: 'kalyo_web' },
+    { supabase, skipWhatsApp: true },
+  );
+  assert(webOnlyResult.success === true, 'web-only enroll succeeds');
+  const expectedWebPhone = emailToWebOnlyPhone(webOnlyEmail);
+  const { data: webConv } = await supabase
+    .from('conversations')
+    .select('customer_phone, metadata')
+    .eq('id', webOnlyResult.conversation_id)
+    .single();
+  assert(webConv?.customer_phone === expectedWebPhone, 'web-only phone assigned');
+  assert(isWebOnlyPhone(webConv?.customer_phone), 'phone flagged as web-only');
+  const webMeta = webConv?.metadata as Record<string, unknown> | null;
+  assert(webMeta?.customer_email === webOnlyEmail, 'email stored on web-only conv');
+  await supabase.from('trial_onboarding_messages').delete().eq('trial_user_email', webOnlyEmail);
+  await supabase.from('conversations').delete().eq('id', webOnlyResult.conversation_id);
+  console.log('  ✓ web-only enroll without phone');
 
   await cleanup();
   console.log('\nAll trial enroll webhook tests passed.');
