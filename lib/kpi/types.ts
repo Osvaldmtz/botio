@@ -95,6 +95,11 @@ export type GA4ChannelRow = {
   engagementRate: number;
 };
 
+export type MetaPixelEventStat = {
+  event: string;
+  count: number;
+};
+
 export type KpiFetchResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string };

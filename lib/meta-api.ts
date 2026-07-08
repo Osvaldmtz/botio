@@ -1,6 +1,6 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { InstagramInsightPoint, InstagramMediaItem, MetaAdsInsight } from '@/lib/kpi/types';
+import type { InstagramInsightPoint, InstagramMediaItem, MetaAdsInsight, MetaPixelEventStat } from '@/lib/kpi/types';
 
 const META_GRAPH = 'https://graph.facebook.com/v19.0';
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
@@ -370,6 +370,38 @@ export async function fetchMetaAdsDaily(datePreset = 'last_30d'): Promise<MetaAd
   return withAdsCurrency(data?.data ?? []);
 }
 
+const DEFAULT_META_PIXEL_ID = '3356117344562696';
+
+export function getMetaPixelId(): string {
+  return process.env.META_PIXEL_ID ?? DEFAULT_META_PIXEL_ID;
+}
+
+/** Pixel event counts from Meta Graph (custom + standard events). */
+export async function fetchMetaPixelEventStats(days = 30): Promise<MetaPixelEventStat[]> {
+  const token = getMetaToken();
+  const pixelId = getMetaPixelId();
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - days * 86_400;
+
+  const params = new URLSearchParams({
+    access_token: token,
+    aggregation: 'event',
+    start_time: String(start),
+    end_time: String(end),
+  });
+
+  const cacheKey = `meta_pixel_stats_${pixelId}_${days}d`;
+  const json = await metaFetch<{ data?: Array<{ value?: string; count?: number }> }>(
+    `${META_GRAPH}/${pixelId}/stats?${params}`,
+    cacheKey,
+  );
+
+  return (json.data ?? [])
+    .filter((row) => row.value && typeof row.count === 'number')
+    .map((row) => ({ event: row.value as string, count: row.count as number }))
+    .sort((a, b) => b.count - a.count);
+}
+
 /** Facebook Page Insights metrics (New Page Experience — replaces deprecated IG metrics). */
 const PAGE_INSIGHT_METRIC_MAP = {
   reach: 'page_total_media_view_unique',
@@ -636,6 +668,100 @@ export async function fetchInstagramMedia(): Promise<InstagramMediaItem[]> {
     saved: 0,
     shares: 0,
   }));
+}
+
+/** Meta budget fields use the currency's minor unit (MXN → centavos). */
+const MXN_MINOR_UNIT = 100;
+
+export type AdsetInsightsSnapshot = {
+  ctr: number;
+  frequency: number;
+  impressions: number;
+  clicks: number;
+};
+
+function minorUnitsToMxn(minorUnits: number): number {
+  return minorUnits / MXN_MINOR_UNIT;
+}
+
+function mxnToMinorUnits(mxn: number): number {
+  return Math.round(mxn * MXN_MINOR_UNIT);
+}
+
+async function metaGraphPost<T extends Record<string, unknown>>(
+  path: string,
+  accessToken: string,
+  body: Record<string, string>,
+): Promise<T> {
+  const params = new URLSearchParams({ access_token: accessToken, ...body });
+  const res = await fetch(`${META_GRAPH}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+    next: { revalidate: 0 },
+  });
+  const json = (await res.json()) as T & { error?: MetaGraphError };
+
+  if (!res.ok || json.error) {
+    throw new Error(json.error?.message ?? `Meta API error (${res.status})`);
+  }
+
+  return json;
+}
+
+export async function fetchAdsetInsights(
+  adsetId: string,
+  datePreset = 'last_7d',
+): Promise<AdsetInsightsSnapshot> {
+  const token = getMetaToken();
+  const json = await metaGraphGet<{ data: Array<Record<string, string>> }>(
+    `/${adsetId}/insights`,
+    token,
+    {
+      fields: 'ctr,frequency,impressions,clicks',
+      date_preset: datePreset,
+    },
+  );
+
+  const row = json.data?.[0];
+  if (!row) {
+    throw new Error(`No insights returned for adset ${adsetId}`);
+  }
+
+  return {
+    ctr: Number(row.ctr) || 0,
+    frequency: Number(row.frequency) || 0,
+    impressions: Number(row.impressions) || 0,
+    clicks: Number(row.clicks) || 0,
+  };
+}
+
+export async function fetchAdsetDailyBudgetMxn(adsetId: string): Promise<number> {
+  const token = getMetaToken();
+  const json = await metaGraphGet<{ daily_budget?: string; name?: string; status?: string }>(
+    `/${adsetId}`,
+    token,
+    { fields: 'daily_budget,name,status' },
+  );
+
+  const dailyBudget = Number(json.daily_budget);
+  if (!Number.isFinite(dailyBudget) || dailyBudget <= 0) {
+    throw new Error(`Adset ${adsetId} has no daily_budget (status: ${json.status ?? 'unknown'})`);
+  }
+
+  return minorUnitsToMxn(dailyBudget);
+}
+
+export async function updateAdsetDailyBudgetMxn(
+  adsetId: string,
+  budgetMxn: number,
+): Promise<number> {
+  const token = getMetaToken();
+  const minorUnits = mxnToMinorUnits(budgetMxn);
+  await metaGraphPost<{ success?: boolean }>(`/${adsetId}`, token, {
+    daily_budget: String(minorUnits),
+  });
+  return minorUnitsToMxn(minorUnits);
 }
 
 export async function fetchInstagramFollowerCount(): Promise<number | null> {

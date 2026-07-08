@@ -5,10 +5,12 @@ import type { KalyoMetricRow, TwilioMetricRow } from '@/lib/kpi/types';
 import {
   fetchMetaAds,
   fetchMetaAdsDaily,
+  fetchMetaPixelEventStats,
   fetchInstagramFollowerCount,
   fetchInstagramInsights,
   fetchInstagramMedia,
 } from '@/lib/meta-api';
+import { fetchCtaEventsSummary } from '@/lib/cta-events-queries';
 import {
   getAppMetrics,
   getChannelBreakdown,
@@ -24,11 +26,12 @@ import type {
   InstagramPageData,
   AdsPageData,
   WebPageData,
+  LandingCtasPageData,
 } from '@/lib/kpi/utils';
 import { aggregateTwilio } from '@/lib/kpi/utils';
 import { fetchStripeActiveSubscriberCount, getMRRCached } from '@/lib/stripe-mrr';
 
-export type { ExecutiveSummaryData, InstagramPageData, AdsPageData, WebPageData } from '@/lib/kpi/utils';
+export type { ExecutiveSummaryData, InstagramPageData, AdsPageData, WebPageData, LandingCtasPageData } from '@/lib/kpi/utils';
 export { aggregateTwilio } from '@/lib/kpi/utils';
 
 export async function getLatestKalyoMetrics(): Promise<KalyoMetricRow | null> {
@@ -306,5 +309,31 @@ export async function fetchWebPageData(): Promise<WebPageData> {
       : null,
     clarityError: clarity.error,
     error,
+  };
+}
+
+export async function fetchLandingCtasPageData(): Promise<LandingCtasPageData> {
+  const [cta, metaAds, metaPixel] = await Promise.all([
+    safeFetch('cta_events', () => fetchCtaEventsSummary(30)),
+    safeFetch('meta_ads_30d', () => fetchMetaAds('last_30d')),
+    safeFetch('meta_pixel_events', () => fetchMetaPixelEventStats(30)),
+  ]);
+
+  return {
+    cta: cta.data ?? {
+      counts: {
+        cta_demo_hero: 0,
+        cta_demo_section: 0,
+        cta_whatsapp_landing: 0,
+        cta_demo_confirmed: 0,
+      },
+      daily: [],
+      conversionRate: null,
+      totalEvents: 0,
+    } satisfies import('@/lib/cta-events-utils').CtaEventsSummary,
+    metaAds: metaAds.data ?? [],
+    metaPixelEvents: metaPixel.data ?? [],
+    metaAdsError: metaAds.error,
+    metaPixelError: metaPixel.error,
   };
 }

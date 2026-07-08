@@ -1,5 +1,6 @@
 import type { KalyoMetricRow, TwilioMetricRow } from '@/lib/kpi/types';
-import type { GA4DailyMetric, GA4PageRow, InstagramInsightPoint, InstagramMediaItem, MetaAdsInsight } from '@/lib/kpi/types';
+import type { GA4DailyMetric, GA4PageRow, InstagramInsightPoint, InstagramMediaItem, MetaAdsInsight, MetaPixelEventStat } from '@/lib/kpi/types';
+import type { CtaEventsSummary } from '@/lib/cta-events-utils';
 
 export const ACTIVE_SUBSCRIBER_GOAL = 100;
 
@@ -78,4 +79,12 @@ export type WebPageData = {
   clarity: ClarityPageMetrics | null;
   clarityError: string | null;
   error: string | null;
+};
+
+export type LandingCtasPageData = {
+  cta: CtaEventsSummary;
+  metaAds: MetaAdsInsight[];
+  metaPixelEvents: MetaPixelEventStat[];
+  metaAdsError: string | null;
+  metaPixelError: string | null;
 };
