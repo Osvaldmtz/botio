@@ -109,28 +109,28 @@ function CtaSection({ data, range }: { data: LandingCtasPageData; range: 7 | 14 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <KpiVividMetric
           label="Demo Hero"
-          value={counts.cta_demo_hero}
+          value={counts.cta_demo_hero.toLocaleString()}
           icon={LayoutTemplate}
           accent="sky"
           spark={chartData.map((d) => d.hero)}
         />
         <KpiVividMetric
           label="Demo Section"
-          value={counts.cta_demo_section}
+          value={counts.cta_demo_section.toLocaleString()}
           icon={MousePointerClick}
           accent="indigo"
           spark={chartData.map((d) => d.section)}
         />
         <KpiVividMetric
           label="WhatsApp"
-          value={counts.cta_whatsapp_landing}
+          value={counts.cta_whatsapp_landing.toLocaleString()}
           icon={MessageCircle}
           accent="emerald"
           spark={chartData.map((d) => d.whatsapp)}
         />
         <KpiVividMetric
           label="Demo Confirmada"
-          value={counts.cta_demo_confirmed}
+          value={counts.cta_demo_confirmed.toLocaleString()}
           icon={CalendarCheck}
           accent="amber"
           spark={chartData.map((d) => d.confirmed)}
@@ -138,7 +138,7 @@ function CtaSection({ data, range }: { data: LandingCtasPageData; range: 7 | 14 
         <KpiVividMetric
           label="Conv. demo"
           value={conversion}
-          detail="confirmada / (hero + section)"
+          hint="confirmada / (hero + section)"
           icon={Percent}
           accent="rose"
         />
@@ -175,9 +175,15 @@ function CtaSection({ data, range }: { data: LandingCtasPageData; range: 7 | 14 
 
       <KpiVividPanel title="Desglose" accent="emerald">
         <KpiVividTable
+          rowKey={(row) => row.event}
           columns={[
-            { key: 'event', label: 'Evento' },
-            { key: 'count', label: 'Total 30d', align: 'right' },
+            { key: 'event', header: 'Evento', render: (row) => row.event },
+            {
+              key: 'count',
+              header: `Total ${range}d`,
+              className: 'text-right tabular-nums',
+              render: (row) => row.count,
+            },
           ]}
           rows={(Object.keys(EVENT_LABELS) as CtaEventName[]).map((key) => ({
             event: EVENT_LABELS[key],
@@ -218,7 +224,7 @@ function MetaSection({ data }: { data: LandingCtasPageData }) {
         <KpiVividMetric label="Clicks Ads" value={clicks.toLocaleString()} icon={MousePointerClick} accent="amber" />
         <KpiVividMetric
           label="Eventos Pixel CTA"
-          value={ctaPixelEvents.reduce((sum, row) => sum + row.count, 0)}
+          value={ctaPixelEvents.reduce((sum, row) => sum + row.count, 0).toLocaleString()}
           icon={Sparkles}
           accent="sky"
         />
@@ -227,9 +233,15 @@ function MetaSection({ data }: { data: LandingCtasPageData }) {
       {data.metaPixelEvents.length > 0 ? (
         <KpiVividPanel title="Eventos Pixel (30d)" accent="violet">
           <KpiVividTable
+            rowKey={(row) => row.event}
             columns={[
-              { key: 'event', label: 'Evento' },
-              { key: 'count', label: 'Conteo', align: 'right' },
+              { key: 'event', header: 'Evento', render: (row) => row.event },
+              {
+                key: 'count',
+                header: 'Conteo',
+                className: 'text-right tabular-nums',
+                render: (row) => row.count,
+              },
             ]}
             rows={data.metaPixelEvents.slice(0, 15).map((row) => ({
               event: row.event,
