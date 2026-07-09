@@ -25,6 +25,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           'application/octet-stream',
         ],
         maximumSizeInBytes: 50 * 1024 * 1024,
+        addRandomSuffix: true,
         tokenPayload: JSON.stringify({ purpose: 'transcribe-temp' }),
       }),
       onUploadCompleted: async ({ blob }) => {
