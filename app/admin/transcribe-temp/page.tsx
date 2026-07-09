@@ -14,9 +14,15 @@ interface FileEntry {
 
 export default function TranscribeTempPage() {
   const [secret, setSecret] = useState('');
+  const secretRef = useRef('');
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const updateSecret = useCallback((value: string) => {
+    secretRef.current = value;
+    setSecret(value);
+  }, []);
 
   const addFiles = useCallback((fileList: FileList | null) => {
     if (!fileList) return;
@@ -28,44 +34,42 @@ export default function TranscribeTempPage() {
     setEntries((prev) => [...prev, ...newEntries]);
   }, []);
 
-  const transcribeOne = useCallback(
-    async (entry: FileEntry) => {
-      if (!secret) {
-        setEntries((prev) =>
-          prev.map((e) => (e.id === entry.id ? { ...e, status: 'error', error: 'Falta el secreto' } : e))
-        );
-        return;
+  const transcribeOne = useCallback(async (entry: FileEntry) => {
+    const currentSecret = secretRef.current.trim();
+    if (!currentSecret) {
+      setEntries((prev) =>
+        prev.map((e) => (e.id === entry.id ? { ...e, status: 'error', error: 'Falta el secreto' } : e))
+      );
+      return;
+    }
+    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'transcribing' } : e)));
+    try {
+      const formData = new FormData();
+      formData.append('file', entry.file, entry.file.name);
+      formData.append('language', 'es');
+
+      const res = await fetch('/api/internal/transcribe-temp', {
+        method: 'POST',
+        headers: { 'x-transcribe-secret': currentSecret },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(errBody || `HTTP ${res.status}`);
       }
-      setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'transcribing' } : e)));
-      try {
-        const formData = new FormData();
-        formData.append('file', entry.file, entry.file.name);
-        formData.append('language', 'es');
 
-        const res = await fetch('/api/internal/transcribe-temp', {
-          method: 'POST',
-          headers: { 'x-transcribe-secret': secret },
-          body: formData,
-        });
-
-        if (!res.ok) {
-          const errBody = await res.text();
-          throw new Error(errBody || `HTTP ${res.status}`);
-        }
-
-        const data = await res.json();
-        setEntries((prev) =>
-          prev.map((e) => (e.id === entry.id ? { ...e, status: 'done', text: data.text } : e))
-        );
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        setEntries((prev) =>
-          prev.map((e) => (e.id === entry.id ? { ...e, status: 'error', error: message } : e))
-        );
-      }
-    },
-    [secret]
-  );
+      const data = await res.json();
+      setEntries((prev) =>
+        prev.map((e) => (e.id === entry.id ? { ...e, status: 'done', text: data.text } : e))
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setEntries((prev) =>
+        prev.map((e) => (e.id === entry.id ? { ...e, status: 'error', error: message } : e))
+      );
+    }
+  }, []);
 
   const transcribeAll = useCallback(() => {
     entries.filter((e) => e.status === 'pending' || e.status === 'error').forEach(transcribeOne);
@@ -98,11 +102,16 @@ export default function TranscribeTempPage() {
         <div className="mt-6">
           <label className="mb-1 block text-sm font-medium text-[#1A1A2E]">Secreto (TRANSCRIBE_TEMP_SECRET)</label>
           <input
-            type="password"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
             value={secret}
-            onChange={(e) => setSecret(e.target.value)}
+            onChange={(e) => updateSecret(e.target.value)}
+            onInput={(e) => {
+              secretRef.current = e.currentTarget.value;
+            }}
             placeholder="Pega aquí el secreto configurado en Vercel"
-            className="w-full rounded-lg border border-[#EDE7F6] bg-white px-3 py-2 text-sm outline-none focus:border-[#7C3DE3]"
+            className="w-full rounded-lg border border-[#EDE7F6] bg-white px-3 py-2 font-mono text-sm outline-none focus:border-[#7C3DE3]"
           />
         </div>
 
