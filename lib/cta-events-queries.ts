@@ -4,8 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   CTA_EVENT_LABELS,
   CTA_EVENT_NAMES,
-  LANDING_CTA_EVENTS,
-  APP_CTA_EVENTS,
   PLAN_CTA_EVENTS,
   computeDemoConversionRate,
   emptyCtaCounts,
