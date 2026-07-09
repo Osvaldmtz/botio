@@ -1,6 +1,6 @@
 import type { KalyoMetricRow, TwilioMetricRow } from '@/lib/kpi/types';
 import type { GA4DailyMetric, GA4PageRow, InstagramInsightPoint, InstagramMediaItem, MetaAdsInsight, MetaPixelEventStat } from '@/lib/kpi/types';
-import type { CtaEventsSummary } from '@/lib/cta-events-utils';
+import type { CtaEventsPageSummary } from '@/lib/cta-events-utils';
 
 export const ACTIVE_SUBSCRIBER_GOAL = 100;
 
@@ -82,7 +82,7 @@ export type WebPageData = {
 };
 
 export type LandingCtasPageData = {
-  cta: CtaEventsSummary;
+  cta: CtaEventsPageSummary;
   metaAds: MetaAdsInsight[];
   metaPixelEvents: MetaPixelEventStat[];
   metaAdsError: string | null;

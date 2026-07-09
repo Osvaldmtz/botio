@@ -10,6 +10,7 @@ import { KpiVividPanel } from '@/components/admin/kpis/vivid/kpi-vivid-panel';
 import { KpiVividAreaChart } from '@/components/admin/kpis/vivid/kpi-vivid-charts';
 import { KpiVividTable } from '@/components/admin/kpis/vivid/kpi-vivid-table';
 import { KpiVividPage, sliceByRange } from '@/components/admin/kpis/vivid/kpi-page-shell';
+import type { ChartRange } from '@/components/admin/kpis/vivid/kpi-toolbar';
 
 type Props = { data: InstagramPageData };
 
@@ -30,7 +31,7 @@ export function InstagramKpiDashboard({ data }: Props) {
   );
 }
 
-function InstagramContent({ data, range }: { data: InstagramPageData; range: 7 | 14 | 30 }) {
+function InstagramContent({ data, range }: { data: InstagramPageData; range: ChartRange }) {
   const insights = useMemo(() => sliceByRange(data.insights, range), [data.insights, range]);
   const last7 = insights.slice(-7);
   const alcance7d = last7.reduce((s, p) => s + p.reach, 0);

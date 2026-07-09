@@ -3,7 +3,7 @@
 import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-export type ChartRange = 7 | 14 | 30;
+export type ChartRange = 7 | 14 | 30 | 90;
 
 type SourceStatus = { id: string; label: string; ok: boolean };
 
@@ -13,6 +13,7 @@ type Props = {
   onRefresh: () => void;
   refreshing?: boolean;
   sources?: SourceStatus[];
+  ranges?: ChartRange[];
   liveEnabled?: boolean;
   onLiveToggle?: () => void;
 };
@@ -25,6 +26,7 @@ export function KpiToolbar({
   onRefresh,
   refreshing,
   sources = [],
+  ranges = RANGES,
   liveEnabled,
   onLiveToggle,
 }: Props) {
@@ -32,7 +34,7 @@ export function KpiToolbar({
     <div className="flex flex-col gap-3 rounded-2xl border border-bg-border bg-bg-subtle/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex rounded-xl border border-bg-border bg-bg p-1 shadow-sm">
-          {RANGES.map((r) => (
+          {ranges.map((r) => (
             <button
               key={r}
               type="button"

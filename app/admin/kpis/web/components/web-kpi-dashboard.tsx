@@ -22,6 +22,7 @@ import { KpiVividPanel } from '@/components/admin/kpis/vivid/kpi-vivid-panel';
 import { KpiVividAreaChart, KpiVividBarChart } from '@/components/admin/kpis/vivid/kpi-vivid-charts';
 import { KpiVividTable } from '@/components/admin/kpis/vivid/kpi-vivid-table';
 import { KpiVividPage, sliceByRange } from '@/components/admin/kpis/vivid/kpi-page-shell';
+import type { ChartRange } from '@/components/admin/kpis/vivid/kpi-toolbar';
 
 type Props = { data: WebPageData };
 type WebTab = 'ga4' | 'clarity' | 'search-console';
@@ -219,7 +220,7 @@ function PropertyBlock({
   summary: WebPageData['landingSummary'];
   pages: WebPageData['landingPages'];
   daily: WebPageData['landing'];
-  range: 7 | 14 | 30;
+  range: ChartRange;
 }) {
   const chartData = useMemo(
     () =>
@@ -266,7 +267,7 @@ function PropertyBlock({
   );
 }
 
-function WebContent({ data, range }: { data: WebPageData; range: 7 | 14 | 30 }) {
+function WebContent({ data, range }: { data: WebPageData; range: ChartRange }) {
   const landing = useMemo(() => sliceByRange(data.landing, range), [data.landing, range]);
   const app = useMemo(() => sliceByRange(data.app, range), [data.app, range]);
 

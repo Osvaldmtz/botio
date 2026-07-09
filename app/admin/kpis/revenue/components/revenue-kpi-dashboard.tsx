@@ -24,6 +24,7 @@ import { KpiVividPanel } from '@/components/admin/kpis/vivid/kpi-vivid-panel';
 import { KpiVividAreaChart, KpiVividLineChart, KpiVividPieChart } from '@/components/admin/kpis/vivid/kpi-vivid-charts';
 import { KpiVividTable } from '@/components/admin/kpis/vivid/kpi-vivid-table';
 import { KpiVividPage, sliceByRange } from '@/components/admin/kpis/vivid/kpi-page-shell';
+import type { ChartRange } from '@/components/admin/kpis/vivid/kpi-toolbar';
 import { ACTIVE_SUBSCRIBER_GOAL } from '@/lib/kpi/utils';
 
 type Props = {
@@ -65,7 +66,7 @@ function RevenueContent({
 }: {
   latest: KalyoMetricRow | null;
   history: KalyoMetricRow[];
-  range: 7 | 14 | 30;
+  range: ChartRange;
   stripeActiveSubscribers: number | null;
   stripeMrr: number | null;
 }) {

@@ -10,7 +10,8 @@ import {
   fetchInstagramInsights,
   fetchInstagramMedia,
 } from '@/lib/meta-api';
-import { fetchCtaEventsSummary } from '@/lib/cta-events-queries';
+import { fetchCtaEventsPageSummary } from '@/lib/cta-events-queries';
+import { emptyCtaCounts } from '@/lib/cta-events-utils';
 import {
   getAppMetrics,
   getChannelBreakdown,
@@ -313,24 +314,27 @@ export async function fetchWebPageData(): Promise<WebPageData> {
 }
 
 export async function fetchLandingCtasPageData(): Promise<LandingCtasPageData> {
+  const emptySummary = {
+    counts: emptyCtaCounts(),
+    daily: [],
+    conversionRate: null,
+    totalEvents: 0,
+    totalValueUsd: 0,
+  };
+
   const [cta, metaAds, metaPixel] = await Promise.all([
-    safeFetch('cta_events', () => fetchCtaEventsSummary(30)),
+    safeFetch('cta_events', () => fetchCtaEventsPageSummary(90)),
     safeFetch('meta_ads_30d', () => fetchMetaAds('last_30d')),
     safeFetch('meta_pixel_events', () => fetchMetaPixelEventStats(30)),
   ]);
 
   return {
     cta: cta.data ?? {
-      counts: {
-        cta_demo_hero: 0,
-        cta_demo_section: 0,
-        cta_whatsapp_landing: 0,
-        cta_demo_confirmed: 0,
-      },
-      daily: [],
-      conversionRate: null,
-      totalEvents: 0,
-    } satisfies import('@/lib/cta-events-utils').CtaEventsSummary,
+      landing: emptySummary,
+      app: emptySummary,
+      all: emptySummary,
+      planComparison: [],
+    },
     metaAds: metaAds.data ?? [],
     metaPixelEvents: metaPixel.data ?? [],
     metaAdsError: metaAds.error,

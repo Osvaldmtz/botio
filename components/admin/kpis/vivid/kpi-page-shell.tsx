@@ -11,10 +11,11 @@ type Props = {
   title: string;
   subtitle: string;
   sources?: Array<{ id: string; label: string; ok: boolean }>;
+  ranges?: import('./kpi-toolbar').ChartRange[];
   children: (ctx: KpiVividPageContext) => ReactNode;
 };
 
-export function KpiVividPage({ title, subtitle, sources = [], children }: Props) {
+export function KpiVividPage({ title, subtitle, sources = [], ranges, children }: Props) {
   const router = useRouter();
   const [range, setRange] = useState<ChartRange>(30);
   const [refreshing, setRefreshing] = useState(false);
@@ -34,6 +35,7 @@ export function KpiVividPage({ title, subtitle, sources = [], children }: Props)
           onRefresh={handleRefresh}
           refreshing={refreshing}
           sources={sources}
+          ranges={ranges}
         />
         {children({ range, refreshing })}
       </div>

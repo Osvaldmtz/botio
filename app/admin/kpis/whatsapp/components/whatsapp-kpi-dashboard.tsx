@@ -10,6 +10,7 @@ import { KpiVividPanel } from '@/components/admin/kpis/vivid/kpi-vivid-panel';
 import { KpiVividBarChart, KpiVividLineChart } from '@/components/admin/kpis/vivid/kpi-vivid-charts';
 import { KpiVividTable } from '@/components/admin/kpis/vivid/kpi-vivid-table';
 import { KpiVividPage, sliceByRange } from '@/components/admin/kpis/vivid/kpi-page-shell';
+import type { ChartRange } from '@/components/admin/kpis/vivid/kpi-toolbar';
 
 type Props = { rows: TwilioMetricRow[] };
 
@@ -25,7 +26,7 @@ export function WhatsappKpiDashboard({ rows }: Props) {
   );
 }
 
-function WhatsappContent({ rows, range }: { rows: TwilioMetricRow[]; range: 7 | 14 | 30 }) {
+function WhatsappContent({ rows, range }: { rows: TwilioMetricRow[]; range: ChartRange }) {
   const filtered = useMemo(() => sliceByRange(rows, range), [rows, range]);
   const totals = aggregateTwilio(filtered);
   const deliveryRate =

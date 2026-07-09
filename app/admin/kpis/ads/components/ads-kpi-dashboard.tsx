@@ -10,6 +10,7 @@ import { KpiVividPanel } from '@/components/admin/kpis/vivid/kpi-vivid-panel';
 import { KpiVividAreaChart, KpiVividBarChart } from '@/components/admin/kpis/vivid/kpi-vivid-charts';
 import { KpiVividTable } from '@/components/admin/kpis/vivid/kpi-vivid-table';
 import { KpiVividPage } from '@/components/admin/kpis/vivid/kpi-page-shell';
+import type { ChartRange } from '@/components/admin/kpis/vivid/kpi-toolbar';
 
 type Props = { data: AdsPageData };
 
@@ -34,7 +35,7 @@ export function AdsKpiDashboard({ data }: Props) {
   );
 }
 
-function AdsContent({ data, range }: { data: AdsPageData; range: 7 | 14 | 30 }) {
+function AdsContent({ data, range }: { data: AdsPageData; range: ChartRange }) {
   const spend = sumField(data.summary, 'spend');
   const impressions = sumField(data.summary, 'impressions');
   const clicks = sumField(data.summary, 'clicks');

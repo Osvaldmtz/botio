@@ -10,6 +10,13 @@ function main(): void {
     cta_demo_section: 5,
     cta_whatsapp_landing: 3,
     cta_demo_confirmed: 2,
+    cta_plan_pro: 0,
+    cta_plan_max: 0,
+    cta_plan_ultra: 0,
+    cta_kaly_voice_used: 0,
+    cta_first_patient: 0,
+    cta_first_test: 0,
+    cta_first_report: 0,
   };
 
   const rate = computeDemoConversionRate(counts);
@@ -20,6 +27,13 @@ function main(): void {
     cta_demo_section: 0,
     cta_whatsapp_landing: 0,
     cta_demo_confirmed: 0,
+    cta_plan_pro: 0,
+    cta_plan_max: 0,
+    cta_plan_ultra: 0,
+    cta_kaly_voice_used: 0,
+    cta_first_patient: 0,
+    cta_first_test: 0,
+    cta_first_report: 0,
   });
   assert(empty === null, 'empty starters should return null');
 

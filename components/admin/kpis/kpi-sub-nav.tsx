@@ -10,7 +10,7 @@ const ITEMS = [
   { href: '/admin/kpis/instagram', label: 'Instagram', color: '#D946EF' },
   { href: '/admin/kpis/ads', label: 'Ads', color: '#F59E0B' },
   { href: '/admin/kpis/web', label: 'Web', color: '#0EA5E9' },
-  { href: '/admin/kpis/landing-ctas', label: 'CTAs Landing', color: '#22C55E' },
+  { href: '/admin/kpis/landing-ctas', label: 'CTAs', color: '#22C55E' },
   { href: '/admin/kpis/pagespeed', label: 'PageSpeed', color: '#14B8A6' },
   { href: '/admin/kpis/revenue', label: 'Revenue', color: '#6366F1' },
   { href: '/admin/kpis/insights', label: 'Análisis IA', color: '#8B5CF6' },
