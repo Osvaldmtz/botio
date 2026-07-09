@@ -35,6 +35,7 @@ export default function TranscribeTempPage() {
       const blob = await upload(`transcribe-temp/${entry.file.name}`, entry.file, {
         access: 'private',
         handleUploadUrl: '/admin/transcribe-temp/upload',
+        addRandomSuffix: true,
       });
 
       setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'transcribing' } : e)));
