@@ -10,11 +10,11 @@ export async function transcribeAudio(
     return { error: 'falta la URL del archivo' };
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
 
   try {
     if (!apiKey) {
-      return { error: 'OPENAI_API_KEY no configurada' };
+      return { error: 'GROQ_API_KEY no configurada' };
     }
 
     const blobResult = await get(blobUrl, { access: 'private' });
@@ -27,24 +27,24 @@ export async function transcribeAudio(
       type: blobResult.blob.contentType || 'application/octet-stream',
     });
 
-    const openaiForm = new FormData();
-    openaiForm.append('file', audioBlob, fileName || 'audio.mp3');
-    openaiForm.append('model', 'whisper-1');
-    openaiForm.append('language', 'es');
-    openaiForm.append('response_format', 'text');
+    const transcriptionForm = new FormData();
+    transcriptionForm.append('file', audioBlob, fileName || 'audio.mp3');
+    transcriptionForm.append('model', 'whisper-large-v3-turbo');
+    transcriptionForm.append('language', 'es');
+    transcriptionForm.append('response_format', 'text');
 
-    const openaiRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
-      body: openaiForm,
+      body: transcriptionForm,
     });
 
-    if (!openaiRes.ok) {
-      const errText = await openaiRes.text();
+    if (!groqRes.ok) {
+      const errText = await groqRes.text();
       return { error: errText };
     }
 
-    const text = await openaiRes.text();
+    const text = await groqRes.text();
     return { text };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
