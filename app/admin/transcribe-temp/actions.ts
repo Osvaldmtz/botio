@@ -1,6 +1,7 @@
 'use server';
 
 import { del, get } from '@vercel/blob';
+import { transcribeGroqBuffer } from '@/lib/audio-transcription';
 
 export async function transcribeAudio(
   blobUrl: string,
@@ -10,41 +11,20 @@ export async function transcribeAudio(
     return { error: 'falta la URL del archivo' };
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
+  if (!process.env.GROQ_API_KEY) {
+    return { error: 'GROQ_API_KEY no configurada' };
+  }
 
   try {
-    if (!apiKey) {
-      return { error: 'GROQ_API_KEY no configurada' };
-    }
-
     const blobResult = await get(blobUrl, { access: 'private' });
     if (!blobResult?.stream) {
       return { error: 'no se pudo descargar el audio desde Blob' };
     }
 
-    const audioBuffer = await new Response(blobResult.stream).arrayBuffer();
-    const audioBlob = new Blob([audioBuffer], {
-      type: blobResult.blob.contentType || 'application/octet-stream',
-    });
+    const audioBuffer = Buffer.from(await new Response(blobResult.stream).arrayBuffer());
+    const mimeType = blobResult.blob.contentType || 'application/octet-stream';
 
-    const transcriptionForm = new FormData();
-    transcriptionForm.append('file', audioBlob, fileName || 'audio.mp3');
-    transcriptionForm.append('model', 'whisper-large-v3-turbo');
-    transcriptionForm.append('language', 'es');
-    transcriptionForm.append('response_format', 'text');
-
-    const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: transcriptionForm,
-    });
-
-    if (!groqRes.ok) {
-      const errText = await groqRes.text();
-      return { error: errText };
-    }
-
-    const text = await groqRes.text();
+    const { text } = await transcribeGroqBuffer(audioBuffer, fileName || 'audio.mp3', mimeType);
     return { text };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
