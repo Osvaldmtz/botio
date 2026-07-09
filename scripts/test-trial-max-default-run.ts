@@ -53,6 +53,7 @@ assert(directWelcome.includes('Kaly voz'), 'direct welcome mentions Kaly voz');
 const day13 = formatDay13({ trial_user_email: 'ana@test.com', trial_user_name: 'Ana' });
 assert(day13.includes('trial Max termina'), 'day 13 mentions trial Max');
 assert(day13.includes('Max') && day13.includes('Pro'), 'day 13 asks Max vs Pro');
+assert(!day13.includes('PRIMER50'), 'day 13 has no coupon');
 
 const proWelcome = buildDirectEnrollmentWelcomeMessage({
   fullName: 'Ana',

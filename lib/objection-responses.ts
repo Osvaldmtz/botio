@@ -23,8 +23,9 @@ export function formatObjectionResponse(
   const priceCount = ctx.priceObjectionCount ?? (isRepeat ? 2 : 1);
   const starter = KALYO_PRICING.starter;
   const discount = KALYO_PRICING.discount;
+  const maxLink = getPaymentLink('max');
+  const proLink = getPaymentLink('pro');
   const maxCoupon = getPaymentLink('max', discount.code);
-  const proCoupon = getPaymentLink('pro', discount.code);
 
   if (type === 'price') {
     if (priceCount <= 1) {
@@ -34,24 +35,30 @@ export function formatObjectionResponse(
         `✓ Con UNA sola sesión cobrada cubres el mes completo\n` +
         `✓ Te ahorra horas en reportes y documentación\n` +
         `✓ Max incluye agenda, videollamadas y transcripción de sesiones\n\n` +
-        `¿Quieres probarlo sin riesgo? Te activo *Max GRATIS 15 días* sin tarjeta — incluye Kaly voz y Meet.\n\n` +
-        `O si prefieres pagar desde ya, 50% en tu primer mes de Max: $${discount.max_with_discount} USD\n` +
-        `${maxCoupon}\n\n` +
-        `Si prefieres algo más básico, Pro queda en $${discount.pro_with_discount} primer mes con ${discount.code}.\n\n` +
-        `O el plan Starter es gratis:\n` +
-        `✓ ${starter.max_patients} pacientes activos\n` +
-        `✓ ${starter.max_evaluations_per_month} evaluaciones por mes\n\n` +
-        `¿Cuál prefieres?`
+        `Prueba Max *15 días gratis* primero, sin tarjeta — incluye Kaly voz y Meet. Si te sirve, decides al final.\n\n` +
+        `¿Te activo el trial? Solo necesito saber si ya tienes cuenta o es tu primera vez.`
       );
     }
 
     if (priceCount === 2) {
       const opener = name ? `Sin problema ${name}` : 'Sin problema';
       return (
-        `${opener}. Si Max aún no encaja en tu presupuesto, Pro con 50% off el primer mes queda en $${discount.pro_with_discount} USD:\n\n` +
-        `${proCoupon}\n\n` +
-        `Pro incluye evaluaciones ilimitadas, Kaly Voice y reportes IA — sin agenda ni videollamadas.\n\n` +
-        `¿Te sirve Pro o prefieres el Starter gratis?`
+        `${opener}. Si ya probaste y aún te parece caro, estos son los precios completos:\n\n` +
+        `🚀 Max $${KALYO_PRICING.max.price_monthly}/mes (recomendado): ${maxLink}\n` +
+        `💎 Pro $${KALYO_PRICING.pro.price_monthly}/mes (más básico): ${proLink}\n\n` +
+        `Si no has probado aún, el trial Max gratis sigue disponible — sin tarjeta.\n\n` +
+        `¿Quieres el trial o prefieres uno de los planes?`
+      );
+    }
+
+    if (priceCount === 3) {
+      const opener = name ? `Entiendo ${name}` : 'Entiendo';
+      return (
+        `${opener}. Como último recurso, puedo ofrecerte 50% en tu primer mes de Max con cupón ${discount.code} ($${discount.max_with_discount} USD):\n\n` +
+        `${maxCoupon}\n\n` +
+        `Si prefieres seguir sin pagar, el plan Starter es gratis:\n` +
+        `✓ ${starter.max_patients} pacientes activos\n` +
+        `✓ ${starter.max_evaluations_per_month} evaluaciones por mes`
       );
     }
 
@@ -85,7 +92,7 @@ export function formatObjectionResponse(
         `📊 91+ tests con reportes IA avanzados (sin escribir reportes a mano)\n` +
         `🇲🇽 Hecho en LATAM para psicólogos LATAM (DSM-5, español)\n\n` +
         `Max ($${KALYO_PRICING.max.price_monthly}/mes) es el recomendado. Pro ($${KALYO_PRICING.pro.price_monthly}/mes) si buscas algo más básico.\n\n` +
-        `¿Te interesa ver una demo en vivo? Te agendo 30 minutos con Osvaldo.`
+        `¿Te interesa probar Max 15 días gratis primero?`
       );
     }
     return (

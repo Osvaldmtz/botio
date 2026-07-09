@@ -494,6 +494,8 @@ export async function processIncomingMessage(
           source: objection.source,
           objection_type: objection.objectionType,
           objection_is_repeat: objection.isRepeat,
+          trial_offered: objection.trialOffered,
+          coupon_offered: objection.couponOffered,
         },
       });
       await touchConversation(supabase, conversation.id, assistantNow);

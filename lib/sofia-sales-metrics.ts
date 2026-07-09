@@ -7,7 +7,10 @@ export type SofiaSalesMetrics = {
   max_share_pct: number | null;
   plan_pro: number;
   plan_max: number;
+  trial_offers_30d: number;
+  trial_activations_30d: number;
   primer50_links_sent_30d: number;
+  coupon_share_pct: number | null;
   purchase_intent_max_30d: number;
   purchase_intent_pro_30d: number;
   max_vs_pro_intent_ratio: number | null;
@@ -28,6 +31,32 @@ export async function fetchSofiaSalesMetrics(
     .eq('role', 'assistant')
     .gte('created_at', since30d)
     .ilike('content', '%PRIMER50%');
+
+  const { data: trialByContent } = await supabase
+    .from('messages')
+    .select('id')
+    .eq('role', 'assistant')
+    .gte('created_at', since30d)
+    .ilike('content', '%15 días%')
+    .ilike('content', '%gratis%');
+
+  const { data: trialByMeta } = await supabase
+    .from('messages')
+    .select('id')
+    .eq('role', 'assistant')
+    .gte('created_at', since30d)
+    .eq('metadata->>trial_offered', 'true');
+
+  const trialOfferIds = new Set([
+    ...(trialByContent ?? []).map((r) => r.id as string),
+    ...(trialByMeta ?? []).map((r) => r.id as string),
+  ]);
+
+  const { data: trialOutcomes } = await supabase
+    .from('ab_outcomes')
+    .select('id')
+    .gte('created_at', since30d)
+    .in('outcome', ['trial_activado', 'trial_activated_via_botio', 'trial_activated']);
 
   const { data: intentMessages } = await supabase
     .from('messages')
@@ -55,6 +84,15 @@ export async function fetchSofiaSalesMetrics(
       ? Number(((purchase_intent_max_30d / intentTotal) * 100).toFixed(1))
       : null;
 
+  const trial_offers_30d = trialOfferIds.size;
+  const trial_activations_30d = trialOutcomes?.length ?? 0;
+  const primer50_links_sent_30d = primer50Messages?.length ?? 0;
+  const offerDenom = trial_offers_30d + primer50_links_sent_30d;
+  const coupon_share_pct =
+    offerDenom > 0
+      ? Number(((primer50_links_sent_30d / offerDenom) * 100).toFixed(1))
+      : null;
+
   const max_share_trend_7d = kalyoHistory
     .filter((row) => row.date >= since7d)
     .map((row) => {
@@ -71,7 +109,10 @@ export async function fetchSofiaSalesMetrics(
     max_share_pct,
     plan_pro,
     plan_max,
-    primer50_links_sent_30d: primer50Messages?.length ?? 0,
+    trial_offers_30d,
+    trial_activations_30d,
+    primer50_links_sent_30d,
+    coupon_share_pct,
     purchase_intent_max_30d,
     purchase_intent_pro_30d,
     max_vs_pro_intent_ratio,

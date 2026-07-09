@@ -11,6 +11,8 @@ export type ObjectionInterceptResult = {
   source: 'objection_handler';
   objectionType: string;
   isRepeat: boolean;
+  trialOffered: boolean;
+  couponOffered: boolean;
 };
 
 export async function loadObjectionLeadContext(
@@ -94,7 +96,7 @@ export async function handleObjectionMessage(params: {
   });
 
   const insertOutcome =
-    objection.type === 'price' && (priceObjectionCount ?? 0) >= 3 ? 'handoff' : 'pending';
+    objection.type === 'price' && (priceObjectionCount ?? 0) >= 4 ? 'handoff' : 'pending';
 
   const { error: insertError } = await params.supabase.from('detected_objections').insert({
     conversation_id: params.conversationId,
@@ -123,7 +125,7 @@ export async function handleObjectionMessage(params: {
     });
   }
 
-  if (objection.type === 'price' && (priceObjectionCount ?? 0) >= 3) {
+  if (objection.type === 'price' && (priceObjectionCount ?? 0) >= 4) {
     await notifyObjectionTelegram({
       kind: 'price_insistence',
       name: lead.name,
@@ -141,5 +143,7 @@ export async function handleObjectionMessage(params: {
     source: 'objection_handler',
     objectionType: objection.type,
     isRepeat: objection.is_repeat,
+    trialOffered: responseText.includes('15 días') && /gratis/i.test(responseText),
+    couponOffered: responseText.includes('PRIMER50'),
   };
 }

@@ -81,6 +81,7 @@ async function runTests(): Promise<void> {
   await cleanup();
 
   const conversationId = await ensureConversation();
+  const maxLink = getPaymentLink('max');
   const maxCoupon = getPaymentLink('max', 'PRIMER50');
 
   const first = await handleObjectionMessage({
@@ -92,9 +93,9 @@ async function runTests(): Promise<void> {
   });
 
   assert(first != null && first.objectionType === 'price', 'first objection type price');
-  assert(first != null && first.replyText.includes(maxCoupon), 'first response includes Max PRIMER50 link');
-  assert(first != null && first.replyText.includes('10 evaluaciones'), 'first response has official Starter eval count');
-  assert(first != null && first.replyText.includes('2 pacientes activos'), 'first response has official Starter patients');
+  assert(first != null && first.trialOffered, 'first response offers trial');
+  assert(first != null && !first.couponOffered, 'first response does not offer coupon');
+  assert(first != null && !first.replyText.includes('PRIMER50'), 'first response has no PRIMER50');
   assert(first != null && first.isRepeat === false, 'first not repeat');
 
   const { data: row1 } = await supabase
@@ -115,10 +116,23 @@ async function runTests(): Promise<void> {
   });
 
   assert(second != null && second.isRepeat === true, 'second is repeat');
-  assert(second != null && second.replyText.includes('Pro'), 'second offers Pro with coupon');
+  assert(second != null && second.replyText.includes(maxLink), 'second offers full-price Max link');
+  assert(second != null && !second.replyText.includes('PRIMER50'), 'second has no coupon');
   assert(second != null && !second.replyText.includes('Osvaldo'), 'second does not handoff yet');
 
   const third = await handleObjectionMessage({
+    supabase,
+    conversationId,
+    customerPhone: testPhone,
+    messageBody: 'No puedo pagar $39',
+    metadata: { name: 'María Test', email: testEmail },
+  });
+
+  assert(third != null && third.couponOffered, 'third offers PRIMER50 as last resort');
+  assert(third != null && third.replyText.includes(maxCoupon), 'third includes coupon link');
+  assert(third != null && !third.replyText.includes('Osvaldo'), 'third does not handoff yet');
+
+  const fourth = await handleObjectionMessage({
     supabase,
     conversationId,
     customerPhone: testPhone,
@@ -126,8 +140,8 @@ async function runTests(): Promise<void> {
     metadata: { name: 'María Test', email: testEmail },
   });
 
-  assert(third != null && third.replyText.includes('Osvaldo'), 'third insistence mentions handoff');
-  assert(third != null && third.replyText.includes('email'), 'third insistence asks for email');
+  assert(fourth != null && fourth.replyText.includes('Osvaldo'), 'fourth insistence mentions handoff');
+  assert(fourth != null && fourth.replyText.includes('email'), 'fourth insistence asks for email');
 
   const { count } = await supabase
     .from('detected_objections')
@@ -135,7 +149,7 @@ async function runTests(): Promise<void> {
     .eq('conversation_id', conversationId)
     .eq('objection_type', 'price')
     .eq('outcome', 'handoff');
-  assert((count ?? 0) >= 1, 'handoff outcome on third insistence');
+  assert((count ?? 0) >= 1, 'handoff outcome on fourth insistence');
 
   const { notifyObjectionTelegram } = await import('../lib/objection-notifications');
   telegramSent.length = 0;

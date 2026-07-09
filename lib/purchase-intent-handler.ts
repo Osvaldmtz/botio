@@ -7,7 +7,6 @@ export type PurchaseIntentResult = {
   source: 'purchase_intent_max' | 'purchase_intent_pro' | 'purchase_intent_ultra' | 'purchase_intent_unknown';
 };
 
-const DISCOUNT_CODE = KALYO_PRICING.discount.code;
 const MAX_PAYMENT_LINK = KALYO_PRICING.max.payment_link;
 const PRO_PAYMENT_LINK = KALYO_PRICING.pro.payment_link;
 
@@ -16,10 +15,7 @@ const REPLY_MAX = `¡Excelente elección! 🎯 El plan Max es el recomendado:
 ${KALYO_PRICING.max.features.slice(0, 6).map((f) => `✓ ${f}`).join('\n')}
 
 💳 Pagar plan Max ($${KALYO_PRICING.max.price_monthly} USD/mes):
-${MAX_PAYMENT_LINK}
-
-🎁 50% off tu primer mes con cupón *${DISCOUNT_CODE}* ($${KALYO_PRICING.discount.max_with_discount}):
-${KALYO_PRICING.max.payment_link_with_discount}`;
+${MAX_PAYMENT_LINK}`;
 
 const REPLY_PRO = `¡Buena elección! 💼 El plan Pro es la alternativa más básica:
 
@@ -28,10 +24,7 @@ ${KALYO_PRICING.pro.features.slice(0, 5).map((f) => `✓ ${f}`).join('\n')}
 Con $10 más, Max incluye agenda + videollamadas + transcripción de sesiones. ¿Seguro que prefieres Pro?
 
 💳 Pagar plan Pro ($${KALYO_PRICING.pro.price_monthly} USD/mes):
-${PRO_PAYMENT_LINK}
-
-🎁 50% off primer mes con *${DISCOUNT_CODE}* ($${KALYO_PRICING.discount.pro_with_discount}):
-${KALYO_PRICING.pro.payment_link_with_discount}`;
+${PRO_PAYMENT_LINK}`;
 
 const REPLY_ULTRA = `⭐ Plan Ultra — $${KALYO_PRICING.ultra.price_monthly} USD/mes:
 
@@ -46,11 +39,9 @@ const REPLY_PAY_NOW = `¡Perfecto! 🎉 Nuestros planes:
 🚀 *Plan Max* ($${KALYO_PRICING.max.price_monthly}/mes) — recomendado: agenda + videollamadas + transcripción + todo Pro
 💎 *Plan Pro* ($${KALYO_PRICING.pro.price_monthly}/mes) — más básico: evaluaciones ilimitadas + Kaly Voice + reportes IA
 
-Con cupón *${DISCOUNT_CODE}*: Max $${KALYO_PRICING.discount.max_with_discount} o Pro $${KALYO_PRICING.discount.pro_with_discount} el primer mes.
-
 ¿Cuál te interesa? Te paso el link directo.
 
-(También puedes preguntarme cualquier duda antes de decidir 😊)`;
+Si aún no has probado, también puedes arrancar con *Max GRATIS 15 días* sin tarjeta. ¿Te activo el trial?`;
 
 async function notifyPurchaseIntentTelegram(params: {
   plan: string;

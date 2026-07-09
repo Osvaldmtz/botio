@@ -28,7 +28,7 @@ function buildInsights(topReason: ClosureReason | null, pct: number): string[] {
   const insights: string[] = [];
   if (topReason === 'price' && pct >= 25) {
     insights.push(
-      `🔥 ${pct}% de leads perdidos fue por precio. Considera más PRIMER50 o destacar el plan Starter.`,
+      `🔥 ${pct}% de leads perdidos fue por precio. Prioriza trial Max gratis; PRIMER50 solo como último recurso.`,
     );
   }
   if (topReason === 'competition' && pct >= 15) {

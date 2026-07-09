@@ -291,11 +291,22 @@ export function ExecutiveKpiDashboard({ data }: Props) {
                   hint={`Pro ${data.sofiaSales?.plan_pro ?? 0} · Max ${data.sofiaSales?.plan_max ?? 0}`}
                 />
                 <KpiVividMetric
-                  label="Links PRIMER50 (30d)"
+                  label="Ofertas trial (30d)"
+                  value={fmtNum(data.sofiaSales?.trial_offers_30d)}
+                  icon={TrendingUp}
+                  accent="emerald"
+                  hint={`Activaciones ${data.sofiaSales?.trial_activations_30d ?? 0}`}
+                />
+                <KpiVividMetric
+                  label="Cupones PRIMER50 (30d)"
                   value={fmtNum(data.sofiaSales?.primer50_links_sent_30d)}
                   icon={DollarSign}
-                  accent="emerald"
-                  hint="Mensajes Sofía con cupón"
+                  accent="amber"
+                  hint={
+                    data.sofiaSales?.coupon_share_pct != null
+                      ? `${data.sofiaSales.coupon_share_pct}% del mix trial/cupón (meta <10%)`
+                      : 'Meta <10% cupones'
+                  }
                 />
                 <KpiVividMetric
                   label="Intent Max (30d)"

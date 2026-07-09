@@ -40,7 +40,7 @@ export function generateInsights(
   const totalClosed = Object.values(data.closure_breakdown).reduce((a, b) => a + b, 0);
   if (totalClosed > 0 && priceClosures / totalClosed >= 0.25) {
     const pct = Math.round((priceClosures / totalClosed) * 100);
-    insights.push(`⚠️ ${pct}% de cierres fue por precio — considera más uso de PRIMER50`);
+    insights.push(`⚠️ ${pct}% de cierres fue por precio — prioriza trial gratis antes de cupones`);
   }
 
   const channelEntries = Object.entries(data.by_channel)

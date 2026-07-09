@@ -17,9 +17,9 @@ export function getPaymentLink(plan: 'pro' | 'max', couponCode?: string): string
   return `${base}?prefilled_promo_code=${encodeURIComponent(couponCode.trim())}`;
 }
 
-/** Default payment link for Sofía: Max with PRIMER50 unless lead explicitly chose Pro. */
+/** Default payment link: full price, no coupon. */
 export function getDefaultPaymentLink(plan: 'pro' | 'max' = 'max'): string {
-  return getPaymentLink(plan, KALYO_PRICING.discount.code);
+  return getPaymentLink(plan);
 }
 
 export function formatPayIntentReply(params: {
@@ -32,23 +32,21 @@ export function formatPayIntentReply(params: {
     renderName(params.trialUserName) ||
     renderName(params.trialUserEmail.split('@')[0]);
   const opener = name ? `¡Genial ${name}!` : '¡Genial!';
-  const discount = KALYO_PRICING.discount;
   const plan = params.preferredPlan ?? 'max';
-  const maxLink = getPaymentLink('max', discount.code);
-  const proLink = getPaymentLink('pro', discount.code);
+  const maxLink = getPaymentLink('max');
+  const proLink = getPaymentLink('pro');
 
   if (plan === 'pro') {
     return (
       `${opener} Aquí tienes el link de pago para *Pro* ($${KALYO_PRICING.pro.price_monthly}/mes):\n\n` +
-      `💎 Pro con 50% off primer mes ($${discount.pro_with_discount}): ${proLink}\n\n` +
+      `💎 Pro: ${proLink}\n\n` +
       `El pago es vía Stripe (tarjeta de crédito/débito). Si tienes dudas, dime.`
     );
   }
 
   return (
     `${opener} Aquí tienes el link de pago para *Max* (recomendado):\n\n` +
-    `🚀 Max $${KALYO_PRICING.max.price_monthly}/mes con 50% off primer mes ($${discount.max_with_discount}):\n` +
-    `${maxLink}\n\n` +
+    `🚀 Max $${KALYO_PRICING.max.price_monthly}/mes:\n${maxLink}\n\n` +
     `Si prefieres Pro ($${KALYO_PRICING.pro.price_monthly}/mes, más básico): ${proLink}\n\n` +
     `El pago es vía Stripe (tarjeta de crédito/débito). Si tienes dudas, dime.`
   );

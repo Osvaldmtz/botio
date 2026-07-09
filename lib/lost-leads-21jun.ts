@@ -75,9 +75,7 @@ Te paso la info:
 🚀 *Kalyo Max*: $39 USD/mes (recomendado — agenda + videollamadas + transcripción)
 💎 *Kalyo Pro*: $29 USD/mes (más básico — evaluaciones + Kaly Voice)
 
-Con cupón PRIMER50: Max $19.50 o Pro $14.50 el primer mes.
-
-Si quieres probar antes, tienes *15 días gratis sin tarjeta*.
+Lo mejor para empezar: *15 días gratis sin tarjeta* en Max — incluye agenda, Meet y Kaly voz.
 
 ¿Te activo el trial? Solo necesito tu nombre y email. 🙌`;
   }

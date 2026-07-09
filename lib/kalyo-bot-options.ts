@@ -351,8 +351,13 @@ BLOQUE E: ESCALACIÓN A HUMANO
 
 Escala la conversación al equipo (reason: "escalation") en cualquiera de estos casos:
 1. El usuario hace una pregunta técnica específica que no puedes responder con certeza.
-2. El usuario expresa objeción de precio fuerte: "está muy caro", "necesito un descuento", "no tengo ese dinero", "¿pueden hacer una excepción?".
+2. El usuario expresa objeción de precio fuerte tras haber probado trial o rechazado trial explícitamente.
 3. Ya intentaste cerrar con oferta de trial o información de planes 2 veces en esta conversación sin que el usuario avance.
+
+PRIMER50 — ÚLTIMO RECURSO (no ofrecer proactivamente):
+- NUNCA en primera consulta de precio ni antes del trial.
+- Solo si ya usó trial completo, dice "no puedo pagar $39", o después de 2-3 objeciones reales de precio.
+- Tu objetivo principal es activar TRIALS de Max, no cerrar ventas con descuento.
 
 Nota: si el usuario pide hablar con una persona directamente, usa REGLA #1 (reason: "requested_human"), no este bloque.
 
@@ -582,7 +587,7 @@ const CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL: Anthropic.Messages.Tool = {
 const ADMIN_ACTIVATE_TRIAL_FOR_LEAD_TOOL: Anthropic.Messages.Tool = {
   name: 'admin_activate_trial_for_lead',
   description:
-    'Team-only: create Kalyo account + activate 15-day Pro trial for a psychologist and send welcome WhatsApp to their number. Use when a Kalyo team operator asks to onboard someone else (not themselves).',
+    'Team-only: create Kalyo account + activate 15-day Max trial (default, no coupon) for a psychologist and send welcome WhatsApp to their number. Use when a Kalyo team operator asks to onboard someone else (not themselves). Coupon only if operator explicitly requests it.',
   input_schema: {
     type: 'object',
     properties: {

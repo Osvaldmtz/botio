@@ -57,28 +57,24 @@ export function formatDay7(user: TrialOnboardingUser, daysLeft: number): string 
 export function formatDay13(user: TrialOnboardingUser): string {
   const name = displayName(user);
   const opener = name ? `⚠️ ${name}, tu trial` : '⚠️ Tu trial';
-  const discount = KALYO_PRICING.discount;
   return (
     `${opener} Max termina en 2 días.\n\n` +
     `¿Te quedas con *Max* ($${KALYO_PRICING.max.price_monthly}/mes) o prefieres *Pro* ($${KALYO_PRICING.pro.price_monthly}/mes)?\n\n` +
     `🚀 Max (recomendado): ${getPaymentLink('max')}\n` +
     `💎 Pro (más básico): ${getPaymentLink('pro')}\n\n` +
-    `Cupón ${discount.code}: Max $${discount.max_with_discount} o Pro $${discount.pro_with_discount} el primer mes.\n\n` +
     `Cancelas cuando quieras desde Configuración. Si eliges Pro, sin problema — dime cuál prefieres.`
   );
 }
 
 export function formatDay15(user: TrialOnboardingUser): string {
   const name = displayName(user);
-  const opener = name ? `🔥 ÚLTIMA OPORTUNIDAD ${name}.` : '🔥 ÚLTIMA OPORTUNIDAD.';
-  const discount = KALYO_PRICING.discount;
+  const opener = name ? `🔥 ${name}, tu trial` : '🔥 Tu trial';
   return (
-    `${opener}\n\n` +
-    `Tu trial Max venció. Reactiva con ${discount.code}:\n\n` +
-    `🚀 Max $${discount.max_with_discount} primer mes (recomendado): ${getPaymentLink('max', discount.code)}\n` +
-    `💎 Pro $${discount.pro_with_discount} primer mes: ${getPaymentLink('pro', discount.code)}\n\n` +
-    `Después del primer mes vuelves al precio normal. Cancelas cuando quieras.\n\n` +
-    `Después de hoy, este descuento ya no aplica.`
+    `${opener} Max venció.\n\n` +
+    `Continúa con el plan que prefieras:\n\n` +
+    `🚀 Max $${KALYO_PRICING.max.price_monthly}/mes (recomendado): ${getPaymentLink('max')}\n` +
+    `💎 Pro $${KALYO_PRICING.pro.price_monthly}/mes (más básico): ${getPaymentLink('pro')}\n\n` +
+    `Cancelas cuando quieras desde Configuración.`
   );
 }
 
