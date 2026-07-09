@@ -1,9 +1,10 @@
 'use client';
 
+import { upload } from '@vercel/blob/client';
 import { useCallback, useRef, useState } from 'react';
 import { transcribeAudio } from './actions';
 
-type FileStatus = 'pending' | 'transcribing' | 'done' | 'error';
+type FileStatus = 'pending' | 'uploading' | 'transcribing' | 'done' | 'error';
 
 interface FileEntry {
   id: string;
@@ -29,12 +30,23 @@ export default function TranscribeTempPage() {
   }, []);
 
   const transcribeOne = useCallback(async (entry: FileEntry) => {
-    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'transcribing' } : e)));
+    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'uploading', error: undefined } : e)));
     try {
-      const formData = new FormData();
-      formData.append('file', entry.file, entry.file.name);
-      const result = await transcribeAudio(formData);
-      if ('error' in result) throw new Error(result.error);
+      const blob = await upload(`transcribe-temp/${entry.file.name}`, entry.file, {
+        access: 'private',
+        handleUploadUrl: '/admin/transcribe-temp/upload',
+      });
+
+      setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'transcribing' } : e)));
+
+      const result = await transcribeAudio(blob.url, entry.file.name);
+      if (!result) {
+        throw new Error('La transcripción no devolvió respuesta');
+      }
+      if ('error' in result) {
+        throw new Error(result.error);
+      }
+
       setEntries((prev) =>
         prev.map((e) => (e.id === entry.id ? { ...e, status: 'done', text: result.text } : e))
       );
@@ -64,6 +76,14 @@ export default function TranscribeTempPage() {
   const copyText = async (entry: FileEntry) => {
     if (!entry.text) return;
     await navigator.clipboard.writeText(entry.text);
+  };
+
+  const statusLabel = (status: FileStatus) => {
+    if (status === 'pending') return 'Pendiente';
+    if (status === 'uploading') return 'Subiendo…';
+    if (status === 'transcribing') return 'Transcribiendo…';
+    if (status === 'done') return 'Listo';
+    return 'Error';
   };
 
   return (
@@ -124,15 +144,12 @@ export default function TranscribeTempPage() {
                       ? 'text-[#10B981]'
                       : entry.status === 'error'
                         ? 'text-[#EF4444]'
-                        : entry.status === 'transcribing'
+                        : entry.status === 'uploading' || entry.status === 'transcribing'
                           ? 'text-[#F59E0B]'
                           : 'text-[#6B7280]'
                   }`}
                 >
-                  {entry.status === 'pending' && 'Pendiente'}
-                  {entry.status === 'transcribing' && 'Transcribiendo…'}
-                  {entry.status === 'done' && 'Listo'}
-                  {entry.status === 'error' && 'Error'}
+                  {statusLabel(entry.status)}
                 </span>
               </div>
 
