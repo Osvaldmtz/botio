@@ -72,8 +72,10 @@ Te escribo porque hace unas horas preguntaste por el precio de Kalyo, pero tuvim
 
 Te paso la info:
 
-💎 *Kalyo Pro*: $29 USD/mes
-🚀 *Kalyo Max*: $39 USD/mes (con Kaly asistente de voz)
+🚀 *Kalyo Max*: $39 USD/mes (recomendado — agenda + videollamadas + transcripción)
+💎 *Kalyo Pro*: $29 USD/mes (más básico — evaluaciones + Kaly Voice)
+
+Con cupón PRIMER50: Max $19.50 o Pro $14.50 el primer mes.
 
 Si quieres probar antes, tienes *15 días gratis sin tarjeta*.
 

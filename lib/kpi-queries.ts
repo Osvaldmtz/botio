@@ -31,8 +31,11 @@ import type {
 } from '@/lib/kpi/utils';
 import { aggregateTwilio } from '@/lib/kpi/utils';
 import { fetchStripeActiveSubscriberCount, getMRRCached } from '@/lib/stripe-mrr';
+import { fetchSofiaSalesMetrics } from '@/lib/sofia-sales-metrics';
+import type { SofiaSalesMetrics } from '@/lib/sofia-sales-metrics';
 
 export type { ExecutiveSummaryData, InstagramPageData, AdsPageData, WebPageData, LandingCtasPageData } from '@/lib/kpi/utils';
+export type { SofiaSalesMetrics } from '@/lib/sofia-sales-metrics';
 export { aggregateTwilio } from '@/lib/kpi/utils';
 
 export async function getLatestKalyoMetrics(): Promise<KalyoMetricRow | null> {
@@ -112,6 +115,8 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
   const landingDaily = landing.data ?? [];
   const landingSessions30d = landingDaily.reduce((sum, d) => sum + d.sessions, 0);
 
+  const sofiaSales = await fetchSofiaSalesMetrics(kalyoLatest, kalyoHistory);
+
   return {
     kalyo: kalyoLatest,
     kalyoHistory,
@@ -123,6 +128,7 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
     landingDaily,
     stripeActiveSubscribers: stripeSubs.count,
     stripeMrr: stripeMrr.available ? stripeMrr.current_mrr_usd : null,
+    sofiaSales,
     errors,
   };
 }

@@ -28,6 +28,7 @@ export type ExecutiveSummaryData = {
   landingDaily: GA4DailyMetric[];
   stripeActiveSubscribers: number | null;
   stripeMrr: number | null;
+  sofiaSales: import('@/lib/sofia-sales-metrics').SofiaSalesMetrics | null;
   errors: Record<string, string>;
 };
 

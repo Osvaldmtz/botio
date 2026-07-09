@@ -19,13 +19,13 @@ export const PROFILE_FLOWS: Record<Exclude<ProfileType, 'unknown'>, ProfileFlowC
     offer_demo: false,
     offer_volume_discount: false,
     key_messages: [
-      'pacientes ilimitados (importante para crecer)',
-      'reportes IA ahorran 2-3 hrs por paciente',
-      '+100 evaluaciones validadas (PHQ-9, Beck, etc.)',
+      'Max recomendado: agenda + videollamadas + transcripción',
+      'reportes IA ahorran horas por paciente',
+      '91+ evaluaciones validadas (PHQ-9, Beck, etc.)',
     ],
     objection_handling: {
       precio:
-        'El plan Pro ($29/mes) suele pagarse solo con 1-2 pacientes extra al mes gracias al tiempo que ahorras en reportes.',
+        'El plan Max ($39/mes) suele pagarse solo con 1-2 pacientes extra al mes. Pro ($29/mes) si busca algo más básico.',
       tiempo: 'La configuración toma menos de 10 minutos; puedes importar pacientes después.',
     },
   },
@@ -88,7 +88,7 @@ export function buildProfilePromptBlock(profile: ProfileType): string {
 PERFIL DETECTADO DEL USUARIO: ${profile}
 PUNTOS CLAVE A MENCIONAR (cuando sean relevantes, no forzados):
 ${flow.key_messages.map((m) => `- ${m}`).join('\n')}
-PLAN RECOMENDADO: ${flow.recommended_plan === 'starter' ? 'Pro ($29)' : 'Starter gratis'}
+PLAN RECOMENDADO: ${flow.recommended_plan === 'starter_free' ? 'Starter gratis' : 'Max ($39) — Pro ($29) como alternativa más básica'}
 OFRECER TRIAL PRO: ${flow.offer_trial ? 'sí' : 'no'}
 OFRECER DEMO: ${flow.offer_demo ? 'sí' : 'no'}
 OFRECER DESCUENTO VOLUMEN: ${flow.offer_volume_discount ? 'sí' : 'no'}

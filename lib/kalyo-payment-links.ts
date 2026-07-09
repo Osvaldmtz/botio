@@ -1,8 +1,9 @@
+import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
 import { renderName } from '@/lib/render-name';
 
 const DEFAULT_PAYMENT_LINKS = {
-  pro: 'https://buy.stripe.com/6oU5kCbIcaFS4xa7AzgQE00',
-  max: 'https://buy.stripe.com/dRm7sK27CbJW7Jmf31gQE01',
+  pro: KALYO_PRICING.pro.payment_link,
+  max: KALYO_PRICING.max.payment_link,
 } as const;
 
 export const KALYO_PAYMENT_LINKS = {
@@ -16,23 +17,39 @@ export function getPaymentLink(plan: 'pro' | 'max', couponCode?: string): string
   return `${base}?prefilled_promo_code=${encodeURIComponent(couponCode.trim())}`;
 }
 
+/** Default payment link for Sofía: Max with PRIMER50 unless lead explicitly chose Pro. */
+export function getDefaultPaymentLink(plan: 'pro' | 'max' = 'max'): string {
+  return getPaymentLink(plan, KALYO_PRICING.discount.code);
+}
+
 export function formatPayIntentReply(params: {
   trialUserName?: string | null;
   trialUserEmail: string;
-  day15SentAt: string | null;
+  day15SentAt?: string | null;
+  preferredPlan?: 'pro' | 'max';
 }): string {
   const name =
     renderName(params.trialUserName) ||
     renderName(params.trialUserEmail.split('@')[0]);
   const opener = name ? `¡Genial ${name}!` : '¡Genial!';
-  const coupon = params.day15SentAt ? 'PRIMER50' : undefined;
-  const proLink = getPaymentLink('pro', coupon);
-  const maxLink = getPaymentLink('max', coupon);
+  const discount = KALYO_PRICING.discount;
+  const plan = params.preferredPlan ?? 'max';
+  const maxLink = getPaymentLink('max', discount.code);
+  const proLink = getPaymentLink('pro', discount.code);
+
+  if (plan === 'pro') {
+    return (
+      `${opener} Aquí tienes el link de pago para *Pro* ($${KALYO_PRICING.pro.price_monthly}/mes):\n\n` +
+      `💎 Pro con 50% off primer mes ($${discount.pro_with_discount}): ${proLink}\n\n` +
+      `El pago es vía Stripe (tarjeta de crédito/débito). Si tienes dudas, dime.`
+    );
+  }
 
   return (
-    `${opener} Aquí tienes los links de pago:\n\n` +
-    `💎 *Pro $29/mes* (lo que tienes en el trial):\n${proLink}\n\n` +
-    `🚀 *Max $39/mes* (incluye asistente de voz con IA):\n${maxLink}\n\n` +
+    `${opener} Aquí tienes el link de pago para *Max* (recomendado):\n\n` +
+    `🚀 Max $${KALYO_PRICING.max.price_monthly}/mes con 50% off primer mes ($${discount.max_with_discount}):\n` +
+    `${maxLink}\n\n` +
+    `Si prefieres Pro ($${KALYO_PRICING.pro.price_monthly}/mes, más básico): ${proLink}\n\n` +
     `El pago es vía Stripe (tarjeta de crédito/débito). Si tienes dudas, dime.`
   );
 }

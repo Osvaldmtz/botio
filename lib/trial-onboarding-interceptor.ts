@@ -119,6 +119,7 @@ export async function handleTrialOnboardingMessage(params: {
         trialUserName: row.trial_user_name,
         trialUserEmail: row.trial_user_email,
         day15SentAt: row.day_15_sent_at,
+        preferredPlan: /\bpro\b/i.test(params.messageBody) ? 'pro' : 'max',
       }),
       source: 'trial_onboarding',
       action: 'pay_intent',

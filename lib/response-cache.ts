@@ -19,7 +19,7 @@ const CACHE_PATTERNS: CachePattern[] = [
     name: 'saludo',
     regex: /^(hola|buenos dias|buenas tardes|que tal|hey|holi)$/,
     response:
-      '¡Hola! Soy Sofía de Kalyo 👋 Ayudamos a psicólogos a evaluar pacientes con +100 pruebas clínicas validadas, todo desde el navegador. ¿Qué te gustaría saber primero: evaluaciones, precios, o cómo funciona la prueba gratis?\n\nResponde con una opción:\n1️⃣ Evaluaciones\n2️⃣ Precios\n3️⃣ Prueba gratis',
+      '¡Hola! Soy Sofía de Kalyo 👋 Ayudamos a psicólogos a evaluar pacientes con 91+ pruebas clínicas validadas, todo desde el navegador. ¿Qué te gustaría saber primero: evaluaciones, precios, o cómo funciona la prueba gratis?\n\nResponde con una opción:\n1️⃣ Evaluaciones\n2️⃣ Precios\n3️⃣ Prueba gratis',
   },
   {
     name: 'precio_simple',
@@ -30,13 +30,13 @@ const CACHE_PATTERNS: CachePattern[] = [
     name: 'que_es_kalyo',
     regex: /^(que es kalyo|que hace kalyo|para que sirve kalyo)$/,
     response:
-      'Kalyo es una plataforma SaaS para psicólogos clínicos en LATAM. Te ayudamos a digitalizar tu práctica: gestión de pacientes, +100 evaluaciones clínicas validadas, reportes PDF con IA. ¿Te gustaría conocer los planes o probar 15 días gratis?',
+      'Kalyo es una plataforma SaaS para psicólogos clínicos en LATAM. Te ayudamos a digitalizar tu práctica: gestión de pacientes, 91+ evaluaciones clínicas validadas, reportes PDF con IA. ¿Te gustaría conocer los planes (Max recomendado) o probar 15 días gratis?',
   },
   {
     name: 'quick_1',
     regex: /^(1|evaluaciones?)$/,
     response:
-      'Tenemos +100 evaluaciones clínicas validadas incluyendo PHQ-9, GAD-7, PCL-5, Beck, Hamilton, AUDIT, SCL-90, STAI, BDI y más. Cada una genera reporte PDF con interpretación por IA. ¿Quieres probar 15 días gratis del plan Pro?',
+      'Tenemos 91+ evaluaciones clínicas validadas incluyendo PHQ-9, GAD-7, PCL-5, Beck, Hamilton, AUDIT, SCL-90, STAI, BDI y más. Cada una genera reporte PDF con interpretación por IA. ¿Quieres probar 15 días gratis del plan Pro?',
   },
   {
     name: 'quick_2',

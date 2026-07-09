@@ -1,20 +1,23 @@
-export type PurchaseIntentType = 'plan_max' | 'plan_pro' | 'pay_now' | null;
+export type PurchaseIntentType = 'plan_max' | 'plan_pro' | 'plan_ultra' | 'pay_now' | null;
 
 export type PurchaseIntent = {
   intent: PurchaseIntentType;
-  plan?: 'max' | 'pro';
+  plan?: 'max' | 'pro' | 'ultra';
 };
+
+const PLAN_ULTRA_RE =
+  /\b(?:quiero|me\s+gustar[íi]a|necesito|dame|prefiero|tomar[eé])\b.{0,40}\b(?:plan\s+)?ultra\b/i;
+const PLAN_ULTRA_SUFFIX_RE = /\b(?:plan\s+)?ultra\b.{0,20}\b(?:por\s+favor|please|ya)\b/i;
+const PLAN_ULTRA_SHORT_RE = /^(?:el\s+ultra|el\s+plan\s+ultra)\b/i;
 
 const PLAN_MAX_RE =
   /\b(?:quiero|me\s+gustar[íi]a|necesito|dame|prefiero|tomar[eé])\b.{0,40}\b(?:plan\s+)?max\b/i;
 const PLAN_MAX_SUFFIX_RE = /\b(?:plan\s+)?max\b.{0,20}\b(?:por\s+favor|please|ya)\b/i;
-// "el max" solo al inicio de mensaje o sin contexto de pregunta
 const PLAN_MAX_SHORT_RE = /^(?:el\s+max|el\s+plan\s+max)\b/i;
 
 const PLAN_PRO_RE =
   /\b(?:quiero|me\s+gustar[íi]a|necesito|dame|prefiero|tomar[eé])\b.{0,40}\b(?:plan\s+)?pro\b/i;
 const PLAN_PRO_SUFFIX_RE = /\b(?:plan\s+)?pro\b.{0,20}\b(?:por\s+favor|please|ya)\b/i;
-// "el pro" solo al inicio de mensaje
 const PLAN_PRO_SHORT_RE = /^(?:el\s+pro|el\s+plan\s+pro)\b/i;
 
 const PAY_NOW_RE =
@@ -25,6 +28,14 @@ const PAY_NOW_RE =
  * Only fires on strong purchase signals — NOT on questions like "cuánto cuesta el max?".
  */
 export function detectPurchaseIntent(message: string): PurchaseIntent {
+  if (
+    PLAN_ULTRA_RE.test(message) ||
+    PLAN_ULTRA_SUFFIX_RE.test(message) ||
+    PLAN_ULTRA_SHORT_RE.test(message)
+  ) {
+    return { intent: 'plan_ultra', plan: 'ultra' };
+  }
+
   if (
     PLAN_MAX_RE.test(message) ||
     PLAN_MAX_SUFFIX_RE.test(message) ||

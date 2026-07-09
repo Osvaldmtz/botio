@@ -1,50 +1,52 @@
 import 'server-only';
+import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
 import { detectPurchaseIntent } from '@/lib/purchase-intent-detector';
 
 export type PurchaseIntentResult = {
   replyText: string;
-  source: 'purchase_intent_max' | 'purchase_intent_pro' | 'purchase_intent_unknown';
+  source: 'purchase_intent_max' | 'purchase_intent_pro' | 'purchase_intent_ultra' | 'purchase_intent_unknown';
 };
 
-const MAX_PAYMENT_LINK = 'https://buy.stripe.com/dRm7sK27CbJW7Jmf31gQE01';
-const PRO_PAYMENT_LINK = 'https://buy.stripe.com/6oU5kCbIcaFS4xa7AzgQE00';
-const DISCOUNT_CODE = 'PRIMER50';
+const DISCOUNT_CODE = KALYO_PRICING.discount.code;
+const MAX_PAYMENT_LINK = KALYO_PRICING.max.payment_link;
+const PRO_PAYMENT_LINK = KALYO_PRICING.pro.payment_link;
 
-const REPLY_MAX = `¡Excelente elección! 🎯 El plan Max es el más completo:
+const REPLY_MAX = `¡Excelente elección! 🎯 El plan Max es el recomendado:
 
-✓ 91+ evaluaciones clínicas con IA
-✓ Reportes ejecutivos automáticos
-✓ Agenda + Videollamadas Kalyo Meet
-✓ Notas SOAP asistidas por IA
-✓ Asistente de voz para sesiones
-✓ Transcripción de 20 sesiones/mes
-✓ Mapa de riesgo clínico
+${KALYO_PRICING.max.features.slice(0, 6).map((f) => `✓ ${f}`).join('\n')}
 
-💳 Pagar plan Max ($39 USD/mes):
+💳 Pagar plan Max ($${KALYO_PRICING.max.price_monthly} USD/mes):
 ${MAX_PAYMENT_LINK}
 
-🎁 ¿Quieres 50% off tu primer mes? Usa el cupón *${DISCOUNT_CODE}* al pagar.
-Link directo con descuento:
-${MAX_PAYMENT_LINK}?prefilled_promo_code=${DISCOUNT_CODE}`;
+🎁 50% off tu primer mes con cupón *${DISCOUNT_CODE}* ($${KALYO_PRICING.discount.max_with_discount}):
+${KALYO_PRICING.max.payment_link_with_discount}`;
 
-const REPLY_PRO = `¡Buena elección! 💼 El plan Pro tiene todo lo clínico:
+const REPLY_PRO = `¡Buena elección! 💼 El plan Pro es la alternativa más básica:
 
-✓ 91+ evaluaciones clínicas validadas
-✓ Reportes automáticos con IA
-✓ Mapa de riesgo clínico
-✓ Alertas de deterioro en pacientes
-✓ Soporte prioritario
+${KALYO_PRICING.pro.features.slice(0, 5).map((f) => `✓ ${f}`).join('\n')}
 
-💳 Pagar plan Pro ($29 USD/mes):
+Con $10 más, Max incluye agenda + videollamadas + transcripción de sesiones. ¿Seguro que prefieres Pro?
+
+💳 Pagar plan Pro ($${KALYO_PRICING.pro.price_monthly} USD/mes):
 ${PRO_PAYMENT_LINK}
 
-🎁 ¿Quieres 50% off tu primer mes? Usa el cupón *${DISCOUNT_CODE}*:
-${PRO_PAYMENT_LINK}?prefilled_promo_code=${DISCOUNT_CODE}`;
+🎁 50% off primer mes con *${DISCOUNT_CODE}* ($${KALYO_PRICING.discount.pro_with_discount}):
+${KALYO_PRICING.pro.payment_link_with_discount}`;
 
-const REPLY_PAY_NOW = `¡Perfecto! 🎉 Tenemos 2 planes disponibles:
+const REPLY_ULTRA = `⭐ Plan Ultra — $${KALYO_PRICING.ultra.price_monthly} USD/mes:
 
-💎 *Plan Max* ($39/mes) — todo lo clínico + agenda + voz IA + videollamadas
-💼 *Plan Pro* ($29/mes) — todo lo clínico
+${KALYO_PRICING.ultra.features.map((f) => `✓ ${f}`).join('\n')}
+
+Comparado con Max ($${KALYO_PRICING.max.price_monthly}/mes): Ultra agrega Sofía 24/7 en WhatsApp, agendamiento automático y cobro con tarjeta desde WhatsApp.
+
+Para activar Ultra, escríbenos a hola@kalyo.io o revisa opciones en https://app.kalyo.io/pricing`;
+
+const REPLY_PAY_NOW = `¡Perfecto! 🎉 Nuestros planes:
+
+🚀 *Plan Max* ($${KALYO_PRICING.max.price_monthly}/mes) — recomendado: agenda + videollamadas + transcripción + todo Pro
+💎 *Plan Pro* ($${KALYO_PRICING.pro.price_monthly}/mes) — más básico: evaluaciones ilimitadas + Kaly Voice + reportes IA
+
+Con cupón *${DISCOUNT_CODE}*: Max $${KALYO_PRICING.discount.max_with_discount} o Pro $${KALYO_PRICING.discount.pro_with_discount} el primer mes.
 
 ¿Cuál te interesa? Te paso el link directo.
 
@@ -90,6 +92,17 @@ export async function handlePurchaseIntentMessage(params: {
 
   const intent = detectPurchaseIntent(params.messageBody);
   if (!intent.intent) return null;
+
+  if (intent.intent === 'plan_ultra') {
+    notifyPurchaseIntentTelegram({
+      plan: 'Ultra',
+      phone: params.phone,
+      customerName: params.customerName,
+      conversationId: params.conversationId,
+    }).catch(() => {});
+
+    return { replyText: REPLY_ULTRA, source: 'purchase_intent_ultra' };
+  }
 
   if (intent.intent === 'plan_max') {
     notifyPurchaseIntentTelegram({

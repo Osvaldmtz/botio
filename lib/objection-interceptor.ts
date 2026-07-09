@@ -77,13 +77,24 @@ export async function handleObjectionMessage(params: {
     params.metadata,
   );
 
+  let priceObjectionCount: number | undefined;
+  if (objection.type === 'price') {
+    const { count } = await params.supabase
+      .from('detected_objections')
+      .select('id', { count: 'exact', head: true })
+      .eq('conversation_id', params.conversationId)
+      .eq('objection_type', 'price');
+    priceObjectionCount = (count ?? 0) + 1;
+  }
+
   const responseText = formatObjectionResponse(objection.type, {
     name: lead.name,
     isRepeat: objection.is_repeat,
+    priceObjectionCount,
   });
 
   const insertOutcome =
-    objection.type === 'price' && objection.is_repeat ? 'handoff' : 'pending';
+    objection.type === 'price' && (priceObjectionCount ?? 0) >= 3 ? 'handoff' : 'pending';
 
   const { error: insertError } = await params.supabase.from('detected_objections').insert({
     conversation_id: params.conversationId,
@@ -112,7 +123,7 @@ export async function handleObjectionMessage(params: {
     });
   }
 
-  if (objection.type === 'price' && objection.is_repeat) {
+  if (objection.type === 'price' && (priceObjectionCount ?? 0) >= 3) {
     await notifyObjectionTelegram({
       kind: 'price_insistence',
       name: lead.name,

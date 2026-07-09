@@ -280,6 +280,43 @@ export function ExecutiveKpiDashboard({ data }: Props) {
               </div>
             </div>
 
+            <div>
+              <KpiVividSectionTitle accent="violet">Sofía — Max vs Pro</KpiVividSectionTitle>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <KpiVividMetric
+                  label="% suscriptores Max"
+                  value={data.sofiaSales?.max_share_pct != null ? `${data.sofiaSales.max_share_pct}%` : '—'}
+                  icon={Layers}
+                  accent="fuchsia"
+                  hint={`Pro ${data.sofiaSales?.plan_pro ?? 0} · Max ${data.sofiaSales?.plan_max ?? 0}`}
+                />
+                <KpiVividMetric
+                  label="Links PRIMER50 (30d)"
+                  value={fmtNum(data.sofiaSales?.primer50_links_sent_30d)}
+                  icon={DollarSign}
+                  accent="emerald"
+                  hint="Mensajes Sofía con cupón"
+                />
+                <KpiVividMetric
+                  label="Intent Max (30d)"
+                  value={fmtNum(data.sofiaSales?.purchase_intent_max_30d)}
+                  icon={TrendingUp}
+                  accent="sky"
+                />
+                <KpiVividMetric
+                  label="Intent Pro (30d)"
+                  value={fmtNum(data.sofiaSales?.purchase_intent_pro_30d)}
+                  icon={TrendingUp}
+                  accent="indigo"
+                  hint={
+                    data.sofiaSales?.max_vs_pro_intent_ratio != null
+                      ? `${data.sofiaSales.max_vs_pro_intent_ratio}% intención Max`
+                      : undefined
+                  }
+                />
+              </div>
+            </div>
+
             <div className="grid gap-4 xl:grid-cols-2">
               <KpiVividPanel title="MRR + Suscriptores + Trials" subtitle={`${range} días`} accent="emerald">
                 {mrrChart.length > 0 ? (

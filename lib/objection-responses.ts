@@ -1,4 +1,5 @@
 import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
+import { getPaymentLink } from '@/lib/kalyo-payment-links';
 import type { ObjectionType } from '@/lib/objection-detector';
 import {
   nameThenVerb,
@@ -10,6 +11,7 @@ import {
 export type ObjectionResponseContext = {
   name?: string | null;
   isRepeat: boolean;
+  priceObjectionCount?: number;
 };
 
 export function formatObjectionResponse(
@@ -18,27 +20,40 @@ export function formatObjectionResponse(
 ): string {
   const name = renderName(ctx.name);
   const isRepeat = ctx.isRepeat;
+  const priceCount = ctx.priceObjectionCount ?? (isRepeat ? 2 : 1);
   const starter = KALYO_PRICING.starter;
-  const proDiscount = KALYO_PRICING.pro.payment_link_with_discount;
   const discount = KALYO_PRICING.discount;
+  const maxCoupon = getPaymentLink('max', discount.code);
+  const proCoupon = getPaymentLink('pro', discount.code);
 
   if (type === 'price') {
-    if (!isRepeat) {
+    if (priceCount <= 1) {
       const greeting = name ? `Entiendo ${name}` : 'Entiendo';
       return (
-        `${greeting}, $29 al mes puede sonar a mucho al inicio. Te pongo las cuentas reales:\n\n` +
+        `${greeting}, $${KALYO_PRICING.max.price_monthly} al mes puede sonar a mucho al inicio. Te pongo las cuentas reales:\n\n` +
         `✓ Con UNA sola sesión cobrada cubres el mes completo\n` +
-        `✓ Te ahorra ~2 horas por paciente en escribir reportes\n` +
-        `✓ A $300 MXN por sesión, son ~4 sesiones extra al mes con el tiempo que recuperas\n\n` +
-        `Te ofrezco 50% en tu primer mes: $${discount.pro_with_discount} USD\n` +
-        `${proDiscount}\n\n` +
-        `O si prefieres probar sin pagar nada, te activo el plan Starter gratis:\n` +
+        `✓ Te ahorra horas en reportes y documentación\n` +
+        `✓ Max incluye agenda, videollamadas y transcripción de sesiones\n\n` +
+        `Te ofrezco 50% en tu primer mes de *Max* (recomendado): $${discount.max_with_discount} USD\n` +
+        `${maxCoupon}\n\n` +
+        `Si prefieres algo más básico, Pro queda en $${discount.pro_with_discount} primer mes con el mismo cupón ${discount.code}.\n\n` +
+        `O si quieres probar sin pagar, el plan Starter es gratis:\n` +
         `✓ ${starter.max_patients} pacientes activos\n` +
-        `✓ ${starter.max_evaluations_per_month} evaluaciones por mes\n` +
-        `✓ Reportes en PDF\n\n` +
+        `✓ ${starter.max_evaluations_per_month} evaluaciones por mes\n\n` +
         `¿Cuál prefieres?`
       );
     }
+
+    if (priceCount === 2) {
+      const opener = name ? `Sin problema ${name}` : 'Sin problema';
+      return (
+        `${opener}. Si Max aún no encaja en tu presupuesto, Pro con 50% off el primer mes queda en $${discount.pro_with_discount} USD:\n\n` +
+        `${proCoupon}\n\n` +
+        `Pro incluye evaluaciones ilimitadas, Kaly Voice y reportes IA — sin agenda ni videollamadas.\n\n` +
+        `¿Te sirve Pro o prefieres el Starter gratis?`
+      );
+    }
+
     const opener = nameThenVerb(name, 'entiendo');
     return (
       `${opener}. Te pongo en contacto con Osvaldo del equipo para que vea cómo ajustarte algo más conveniente.\n\n` +
@@ -51,7 +66,7 @@ export function formatObjectionResponse(
       return (
         `${prefixWithName('Claro', name)} es una decisión importante. Mientras lo piensas, puedes probar el trial Pro de 15 días GRATIS (sin tarjeta):\n\n` +
         `https://app.kalyo.io/login\n\n` +
-        `Así ves todo sin presión. ¿Te lo activo? Solo necesito tu nombre completo y email.`
+        `Así ves todo sin presión. Si te gusta, al vencer te recomiendo Max ($${KALYO_PRICING.max.price_monthly}/mes) o Pro si prefieres algo más básico. ¿Te activo el trial? Solo necesito tu nombre completo y email.`
       );
     }
     return (
@@ -65,10 +80,11 @@ export function formatObjectionResponse(
     if (!isRepeat) {
       return (
         `${prefixWithName('Interesante', name)} ¿qué usas hoy? Kalyo se diferencia en 3 cosas clave:\n\n` +
-        `🎙️ Asistente de voz con IA (hablas y registra todo)\n` +
-        `📊 Reportes ejecutivos automáticos (sin escribir reportes a mano)\n` +
+        `🚀 Plan Max: agenda + videollamadas + transcripción + portal del paciente\n` +
+        `📊 91+ tests con reportes IA avanzados (sin escribir reportes a mano)\n` +
         `🇲🇽 Hecho en LATAM para psicólogos LATAM (DSM-5, español)\n\n` +
-        `¿Te interesa ver una demo en vivo de cómo se compara? Te agendo 30 minutos con Osvaldo.`
+        `Max ($${KALYO_PRICING.max.price_monthly}/mes) es el recomendado. Pro ($${KALYO_PRICING.pro.price_monthly}/mes) si buscas algo más básico.\n\n` +
+        `¿Te interesa ver una demo en vivo? Te agendo 30 minutos con Osvaldo.`
       );
     }
     return (
@@ -82,7 +98,7 @@ export function formatObjectionResponse(
         `${prefixWithName('Te entiendo', name)} todos andamos contra el tiempo. ¿Qué te parece si:\n\n` +
         `1️⃣ Te activo el trial gratis ahora (30 segundos)\n` +
         `2️⃣ Lo pruebas cuando puedas estos 15 días\n` +
-        `3️⃣ Si te sirve, sigues. Si no, no pasa nada\n\n` +
+        `3️⃣ Si te sirve, sigues con Max o Pro. Si no, no pasa nada\n\n` +
         `¿Te activo el trial?`
       );
     }
@@ -97,7 +113,7 @@ export function formatObjectionResponse(
       return (
         `${prefixWithName('Cuéntame más', name)} ¿qué estás buscando exactamente? Quiero entender tu necesidad para ver si Kalyo encaja.\n\n` +
         `Por ejemplo:\n` +
-        `- ¿Algo más simple o más completo?\n` +
+        `- ¿Algo más simple (Pro) o consultorio completo (Max)?\n` +
         `- ¿Uso personal o equipo?\n` +
         `- ¿Pacientes, evaluaciones, citas?`
       );
@@ -117,7 +133,7 @@ export function formatObjectionResponse(
       `✓ Estructurar tu práctica desde día 1\n` +
       `✓ Hacer evaluaciones con IA y verte profesional ante cada paciente\n` +
       `✓ Tener registros impecables\n\n` +
-      `El trial Pro es GRATIS 15 días — arrancas sin invertir. Solo pagas si te sirve.\n\n` +
+      `El trial Pro es GRATIS 15 días — arrancas sin invertir. Si te sirve, Max ($${KALYO_PRICING.max.price_monthly}/mes) es el recomendado.\n\n` +
       `¿Te activo el trial? Necesito tu nombre completo y email.`
     );
   }

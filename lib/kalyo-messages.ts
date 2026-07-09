@@ -69,7 +69,7 @@ export function mapQuickReplySelection(text: string): string | null {
     return 'El usuario eligió Evaluaciones — explícale las evaluaciones clínicas de Kalyo. NO incluyas quick replies al final.';
   }
   if (/^2$|precio|plan/i.test(normalized)) {
-    return 'El usuario eligió Precios — resume los planes Starter, Pro y Max. NO incluyas quick replies al final.';
+    return 'El usuario eligió Precios — presenta Max primero como recomendado, luego Pro como alternativa más básica. Usa datos oficiales de planes. NO incluyas quick replies al final.';
   }
   if (/^3$|prueba|trial|gratis/i.test(normalized)) {
     return 'El usuario eligió Prueba gratis — inicia el Flujo Único de Trial: ofrece trial Pro 15 días sin tarjeta y pregunta "¿Ya tienes cuenta en Kalyo o es tu primera vez?". NO incluyas quick replies al final.';

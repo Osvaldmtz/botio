@@ -28,26 +28,19 @@ assert(
   'max coupon query param',
 );
 
-const withoutCoupon = formatPayIntentReply({
+const defaultPay = formatPayIntentReply({
   trialUserName: 'Roberto',
   trialUserEmail: 'roberto@test.com',
-  day15SentAt: null,
 });
-assert(withoutCoupon.includes(PRO_BASE), 'pay intent without coupon includes pro link');
-assert(!withoutCoupon.includes('prefilled_promo_code'), 'pay intent without coupon has no promo');
+assert(defaultPay.includes(`${MAX_BASE}?prefilled_promo_code=PRIMER50`), 'default pay intent is Max with PRIMER50');
+assert(defaultPay.indexOf('Max') < defaultPay.indexOf('Pro'), 'Max listed before Pro');
 
-const withCoupon = formatPayIntentReply({
+const proExplicit = formatPayIntentReply({
   trialUserName: 'Roberto',
   trialUserEmail: 'roberto@test.com',
-  day15SentAt: new Date().toISOString(),
+  preferredPlan: 'pro',
 });
-assert(
-  withCoupon.includes(`${PRO_BASE}?prefilled_promo_code=PRIMER50`),
-  'pay intent after day15 includes coupon on pro',
-);
-assert(
-  withCoupon.includes(`${MAX_BASE}?prefilled_promo_code=PRIMER50`),
-  'pay intent after day15 includes coupon on max',
-);
+assert(proExplicit.includes(`${PRO_BASE}?prefilled_promo_code=PRIMER50`), 'explicit Pro uses Pro link with coupon');
+assert(!proExplicit.includes(MAX_BASE), 'explicit Pro reply does not include Max link');
 
 console.log('✓ All payment link tests passed');

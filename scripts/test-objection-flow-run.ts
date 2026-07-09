@@ -81,7 +81,7 @@ async function runTests(): Promise<void> {
   await cleanup();
 
   const conversationId = await ensureConversation();
-  const proCoupon = getPaymentLink('pro', 'PRIMER50');
+  const maxCoupon = getPaymentLink('max', 'PRIMER50');
 
   const first = await handleObjectionMessage({
     supabase,
@@ -92,8 +92,8 @@ async function runTests(): Promise<void> {
   });
 
   assert(first != null && first.objectionType === 'price', 'first objection type price');
-  assert(first != null && first.replyText.includes(proCoupon), 'first response includes PRIMER50 link');
-  assert(first != null && first.replyText.includes('20 evaluaciones'), 'first response has official Starter eval count');
+  assert(first != null && first.replyText.includes(maxCoupon), 'first response includes Max PRIMER50 link');
+  assert(first != null && first.replyText.includes('10 evaluaciones'), 'first response has official Starter eval count');
   assert(first != null && first.replyText.includes('2 pacientes activos'), 'first response has official Starter patients');
   assert(first != null && first.isRepeat === false, 'first not repeat');
 
@@ -115,8 +115,19 @@ async function runTests(): Promise<void> {
   });
 
   assert(second != null && second.isRepeat === true, 'second is repeat');
-  assert(second != null && second.replyText.includes('Osvaldo'), 'insistence mentions handoff');
-  assert(second != null && second.replyText.includes('email'), 'insistence asks for email');
+  assert(second != null && second.replyText.includes('Pro'), 'second offers Pro with coupon');
+  assert(second != null && !second.replyText.includes('Osvaldo'), 'second does not handoff yet');
+
+  const third = await handleObjectionMessage({
+    supabase,
+    conversationId,
+    customerPhone: testPhone,
+    messageBody: 'Sigue siendo caro para mí otra vez',
+    metadata: { name: 'María Test', email: testEmail },
+  });
+
+  assert(third != null && third.replyText.includes('Osvaldo'), 'third insistence mentions handoff');
+  assert(third != null && third.replyText.includes('email'), 'third insistence asks for email');
 
   const { count } = await supabase
     .from('detected_objections')
@@ -124,7 +135,7 @@ async function runTests(): Promise<void> {
     .eq('conversation_id', conversationId)
     .eq('objection_type', 'price')
     .eq('outcome', 'handoff');
-  assert((count ?? 0) >= 1, 'handoff outcome on insistence');
+  assert((count ?? 0) >= 1, 'handoff outcome on third insistence');
 
   const { notifyObjectionTelegram } = await import('../lib/objection-notifications');
   telegramSent.length = 0;

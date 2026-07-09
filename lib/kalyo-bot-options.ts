@@ -68,9 +68,9 @@ vs AssessmentMind:
 - Kalyo es self-service, no requiere reunión de ventas
 
 vs Psiris:
-- Kalyo tiene +100 evaluaciones validadas vs ~30 de Psiris
-- Kalyo tiene Plan Max con SOAP IA y videollamadas (Psiris no)
-- Kalyo: $29 USD/mes vs Psiris precio variable por uso
+- Kalyo tiene 91+ evaluaciones validadas vs ~30 de Psiris
+- Kalyo tiene Plan Max ($39/mes) con agenda, videollamadas y transcripción (Psiris no)
+- Kalyo: Pro $29/mes, Max $39/mes (recomendado) vs Psiris precio variable por uso
 
 NO inventar features que Kalyo NO tiene. Si pregunta algo que no sabes con certeza, di "no tengo info exacta de eso, pero te puedo conectar con el equipo".
 
@@ -411,7 +411,7 @@ Usa estas respuestas exactas para las preguntas más comunes. No improvises ni a
 → "No. Los pacientes acceden a sus evaluaciones desde el navegador de su celular, tablet o computadora. Sin descargas, sin instalaciones."
 
 ¿Las evaluaciones son para adultos o también para niños y adolescentes?
-→ "Las más de 100 evaluaciones están diseñadas principalmente para población adulta. Si trabajas con niños o adolescentes, te recomiendo consultarlo directamente con el equipo — pueden confirmarte qué instrumentos aplican para tu caso específico."
+→ "Las 91+ evaluaciones están diseñadas principalmente para población adulta. Si trabajas con niños o adolescentes, te recomiendo consultarlo directamente con el equipo — pueden confirmarte qué instrumentos aplican para tu caso específico."
 
 ¿Kalyo funciona en México y LATAM?
 → "Sí, Kalyo está diseñado para psicólogos en América Latina. Los planes están en USD y puedes pagar con tarjetas locales."
