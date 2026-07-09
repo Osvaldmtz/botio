@@ -6,16 +6,17 @@ export async function transcribeAudio(
   blobUrl: string,
   fileName: string
 ): Promise<{ text: string } | { error: string }> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return { error: 'OPENAI_API_KEY no configurada' };
-  }
-
   if (!blobUrl?.trim()) {
     return { error: 'falta la URL del archivo' };
   }
 
+  const apiKey = process.env.OPENAI_API_KEY;
+
   try {
+    if (!apiKey) {
+      return { error: 'OPENAI_API_KEY no configurada' };
+    }
+
     const blobResult = await get(blobUrl, { access: 'private' });
     if (!blobResult?.stream) {
       return { error: 'no se pudo descargar el audio desde Blob' };
