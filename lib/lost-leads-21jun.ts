@@ -88,7 +88,7 @@ Si quieres probar antes, tienes *15 días gratis sin tarjeta*.
 
 Soy Sofía de Kalyo. Recibí tu mensaje con tu email (${email}) pero hubo una falla técnica y no pude procesarlo en su momento. Mil disculpas por la espera.
 
-Buenas noticias: te puedo activar tu trial Pro de 15 días gratis ahora mismo.
+Buenas noticias: te puedo activar tu trial Max de 15 días gratis ahora mismo — incluye agenda, Meet y Kaly voz.
 
 ¿Confirmas que quieres proceder con ese email? Solo respóndeme "sí" y te lo activo. 🚀`;
   }

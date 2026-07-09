@@ -56,7 +56,7 @@ export const PROFILE_FLOWS: Record<Exclude<ProfileType, 'unknown'>, ProfileFlowC
     ],
     objection_handling: {
       precio: `El plan Starter es gratis para siempre con ${KALYO_PRICING.starter.max_patients} pacientes y ${KALYO_PRICING.starter.max_evaluations_per_month} evaluaciones/mes — perfecto mientras estudias.`,
-      trial: 'El trial Pro es para psicólogos que ya atienden pacientes; el Starter gratis te sirve ahora.',
+      trial: 'El trial Max es para psicólogos que ya atienden; el Starter gratis te sirve mientras estudias.',
     },
   },
   institution_decision_maker: {

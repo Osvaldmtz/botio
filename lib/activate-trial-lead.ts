@@ -23,6 +23,7 @@ export async function activateTrialForLead(params: {
   fullName: string;
   phone: string;
   source: string;
+  trialPlan?: 'max' | 'pro';
 }): Promise<ActivateTrialLeadResult> {
   const email = params.email.trim().toLowerCase();
   const fullName = params.fullName.trim();
@@ -36,6 +37,7 @@ export async function activateTrialForLead(params: {
     email,
     fullName,
     phone,
+    trialPlan: params.trialPlan ?? 'max',
   });
 
   if (!account.success) {
@@ -58,6 +60,7 @@ export async function activateTrialForLead(params: {
     phone,
     source: params.source,
     tempPassword: account.password,
+    trialPlan: params.trialPlan ?? 'max',
   });
 
   const welcomeSent = enroll.success;

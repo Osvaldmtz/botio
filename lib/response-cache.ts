@@ -36,7 +36,7 @@ const CACHE_PATTERNS: CachePattern[] = [
     name: 'quick_1',
     regex: /^(1|evaluaciones?)$/,
     response:
-      'Tenemos 91+ evaluaciones clínicas validadas incluyendo PHQ-9, GAD-7, PCL-5, Beck, Hamilton, AUDIT, SCL-90, STAI, BDI y más. Cada una genera reporte PDF con interpretación por IA. ¿Quieres probar 15 días gratis del plan Pro?',
+      'Tenemos 91+ evaluaciones clínicas validadas incluyendo PHQ-9, GAD-7, PCL-5, Beck, Hamilton, AUDIT, SCL-90, STAI, BDI y más. Cada una genera reporte PDF con interpretación por IA. ¿Quieres probar 15 días gratis del plan Max?',
   },
   {
     name: 'quick_2',
@@ -47,7 +47,7 @@ const CACHE_PATTERNS: CachePattern[] = [
     name: 'quick_3',
     regex: /^(3|prueba gratis|trial)$/,
     response:
-      '¡Excelente! Te activo el trial Pro de 15 días sin tarjeta de crédito. ¿Ya tienes cuenta en Kalyo o es tu primera vez?',
+      '¡Excelente! Te activo el trial Max de 15 días sin tarjeta de crédito — incluye agenda, Kalyo Meet, grabación y Kaly voz. ¿Ya tienes cuenta en Kalyo o es tu primera vez?',
   },
   {
     name: 'gracias',

@@ -1,7 +1,13 @@
 import 'server-only';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { GenerateReplyOptions } from '@/lib/claude';
-import { activateProTrial } from '@/lib/kalyo';
+import { activateTrial } from '@/lib/kalyo';
+import { buildTrialActivationSuccessMessage } from '@/lib/kalyo-trial-messages';
+import {
+  detectTrialPlanPreference,
+  trialPlanLabel,
+  type TrialPlanChoice,
+} from '@/lib/kalyo-trial-plans';
 import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { savePendingDemoSlots } from '@/lib/demo-conversation';
@@ -114,7 +120,7 @@ DEMO = llamada agendada con Osvaldo, 30 minutos, vía Calendly / videollamada. T
 → Compartir link Calendly oficial (ver BLOQUE DEMO). El sistema puede enviarlo automáticamente.
 → NUNCA activar trial ni create_account_and_activate_trial cuando el usuario pidió demo
 
-TRIAL = activar 15 días Pro gratis sin tarjeta. Triggers:
+TRIAL = activar 15 días Max gratis sin tarjeta (default). Triggers:
 - "quiero el trial"
 - "quiero probarlo"
 - "quiero la prueba gratis"
@@ -170,7 +176,7 @@ CAMINO 1 — Usuario YA tiene cuenta:
 CAMINO 2 — Usuario NUEVO (primera vez):
 - Pide nombre completo + email.
 - Llama create_account_and_activate_trial con email y full_name.
-- El sistema crea la cuenta y activa el trial Pro de 15 días automáticamente (sin registro manual en la web).
+- El sistema crea la cuenta y activa el trial Max de 15 días automáticamente (sin registro manual en la web).
 
 NUNCA pidas al usuario nuevo que se registre manualmente en la web si ya te dio nombre y email — usa create_account_and_activate_trial.
 NUNCA envíes links de registro distintos a https://app.kalyo.io/login (prohibido: kalyo.io/register, kalyo.io, app.kalyo.io/login?mode=register).
@@ -179,16 +185,19 @@ NUNCA envíes links de registro distintos a https://app.kalyo.io/login (prohibid
 
 HERRAMIENTA 1: activate_pro_trial
 
-Activa trial Pro 15 días para una cuenta Kalyo EXISTENTE (el usuario ya se registró antes).
+Activa trial de 15 días para una cuenta Kalyo EXISTENTE (el usuario ya se registró antes).
+DEFAULT: plan Max. Usa plan "pro" SOLO si el usuario pidió explícitamente trial de Pro.
 
 Cuándo llamarla:
 - El usuario confirmó que YA tiene cuenta en Kalyo.
 - Pidió trial y proporcionó su email.
 
+Input opcional: plan ("max" | "pro"). Omitir o "max" en el caso normal.
+
 Qué responder según el resultado:
-- status "success": Confirma trial activo; puede entrar en https://app.kalyo.io/login
-- status "already_active": Plan Pro ya activo; incluye fecha de vencimiento.
-- status "already_used": Texto exacto: "Ya utilizaste tu prueba gratuita de 15 días. Para continuar disfrutando Kalyo Pro puedes suscribirte por $29/mes en kalyo.io 😊"
+- status "success": Confirma trial Max (o Pro si aplicó) activo; puede entrar en https://app.kalyo.io/login. Menciona features Max si aplica.
+- status "already_active": Trial/plan ya activo; incluye fecha de vencimiento.
+- status "already_used": Texto exacto: "Ya utilizaste tu prueba gratuita de 15 días. Puedes suscribirte a Max ($39/mes) o Pro ($29/mes) en kalyo.io 😊"
 - status "not_found": El email no existe — cambia al CAMINO 2: pide nombre completo y usa create_account_and_activate_trial.
 - status "error": Discúlpate y pide reintentar.
 
@@ -196,9 +205,10 @@ Qué responder según el resultado:
 
 HERRAMIENTA 2: create_account_and_activate_trial
 
-Crea cuenta nueva en Kalyo + activa trial Pro 15 días. SOLO cuando el usuario pidió trial explícitamente y confirmó que es su primera vez (o activate_pro_trial devolvió not_found).
+Crea cuenta nueva en Kalyo + activa trial de 15 días (DEFAULT Max). SOLO cuando el usuario pidió trial explícitamente y confirmó que es su primera vez (o activate_pro_trial devolvió not_found).
 
 Input requerido: email + full_name.
+Input opcional: plan ("max" | "pro"). Usa "pro" SOLO si el usuario pidió explícitamente trial de Pro.
 
 Qué responder según el resultado:
 - success: Entrega link https://app.kalyo.io/login, email y contraseña temporal (campo password del tool). Indica que puede cambiarla después de entrar.
@@ -285,20 +295,22 @@ INTENCIÓN DE COMPRA / TRIAL — FLUJO ÚNICO
 
 NO aplicar este flujo si el usuario pidió DEMO (ver DISTINCIÓN CRÍTICA). "Demo" / "demo de Kalyo" / "ver una demo" = flujo DEMO, no trial.
 
-Cuando el usuario muestra intención de tomar el Plan Pro o probar gratis (con cualquier palabra: "quiero Pro", "quiero el plan Pro", "quiero comprar", "quiero el trial", "quiero probarlo", "lo quiero", "voy a contratar", "regalame los 15 dias", "me ingresa", "me apunto", "lo tomo", "lo contrato", "quiero pagar", "cómo pago", "vamos", "lo activo", "quiero suscribirme", "acepto", "quiero comprarlo", o variantes similares) — y NO pidió demo en vivo:
+Cuando el usuario muestra intención de probar gratis (con cualquier palabra: "quiero Pro", "quiero el trial", "quiero probarlo", "lo quiero", "voy a contratar", "regalame los 15 dias", "me ingresa", "me apunto", "lo tomo", "lo contrato", "quiero pagar", "cómo pago", "vamos", "lo activo", "quiero suscribirme", "acepto", "quiero comprarlo", o variantes similares) — y NO pidió demo en vivo:
 
-Paso 1 — SIEMPRE ofrecer trial primero:
-Responde: "¡Excelente! Te activo el trial Pro de 15 días sin tarjeta de crédito. ¿Ya tienes cuenta en Kalyo o es tu primera vez?"
+Paso 1 — SIEMPRE ofrecer trial Max primero:
+Responde: "¡Excelente! Te activo el trial Max de 15 días sin tarjeta de crédito — incluye agenda, Kalyo Meet, grabación y Kaly voz. ¿Ya tienes cuenta en Kalyo o es tu primera vez?"
+
+EXCEPCIÓN TRIAL PRO: Si el usuario dice "solo quiero Pro" o "trial Pro" para la prueba gratis, menciona UNA vez: "Te recomiendo probar Max primero — incluye agenda, Meet y Kaly voz. Si no te sirven, bajas a Pro sin costo." Si insiste, activa trial Pro (plan "pro") sin más drama.
 
 Paso 2A — Si dice "ya tengo cuenta" / "sí tengo" / "ya me registré":
 - Pide solo email
-- Llama activate_pro_trial con ese email
+- Llama activate_pro_trial con ese email (y plan "pro" solo si lo pidió explícito)
 - Si éxito: confirma activación y que puede entrar en https://app.kalyo.io/login
 - Si error: explica y ofrece conectar con el equipo
 
 Paso 2B — Si dice "primera vez" / "no tengo" / "nuevo" / "no me he registrado":
 - Pide: "Perfecto. Necesito tu nombre completo y email para crearte la cuenta."
-- Cuando tengas ambos datos, llama create_account_and_activate_trial con email y full_name
+- Cuando tengas ambos datos, llama create_account_and_activate_trial con email, full_name y plan (pro solo si lo pidió explícito)
 - Usa el mensaje que retorna la herramienta (credenciales + link de login)
 
 Paso 3 — Notificación al equipo:
@@ -380,7 +392,7 @@ Ofrece proactivamente el trial cuando se cumplan todas estas condiciones:
 No activa si el usuario solo saludó, exploró superficialmente, o no mostró interés concreto en Kalyo.
 
 Cuando se cumplan todas las condiciones, integra de forma natural en tu respuesta:
-"Por cierto, ¿quieres que te active el trial Pro de 15 días sin tarjeta? ¿Ya tienes cuenta en Kalyo o es tu primera vez?"
+"Por cierto, ¿quieres que te active el trial Max de 15 días sin tarjeta? ¿Ya tienes cuenta en Kalyo o es tu primera vez?"
 
 Si acepta, sigue el Flujo Único de Trial (INTENCIÓN DE COMPRA / TRIAL).
 
@@ -457,9 +469,9 @@ Si el usuario hace una pregunta sin relación con Kalyo o la psicología clínic
 BLOQUE N: SOLICITUD PROACTIVA DE CONTACTO (TEMPRANA)
 
 Si llevas 3 o 4 mensajes del usuario, aún no has activado su trial, y mostró interés concreto (preguntó precios, evaluaciones, trial, confirmó que es psicólogo, o eligió una opción del menú), ofrece el Flujo Único:
-"¿Quieres que te active el trial Pro de 15 días sin tarjeta? ¿Ya tienes cuenta en Kalyo o es tu primera vez?"
+"¿Quieres que te active el trial Max de 15 días sin tarjeta? ¿Ya tienes cuenta en Kalyo o es tu primera vez?"
 
-También ofrece el trial en el mensaje 3 si preguntó directamente por precios o el plan Pro.
+También ofrece el trial en el mensaje 3 si preguntó directamente por precios o planes.
 
 No repitas esta solicitud si ya la hiciste o si ya tienes el email.
 
@@ -491,9 +503,9 @@ const KALYO_INSTRUCTIONS_META = `
 
 You are the Kalyo assistant running on Facebook Messenger / Instagram Direct Messages.
 
-If the user asks about the free trial, about activating Kalyo Pro, about starting their 15-day free Pro trial, or about trying the Pro plan, reply in the language they are writing in and include this EXACT WhatsApp deep-link sentence verbatim:
+If the user asks about the free trial, about activating Kalyo Max, about starting their 15-day free Max trial, or about trying Kalyo, reply in the language they are writing in and include this EXACT WhatsApp deep-link sentence verbatim:
 
-"Para activar tu prueba gratuita de 15 días del plan Pro, haz clic aquí y escríbenos por WhatsApp: ${KALYO_TRIAL_DEEP_LINK} 🚀"
+"Para activar tu prueba gratuita de 15 días del plan Max, haz clic aquí y escríbenos por WhatsApp: ${KALYO_TRIAL_DEEP_LINK} 🚀"
 
 Trial activation happens on WhatsApp only — do NOT ask for their email on Messenger or Instagram, and do NOT try to activate the trial yourself. The wa.me link above opens WhatsApp with a pre-filled message so the user lands in the right conversation to finish activation.
 
@@ -515,15 +527,24 @@ Si te piden activar trial para otra persona (onboarding manual), pide:
 
 Cuando tengas los tres datos, llama admin_activate_trial_for_lead con email, full_name y phone del LEAD (no uses tu propio número).
 
-Responde al operador confirmando: trial activado, welcome enviado al WhatsApp del lead, y fecha de fin de trial. Si welcome_sent es false pero status success, indica que el trial quedó activo pero el welcome ya se había enviado antes.
+Responde al operador confirmando: trial Max activado, welcome enviado al WhatsApp del lead, y fecha de fin de trial. Si welcome_sent es false pero status success, indica que el trial quedó activo pero el welcome ya se había enviado antes.
 
 NO uses create_account_and_activate_trial ni activate_pro_trial para onboardings de terceros — usa solo admin_activate_trial_for_lead.
 `;
 
+const TRIAL_PLAN_INPUT_SCHEMA = {
+  plan: {
+    type: 'string',
+    enum: ['max', 'pro'],
+    description:
+      'Trial plan to activate. Default max. Use pro ONLY if the user explicitly requested Pro trial.',
+  },
+} as const;
+
 const ACTIVATE_PRO_TRIAL_TOOL: Anthropic.Messages.Tool = {
   name: 'activate_pro_trial',
   description:
-    'Activate a 15-day Pro trial for a Kalyo psychologist by email. Only call when the user has clearly asked to start their trial AND provided their email address.',
+    'Activate a 15-day Max trial (default) for a Kalyo psychologist by email. Use plan "pro" only if user explicitly asked for Pro trial. Only call when the user has clearly asked to start their trial AND provided their email address.',
   input_schema: {
     type: 'object',
     properties: {
@@ -531,6 +552,7 @@ const ACTIVATE_PRO_TRIAL_TOOL: Anthropic.Messages.Tool = {
         type: 'string',
         description: 'The email address of the Kalyo account to activate.',
       },
+      ...TRIAL_PLAN_INPUT_SCHEMA,
     },
     required: ['email'],
   },
@@ -539,7 +561,7 @@ const ACTIVATE_PRO_TRIAL_TOOL: Anthropic.Messages.Tool = {
 const CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL: Anthropic.Messages.Tool = {
   name: 'create_account_and_activate_trial',
   description:
-    'Create a new Kalyo account and activate a 15-day Pro trial. Only use when the user explicitly asked for a trial AND confirmed they are new to Kalyo (first time), with email and full name provided.',
+    'Create a new Kalyo account and activate a 15-day Max trial (default). Use plan "pro" only if user explicitly asked for Pro trial. Only use when the user explicitly asked for a trial AND confirmed they are new to Kalyo (first time), with email and full name provided.',
   input_schema: {
     type: 'object',
     properties: {
@@ -551,6 +573,7 @@ const CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL: Anthropic.Messages.Tool = {
         type: 'string',
         description: 'Full name of the psychologist.',
       },
+      ...TRIAL_PLAN_INPUT_SCHEMA,
     },
     required: ['email', 'full_name'],
   },
@@ -728,6 +751,12 @@ export type BuildKalyoOptionsResult = {
   options: GenerateReplyOptions;
 };
 
+function parseTrialPlanFromInput(input: unknown): TrialPlanChoice {
+  if (typeof input !== 'object' || input === null) return 'max';
+  const plan = (input as Record<string, unknown>).plan;
+  return plan === 'pro' ? 'pro' : 'max';
+}
+
 function formatTrialEndDate(iso: string): string {
   try {
     return format(new Date(iso), "d MMM yyyy", { locale: es });
@@ -742,27 +771,16 @@ function buildAccountCreationSuccessMessage(
   trialEndsAt: string,
   reactivated?: boolean,
   tempPassword?: string,
+  trialPlan: TrialPlanChoice = 'max',
 ): string {
-  const trialDate = formatTrialEndDate(trialEndsAt);
-  const name = fullName?.trim();
-  const greeting = name ? `¡Listo ${name}!` : '¡Listo!';
-
-  if (reactivated) {
-    return `${greeting} Tu trial Pro está activo 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${email}.
-
-Tu trial Pro de 15 días empezó hoy. Termina el ${trialDate}.
-
-¿Te ayudo con el setup inicial?`;
-  }
-
-  const passwordLine = tempPassword
-    ? `\nContraseña temporal: ${tempPassword}\n(Puedes cambiarla después de entrar)\n`
-    : '\n';
-
-  return `${greeting} Tu cuenta está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${email}.${passwordLine}
-Tu trial Pro de 15 días empezó hoy. Termina el ${trialDate}.
-
-¿Te ayudo con el setup inicial?`;
+  return buildTrialActivationSuccessMessage({
+    email,
+    fullName,
+    trialEndsAt,
+    reactivated,
+    tempPassword,
+    trialPlan,
+  });
 }
 
 async function onTrialSuccessSideEffects(
@@ -924,11 +942,11 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
       tools,
       toolHandlers: {
         activate_pro_trial: async (input: unknown) => {
-          const email =
-            typeof input === 'object' && input !== null && 'email' in input
-              ? String((input as { email: unknown }).email ?? '')
-              : '';
-          const result = await activateProTrial(email);
+          const obj =
+            typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+          const email = typeof obj.email === 'string' ? obj.email : '';
+          const trialPlan = parseTrialPlanFromInput(input);
+          const result = await activateTrial(email, trialPlan);
 
           if (result.status === 'success') {
             await onTrialSuccessSideEffects(
@@ -957,11 +975,13 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
           const email = typeof obj.email === 'string' ? obj.email : '';
           const fullName = typeof obj.full_name === 'string' ? obj.full_name : '';
+          const trialPlan = parseTrialPlanFromInput(input);
 
           const result = await createKalyoTrialAccount({
             email,
             fullName,
             phone: senderFrom,
+            trialPlan,
           });
 
           if (result.success) {
@@ -993,6 +1013,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
                 result.trial_ends_at,
                 result.reactivated,
                 result.password,
+                trialPlan,
               ),
             };
           }
@@ -1081,7 +1102,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             trial_ends_at: result.trial_ends_at,
             welcome_sent: result.welcome_sent,
             reactivated: result.reactivated,
-            bot_message: `Listo. Trial Pro activado para ${fullName} (${result.email}) hasta ${trialDate}. ${welcomeNote}`,
+            bot_message: `Listo. Trial ${trialPlanLabel('max')} activado para ${fullName} (${result.email}) hasta ${trialDate}. ${welcomeNote}`,
           };
         },
         schedule_demo: async (input: unknown) => {

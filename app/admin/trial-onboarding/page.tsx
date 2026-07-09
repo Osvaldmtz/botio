@@ -12,7 +12,7 @@ export default function TrialOnboardingPage() {
   return (
     <AdminShell
       title="Onboarding trials"
-      subtitle="Mensajes automáticos días 1, 3, 7, 13 y 15 del trial Pro."
+      subtitle="Mensajes automáticos días 1, 3, 7, 13 y 15 del trial Max."
     >
       <TrialOnboardingDashboard />
     </AdminShell>

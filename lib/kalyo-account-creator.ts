@@ -1,7 +1,10 @@
 import { getKalyoClient } from '@/lib/kalyo-supabase';
+import {
+  KALYO_TRIAL_MS,
+  resolveTrialDbPlan,
+  type TrialPlanChoice,
+} from '@/lib/kalyo-trial-plans';
 
-const TRIAL_DAYS = 15;
-const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
 const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export type CreateAccountResult =
@@ -40,14 +43,17 @@ function hasActiveTrial(trialEndsAt: string | null, planExpiresAt: string | null
   return false;
 }
 
-async function activateTrialForEmail(email: string): Promise<{ trial_ends_at: string } | null> {
+async function activateTrialForEmail(
+  email: string,
+  trialPlan: TrialPlanChoice = 'max',
+): Promise<{ trial_ends_at: string; trial_plan: TrialPlanChoice } | null> {
   const supabase = getKalyoClient();
-  const expiresAt = new Date(Date.now() + TRIAL_MS).toISOString();
+  const expiresAt = new Date(Date.now() + KALYO_TRIAL_MS).toISOString();
 
   const { error } = await supabase
     .from('psychologists')
     .update({
-      plan: 'starter',
+      plan: resolveTrialDbPlan(trialPlan),
       trial_ends_at: expiresAt,
       plan_expires_at: expiresAt,
     })
@@ -58,7 +64,7 @@ async function activateTrialForEmail(email: string): Promise<{ trial_ends_at: st
     return null;
   }
 
-  return { trial_ends_at: expiresAt };
+  return { trial_ends_at: expiresAt, trial_plan: trialPlan };
 }
 
 export async function createKalyoTrialAccount(input: {
@@ -66,9 +72,11 @@ export async function createKalyoTrialAccount(input: {
   fullName: string;
   phone?: string;
   forceInsertFail?: boolean;
+  trialPlan?: TrialPlanChoice;
 }): Promise<CreateAccountResult> {
   const email = input.email.trim().toLowerCase();
   const fullName = input.fullName.trim() || email.split('@')[0];
+  const trialPlan = input.trialPlan ?? 'max';
 
   if (!isValidEmail(email)) {
     return { success: false, email, error: 'invalid_email', error_detail: 'Invalid email format' };
@@ -102,7 +110,7 @@ export async function createKalyoTrialAccount(input: {
       return { success: false, email, error: 'trial_already_used' };
     }
 
-    const activated = await activateTrialForEmail(email);
+    const activated = await activateTrialForEmail(email, trialPlan);
     if (!activated) {
       return {
         success: false,
@@ -175,7 +183,7 @@ export async function createKalyoTrialAccount(input: {
     };
   }
 
-  const activated = await activateTrialForEmail(email);
+  const activated = await activateTrialForEmail(email, trialPlan);
   if (!activated) {
     await supabase.from('psychologists').delete().eq('auth_id', userId);
     await supabase.auth.admin.deleteUser(userId);

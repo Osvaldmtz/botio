@@ -99,14 +99,14 @@ export function buildFollowupMessage(firstUserMessage: string | null): string {
   if (/precio|plan|costo|\$|usd|suscri/i.test(text)) {
     return (
       'Hola 👋 ¿Pudiste revisar los planes de Kalyo? ' +
-      'Si quieres, te explico cuál conviene más para tu caso o activo tu prueba Pro gratis de 15 días.'
+      'Si quieres, te explico cuál conviene más para tu caso o activo tu prueba Max gratis de 15 días.'
     );
   }
 
   if (/prueba|trial|gratis|gratuit/i.test(text)) {
     return (
       'Hola 👋 ¿Seguiste con la prueba gratis de Kalyo? ' +
-      'Si ya te registraste, escríbeme tu email y activo tu Pro de 15 días al instante. Entra en https://app.kalyo.io/login cuando quieras.'
+      'Si ya te registraste, escríbeme tu email y activo tu Max de 15 días al instante. Entra en https://app.kalyo.io/login cuando quieras.'
     );
   }
 

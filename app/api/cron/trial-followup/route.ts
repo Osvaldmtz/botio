@@ -7,10 +7,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MESSAGE_3_DAYS =
-  'Hola! Tu prueba Pro de Kalyo termina en 3 días 🔔 ¿Qué te ha parecido hasta ahora? Si quieres continuar, puedes suscribirte en kalyo.io por $29/mes';
+  'Hola! Tu prueba Max de Kalyo termina en 3 días 🔔 ¿Qué te ha parecido hasta ahora? Si quieres continuar, Max $39/mes o Pro $29/mes en kalyo.io';
 
 const MESSAGE_TODAY =
-  'Tu prueba gratuita de Kalyo Pro termina hoy 😊 ¿Quieres continuar? Suscríbete en kalyo.io por $29/mes y sigue evaluando a tus pacientes sin límites';
+  'Tu prueba gratuita de Kalyo Max termina hoy 😊 ¿Quieres continuar? Max $39/mes (recomendado) o Pro $29/mes en kalyo.io';
 
 type TrialUser = {
   id: string;
@@ -72,7 +72,7 @@ async function findTrialUsersExpiring(daysFromNow: number): Promise<TrialUser[]>
   const { data, error } = await supabase
     .from('psychologists')
     .select('id, email, phone, trial_ends_at')
-    .eq('plan', 'starter')
+    .in('plan', ['professional', 'starter'])
     .not('phone', 'is', null)
     .gte('trial_ends_at', start)
     .lt('trial_ends_at', end);
@@ -81,7 +81,7 @@ async function findTrialUsersExpiring(daysFromNow: number): Promise<TrialUser[]>
     return [];
   }
   console.log(
-    `[trial-followup-fix] now matching plan=starter trials | daysFromNow=${daysFromNow} | range=${start}..${end} | found=${data?.length ?? 0}`,
+    `[trial-followup-fix] matching plan=professional|starter trials | daysFromNow=${daysFromNow} | range=${start}..${end} | found=${data?.length ?? 0}`,
   );
   return (data ?? []).filter(
     (u): u is TrialUser => typeof u.phone === 'string' && u.phone.trim().length > 0,

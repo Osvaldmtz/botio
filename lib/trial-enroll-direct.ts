@@ -4,6 +4,9 @@ import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { isTeamMember } from '@/lib/team-members';
 import { markTrialActivatedByContact } from '@/lib/conversation-outcome';
 import { notifyTrialEnrolled } from '@/lib/trial-onboarding-notifications';
+import { buildDirectEnrollmentWelcomeMessage } from '@/lib/kalyo-trial-messages';
+
+export { buildDirectEnrollmentWelcomeMessage };
 
 const DEFAULT_KALYO_BOT_ID = '64f6eed2-1522-48fe-a2c6-f858b767df06';
 
@@ -16,6 +19,7 @@ export type TrialEnrollDirectInput = {
   isNewAccount: boolean;
   tempPassword?: string;
   source: string;
+  trialPlan?: 'max' | 'pro';
 };
 
 export type TrialEnrollDirectSuccess = {
@@ -83,55 +87,6 @@ export function normalizeEnrollPhone(raw: string): string {
   return normalizePhoneForDB(phone);
 }
 
-function formatTrialEndDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  } catch {
-    return iso.slice(0, 10);
-  }
-}
-
-export function buildDirectEnrollmentWelcomeMessage(input: {
-  fullName: string;
-  email: string;
-  trialEndsAt: string;
-  isNewAccount: boolean;
-  tempPassword?: string;
-}): string {
-  const name = input.fullName?.trim() || 'Doctor/a';
-  const endDate = formatTrialEndDate(input.trialEndsAt);
-
-  if (input.isNewAccount) {
-    return (
-      `¡Hola ${name}! 👋 Soy Sofía de Kalyo.\n\n` +
-      `Tu trial Pro de 15 días está activo. Vence el ${endDate}.\n\n` +
-      `🔐 *Acceso a tu cuenta:*\n` +
-      `🌐 https://app.kalyo.io/login\n` +
-      `📧 Email: ${input.email}\n` +
-      `🔑 Contraseña: ${input.tempPassword}\n\n` +
-      `(Te recomendamos cambiarla en Configuración cuando entres)\n\n` +
-      `📋 *Primeros pasos:*\n` +
-      `1. Entra y crea tu primer paciente\n` +
-      `2. Aplica una evaluación (PHQ-9 es buena para empezar)\n` +
-      `3. Genera el reporte con IA\n\n` +
-      `¿Dudas? Aquí estoy. 🚀`
-    );
-  }
-
-  return (
-    `¡Hola ${name}! 👋 Soy Sofía de Kalyo.\n\n` +
-    `Reactivamos tu trial Pro por 15 días más. Vence el ${endDate}.\n\n` +
-    `Entra con tu cuenta de siempre:\n` +
-    `🌐 https://app.kalyo.io/login\n` +
-    `📧 Email: ${input.email}\n\n` +
-    `Si olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n\n` +
-    `¿Dudas? Aquí estoy. 🚀`
-  );
-}
 
 export function validateTrialEnrollDirectBody(
   body: unknown,
@@ -165,6 +120,8 @@ export function validateTrialEnrollDirectBody(
   const isReactivation = record.is_new_account === false;
   const tempPassword =
     typeof record.temp_password === 'string' ? record.temp_password.trim() : undefined;
+  const trialPlanRaw = typeof record.trial_plan === 'string' ? record.trial_plan.trim().toLowerCase() : '';
+  const trialPlan = trialPlanRaw === 'pro' ? 'pro' : 'max';
 
   if (!email || !email.includes('@')) {
     return { ok: false, error: 'email is required', step: 'validation' };
@@ -211,6 +168,7 @@ export function validateTrialEnrollDirectBody(
       isNewAccount,
       tempPassword: isNewAccount ? tempPassword : undefined,
       source,
+      trialPlan,
     },
   };
 }
@@ -481,6 +439,7 @@ export async function enrollTrialDirect(
     trialEndsAt: input.trialEndsAt,
     isNewAccount: input.isNewAccount,
     tempPassword: input.tempPassword,
+    trialPlan: input.trialPlan ?? 'max',
   });
 
   let welcomeSid = '';

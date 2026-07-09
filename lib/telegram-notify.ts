@@ -27,7 +27,7 @@ const REASON_LABELS: Record<string, string> = {
   purchase_intent: 'Intención de compra',
   new_lead: 'Nuevo lead',
   escalation: 'Escalación de conversación',
-  activate_trial: 'Trial Pro activado',
+  activate_trial: 'Trial Max activado',
   trial_activated_via_botio: 'Trial activado vía Botio (cuenta nueva)',
   demo_scheduled: 'Demo agendada',
   meta_ads_ambassador: 'Lead Embajador Meta Ads',

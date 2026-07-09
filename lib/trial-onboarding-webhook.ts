@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isAmbassadorConversation, isAmbassadorFlowsEnabled } from '@/lib/ambassador-filters';
 import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { renderName } from '@/lib/render-name';
+import { buildImmediateWelcomeMessage } from '@/lib/kalyo-trial-messages';
+import type { TrialPlanChoice } from '@/lib/kalyo-trial-plans';
 import { isTeamMember } from '@/lib/team-members';
 import { markTrialActivatedByContact, findConversationIdsByEmail } from '@/lib/conversation-outcome';
 import { emailToWebOnlyPhone, isWebOnlyPhone } from '@/lib/web-only-phone';
@@ -54,6 +56,7 @@ export type TrialOnboardingEnrollInput = {
   trialStartedAt?: string;
   source?: string;
   tempPassword?: string;
+  trialPlan?: TrialPlanChoice;
 };
 
 export type TrialOnboardingEnrollSuccess = {
@@ -72,27 +75,7 @@ export type TrialOnboardingEnrollResult =
   | TrialOnboardingEnrollSuccess
   | TrialOnboardingEnrollFailure;
 
-export function buildImmediateWelcomeMessage(
-  name: string,
-  options?: { email?: string; tempPassword?: string },
-): string {
-  const display = renderName(name) || 'ahí';
-  const credentials =
-    options?.email && options?.tempPassword
-      ? `\n\nTus datos de acceso:\n📧 Email: ${options.email}\n🔑 Contraseña temporal: ${options.tempPassword}\n(Puedes cambiarla después de entrar)\n`
-      : '';
-
-  return (
-    `¡Hola ${display}! 👋 Soy Sofía, asistente de Kalyo.\n\n` +
-    `Te activaste el trial Pro de 15 días. Aquí estaré para resolverte dudas o ayudarte durante este tiempo.` +
-    credentials +
-    `\nTu primer paso:\n` +
-    `1️⃣ Entra a app.kalyo.io/login\n` +
-    `2️⃣ Crea tu primer paciente\n` +
-    `3️⃣ Aplica una evaluación con IA\n\n` +
-    `Cualquier duda, escríbeme. ¡Bienvenido/a! 🎉`
-  );
-}
+export { buildImmediateWelcomeMessage };
 
 function buildCredentialsFollowUp(email: string, tempPassword: string): string {
   return (
@@ -165,6 +148,7 @@ export async function sendWelcomeMessage(params: {
   twilio?: WelcomeMessageTwilioFns;
   email?: string;
   tempPassword?: string;
+  trialPlan?: TrialPlanChoice;
 }): Promise<WelcomeMessageResult> {
   const { to, name, creds } = params;
   const templateSid = params.templateSid ?? process.env.KALYO_WELCOME_TEMPLATE_SID;
@@ -172,8 +156,8 @@ export async function sendWelcomeMessage(params: {
   const displayName = renderName(name) || 'ahí';
   const welcomeOptions =
     params.email && params.tempPassword
-      ? { email: params.email, tempPassword: params.tempPassword }
-      : undefined;
+      ? { email: params.email, tempPassword: params.tempPassword, trialPlan: params.trialPlan ?? 'max' }
+      : { trialPlan: params.trialPlan ?? 'max' };
 
   if (templateSid) {
     try {
@@ -562,6 +546,7 @@ export async function enrollTrialFromKalyoWebhook(
       creds,
       email,
       tempPassword: input.tempPassword,
+      trialPlan: input.trialPlan ?? 'max',
     });
 
     const welcomeStatus = welcomeResult.success ? 'sent' : 'failed';
@@ -584,6 +569,7 @@ export async function enrollTrialFromKalyoWebhook(
       const welcomeBody = buildImmediateWelcomeMessage(name, {
         email,
         tempPassword: input.tempPassword,
+        trialPlan: input.trialPlan ?? 'max',
       });
       await supabase.from('messages').insert({
         conversation_id: conversationId,
@@ -648,6 +634,9 @@ export function validateTrialEnrollBody(body: unknown):
   const source = typeof record.source === 'string' ? record.source.trim() : undefined;
   const tempPassword =
     typeof record.temp_password === 'string' ? record.temp_password.trim() : undefined;
+  const trialPlanRaw =
+    typeof record.trial_plan === 'string' ? record.trial_plan.trim().toLowerCase() : '';
+  const trialPlan = trialPlanRaw === 'pro' ? 'pro' : 'max';
 
   if (!email || !email.includes('@')) {
     return { ok: false, error: 'email is required' };
@@ -668,6 +657,7 @@ export function validateTrialEnrollBody(body: unknown):
       trialStartedAt,
       source,
       tempPassword: tempPassword || undefined,
+      trialPlan,
     },
   };
 }

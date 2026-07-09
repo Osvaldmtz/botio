@@ -1,20 +1,29 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getKalyoClient } from '@/lib/kalyo-supabase';
+import {
+  KALYO_TRIAL_MS,
+  resolveTrialDbPlan,
+  trialPlanLabel,
+  type TrialPlanChoice,
+} from '@/lib/kalyo-trial-plans';
 
 export { getKalyoClient };
 
-const TRIAL_DAYS = 15;
-const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
-
-export type ActivateProTrialResult =
-  | { status: 'success'; expires_at: string }
+export type ActivateTrialResult =
+  | { status: 'success'; expires_at: string; trial_plan: TrialPlanChoice }
   | { status: 'already_active'; expires_at: string }
   | { status: 'already_used'; trial_ended_at: string }
   | { status: 'not_found' }
   | { status: 'error'; message: string };
 
-export async function activateProTrial(rawEmail: string): Promise<ActivateProTrialResult> {
+/** @deprecated Use ActivateTrialResult */
+export type ActivateProTrialResult = ActivateTrialResult;
+
+export async function activateTrial(
+  rawEmail: string,
+  trialPlan: TrialPlanChoice = 'max',
+): Promise<ActivateTrialResult> {
   const email = rawEmail.trim().toLowerCase();
   if (!email || !email.includes('@')) {
     return { status: 'error', message: 'Invalid email format' };
@@ -44,27 +53,16 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
   }
 
   const now = new Date();
-
-  // Snapshot the profile state once. The two fields that matter are:
-  //   plan_expires_at — is there a currently-valid Pro subscription right now?
-  //   trial_ends_at   — did this account ever have a trial that has now ended?
-  // Note: `plan` alone is NOT reliable as the source of truth. Kalyo's backend
-  // does not always flip `plan` back to 'free' when a trial expires, so a row
-  // can have plan='professional' with plan_expires_at in the past. Use the
-  // timestamps, not the enum, for gating decisions.
   const planExpiresAt = profile.plan_expires_at
     ? new Date(profile.plan_expires_at as string)
     : null;
   const trialEndsAt = profile.trial_ends_at ? new Date(profile.trial_ends_at as string) : null;
-
-  // Use plan_expires_at as the source of truth regardless of the plan field,
-  // because the trial sets plan='starter' and paid subscriptions set plan='professional'.
   const hasActivePlan = planExpiresAt !== null && planExpiresAt.getTime() > now.getTime();
-
   const hasUsedTrial = trialEndsAt !== null && trialEndsAt.getTime() < now.getTime();
 
-  console.log('[kalyo] activateProTrial state', {
+  console.log('[kalyo] activateTrial state', {
     email,
+    trialPlan,
     plan: profile.plan,
     plan_expires_at: profile.plan_expires_at,
     trial_ends_at: profile.trial_ends_at,
@@ -72,8 +70,6 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
     hasUsedTrial,
   });
 
-  // Currently has an active Pro subscription (paid or trial in progress).
-  // Don't extend or re-activate — tell them it's already active.
   if (hasActivePlan) {
     return {
       status: 'already_active',
@@ -81,8 +77,6 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
     };
   }
 
-  // Already consumed their one-time trial. trial_ends_at is the source of
-  // truth — this fires whether or not Kalyo has flipped the plan column back.
   if (hasUsedTrial) {
     return {
       status: 'already_used',
@@ -90,13 +84,14 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
     };
   }
 
-  const expiresAt = new Date(now.getTime() + TRIAL_MS);
+  const expiresAt = new Date(now.getTime() + KALYO_TRIAL_MS);
   const expiresAtIso = expiresAt.toISOString();
+  const dbPlan = resolveTrialDbPlan(trialPlan);
 
   const { error: updateError } = await supabase
     .from('psychologists')
     .update({
-      plan: 'starter',
+      plan: dbPlan,
       trial_ends_at: expiresAtIso,
       plan_expires_at: expiresAtIso,
     })
@@ -107,5 +102,15 @@ export async function activateProTrial(rawEmail: string): Promise<ActivateProTri
     return { status: 'error', message: updateError.message };
   }
 
-  return { status: 'success', expires_at: expiresAtIso };
+  console.log(`[kalyo] trial activated | email=${email} | plan=${trialPlanLabel(trialPlan)} | db=${dbPlan}`);
+
+  return { status: 'success', expires_at: expiresAtIso, trial_plan: trialPlan };
+}
+
+/** Default trial is Max. Pass `pro` only when lead explicitly requested Pro trial. */
+export async function activateProTrial(
+  rawEmail: string,
+  trialPlan: TrialPlanChoice = 'max',
+): Promise<ActivateTrialResult> {
+  return activateTrial(rawEmail, trialPlan);
 }

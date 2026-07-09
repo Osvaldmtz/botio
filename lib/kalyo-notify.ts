@@ -39,7 +39,7 @@ const WHATSAPP_HEADERS: Record<string, string> = {
   purchase_intent: '💰 Intención de compra',
   new_lead: '📬 Nuevo lead Kalyo',
   escalation: '⚠️ Escalación de conversación',
-  activate_trial: '🎁 Trial Pro activado',
+  activate_trial: '🎁 Trial Max activado',
   trial_activated_via_botio: '🎁 Trial activado vía Botio',
   demo_scheduled: '📅 Demo agendada',
   demo_confirmed_by_customer: '✅ Demo confirmada por cliente',
