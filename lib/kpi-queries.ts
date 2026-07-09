@@ -32,7 +32,6 @@ import type {
 import { aggregateTwilio } from '@/lib/kpi/utils';
 import { fetchStripeActiveSubscriberCount, getMRRCached } from '@/lib/stripe-mrr';
 import { fetchSofiaSalesMetrics } from '@/lib/sofia-sales-metrics';
-import type { SofiaSalesMetrics } from '@/lib/sofia-sales-metrics';
 
 export type { ExecutiveSummaryData, InstagramPageData, AdsPageData, WebPageData, LandingCtasPageData } from '@/lib/kpi/utils';
 export type { SofiaSalesMetrics } from '@/lib/sofia-sales-metrics';

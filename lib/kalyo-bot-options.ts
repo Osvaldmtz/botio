@@ -3,11 +3,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { GenerateReplyOptions } from '@/lib/claude';
 import { activateTrial } from '@/lib/kalyo';
 import { buildTrialActivationSuccessMessage } from '@/lib/kalyo-trial-messages';
-import {
-  detectTrialPlanPreference,
-  trialPlanLabel,
-  type TrialPlanChoice,
-} from '@/lib/kalyo-trial-plans';
+import { trialPlanLabel, type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
 import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { savePendingDemoSlots } from '@/lib/demo-conversation';
