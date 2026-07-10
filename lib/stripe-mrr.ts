@@ -120,11 +120,11 @@ async function getMRR(): Promise<MRRMetrics> {
             customer_id: typeof customer === 'string' ? customer : (customer?.id ?? ''),
             email:
               customer && typeof customer !== 'string' && !customer.deleted
-                ? customer.email
+                ? (customer.email ?? null)
                 : null,
             name:
               customer && typeof customer !== 'string' && !customer.deleted
-                ? customer.name
+                ? (customer.name ?? null)
                 : null,
             plan_label: planLabel,
             mrr_usd: Math.round(subMrr * 100) / 100,
