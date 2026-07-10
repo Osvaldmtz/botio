@@ -160,6 +160,7 @@ export async function listActiveStripeSubscriptions(): Promise<StripeSubscriptio
   return snapshots;
 }
 
+export async function investigateStripeKalyo(
   emails: string[],
 ): Promise<ReconcileResult[]> {
   const secret = process.env.STRIPE_SECRET_KEY?.trim();
