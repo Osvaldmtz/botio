@@ -1,0 +1,61 @@
+import 'server-only';
+import { NextResponse } from 'next/server';
+import { isAdmin } from '@/lib/admin-auth';
+import {
+  investigateStripeKalyo,
+  reconcileStripeKalyo,
+} from '@/lib/stripe-kalyo-reconcile';
+
+export const dynamic = 'force-dynamic';
+
+function parseEmails(request: Request): string[] {
+  const url = new URL(request.url);
+  const queryEmails = url.searchParams.get('emails');
+  if (queryEmails) {
+    return queryEmails.split(',').map((e) => e.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+export async function GET(request: Request) {
+  if (!isAdmin()) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const emails = parseEmails(request);
+  if (emails.length === 0) {
+    return NextResponse.json(
+      { error: 'Provide ?emails=one@mail.com,other@mail.com' },
+      { status: 400 },
+    );
+  }
+
+  const results = await investigateStripeKalyo(emails);
+  return NextResponse.json({ results, fetchedAt: new Date().toISOString() });
+}
+
+export async function POST(request: Request) {
+  if (!isAdmin()) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let emails = parseEmails(request);
+  if (emails.length === 0) {
+    try {
+      const body = (await request.json()) as { emails?: string[] };
+      emails = (body.emails ?? []).map((e) => e.trim()).filter(Boolean);
+    } catch {
+      emails = [];
+    }
+  }
+
+  if (emails.length === 0) {
+    return NextResponse.json(
+      { error: 'Provide emails via ?emails= or JSON body { emails: [] }' },
+      { status: 400 },
+    );
+  }
+
+  const results = await reconcileStripeKalyo(emails);
+  return NextResponse.json({ results, syncedAt: new Date().toISOString() });
+}
