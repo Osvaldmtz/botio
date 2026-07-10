@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/admin-auth';
 import {
   investigateStripeKalyo,
+  listActiveStripeSubscriptions,
   reconcileStripeKalyo,
 } from '@/lib/stripe-kalyo-reconcile';
 
@@ -24,8 +25,13 @@ export async function GET(request: Request) {
 
   const emails = parseEmails(request);
   if (emails.length === 0) {
+    const scan = new URL(request.url).searchParams.get('scan');
+    if (scan === 'active') {
+      const active = await listActiveStripeSubscriptions();
+      return NextResponse.json({ active, fetchedAt: new Date().toISOString() });
+    }
     return NextResponse.json(
-      { error: 'Provide ?emails=one@mail.com,other@mail.com' },
+      { error: 'Provide ?emails=one@mail.com or ?scan=active' },
       { status: 400 },
     );
   }

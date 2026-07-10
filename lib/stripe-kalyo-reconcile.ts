@@ -128,7 +128,38 @@ function pickCanonicalKalyoAccount(
   })[0];
 }
 
-export async function investigateStripeKalyo(
+export async function listActiveStripeSubscriptions(): Promise<StripeSubscriptionSnapshot[]> {
+  const secret = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secret) return [];
+
+  const stripe = new Stripe(secret, { apiVersion: '2025-02-24.acacia' });
+  const snapshots: StripeSubscriptionSnapshot[] = [];
+  let startingAfter: string | undefined;
+
+  for (;;) {
+    const page = await stripe.subscriptions.list({
+      status: 'active',
+      limit: 100,
+      expand: ['data.customer', 'data.items.data.price'],
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+
+    for (const sub of page.data) {
+      const customer = sub.customer;
+      const email =
+        customer && typeof customer !== 'string' && !customer.deleted
+          ? (customer.email ?? null)
+          : null;
+      snapshots.push(snapshotFromSubscription(sub, email));
+    }
+
+    if (!page.has_more || page.data.length === 0) break;
+    startingAfter = page.data[page.data.length - 1]?.id;
+  }
+
+  return snapshots;
+}
+
   emails: string[],
 ): Promise<ReconcileResult[]> {
   const secret = process.env.STRIPE_SECRET_KEY?.trim();
