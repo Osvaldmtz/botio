@@ -2,6 +2,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/admin-auth';
 import {
+  getStripeCustomerHistory,
   investigateStripeKalyo,
   listActiveStripeSubscriptions,
   reconcileStripeKalyo,
@@ -24,8 +25,16 @@ export async function GET(request: Request) {
   }
 
   const emails = parseEmails(request);
+  const url = new URL(request.url);
+  const customerId = url.searchParams.get('customer_id');
+
+  if (customerId) {
+    const history = await getStripeCustomerHistory(customerId.trim());
+    return NextResponse.json({ history, fetchedAt: new Date().toISOString() });
+  }
+
   if (emails.length === 0) {
-    const scan = new URL(request.url).searchParams.get('scan');
+    const scan = url.searchParams.get('scan');
     if (scan === 'active') {
       const active = await listActiveStripeSubscriptions();
       return NextResponse.json({ active, fetchedAt: new Date().toISOString() });

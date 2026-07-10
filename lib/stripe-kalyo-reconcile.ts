@@ -128,6 +128,54 @@ function pickCanonicalKalyoAccount(
   })[0];
 }
 
+export async function getStripeCustomerHistory(customerId: string): Promise<{
+  customer_id: string;
+  email: string | null;
+  subscriptions: StripeSubscriptionSnapshot[];
+  recent_invoices: Array<{
+    id: string;
+    status: string | null;
+    amount_paid_usd: number;
+    billing_reason: string | null;
+    created_at: string;
+    paid_at: string | null;
+  }>;
+}> {
+  const secret = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secret) {
+    return {
+      customer_id: customerId,
+      email: null,
+      subscriptions: [],
+      recent_invoices: [],
+    };
+  }
+
+  const stripe = new Stripe(secret, { apiVersion: '2025-02-24.acacia' });
+  const customer = await stripe.customers.retrieve(customerId);
+  const email =
+    customer.deleted || !('email' in customer) ? null : (customer.email ?? null);
+
+  const subscriptions = await listSubscriptionsForCustomer(stripe, customerId, email);
+  const invoices = await stripe.invoices.list({ customer: customerId, limit: 10 });
+
+  return {
+    customer_id: customerId,
+    email,
+    subscriptions,
+    recent_invoices: invoices.data.map((inv) => ({
+      id: inv.id,
+      status: inv.status,
+      amount_paid_usd: Math.round((inv.amount_paid ?? 0)) / 100,
+      billing_reason: inv.billing_reason,
+      created_at: new Date(inv.created * 1000).toISOString(),
+      paid_at: inv.status_transitions?.paid_at
+        ? new Date(inv.status_transitions.paid_at * 1000).toISOString()
+        : null,
+    })),
+  };
+}
+
 export async function listActiveStripeSubscriptions(): Promise<StripeSubscriptionSnapshot[]> {
   const secret = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secret) return [];
