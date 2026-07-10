@@ -3,6 +3,7 @@ import type { EnrichedLead, ConversationMessage } from '@/lib/lead-enrichment';
 import { customerDisplayName } from '@/app/admin/conversations/lib/format';
 
 export const HOT_LEAD_SCORE_THRESHOLD = 70;
+export const STALE_HOT_ALERT_MS = 2 * 60 * 60 * 1000;
 const HOT_ALERT_PREFIX = 'hot_alert:';
 const RE_ALERT_MS = 24 * 60 * 60 * 1000;
 const ADMIN_BASE_URL = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? 'https://botio.dgx.agency';
@@ -19,6 +20,7 @@ type ConversationRow = {
   lead_country?: string | null;
   lead_signals?: string[] | null;
   enriched_at?: string | null;
+  hot_alert_sent_at?: string | null;
 };
 
 export function normalizeLeadSignals(signals: unknown): string[] {
@@ -51,10 +53,35 @@ export function parseHotAlertAt(signals: string[] | null | undefined): Date | nu
   return null;
 }
 
-export function shouldSendHotAlert(signals: string[] | null | undefined): boolean {
-  const lastSent = parseHotAlertAt(signals);
+export function resolveHotAlertSentAt(
+  hotAlertSentAt: string | null | undefined,
+  signals: string[] | null | undefined,
+): Date | null {
+  if (hotAlertSentAt) {
+    const fromColumn = new Date(hotAlertSentAt);
+    if (!Number.isNaN(fromColumn.getTime())) return fromColumn;
+  }
+  return parseHotAlertAt(signals);
+}
+
+export function shouldSendHotAlert(
+  signals: string[] | null | undefined,
+  hotAlertSentAt?: string | null,
+): boolean {
+  const lastSent = resolveHotAlertSentAt(hotAlertSentAt, signals);
   if (!lastSent) return true;
   return Date.now() - lastSent.getTime() >= RE_ALERT_MS;
+}
+
+export function isStaleHotLead(
+  lastMessageAt: string | null | undefined,
+  enrichedAt?: string | null,
+): boolean {
+  const reference = lastMessageAt ?? enrichedAt;
+  if (!reference) return false;
+  const timestamp = new Date(reference).getTime();
+  if (Number.isNaN(timestamp)) return false;
+  return Date.now() - timestamp > STALE_HOT_ALERT_MS;
 }
 
 function stripHotAlertSignals(signals: string[]): string[] {
@@ -129,6 +156,24 @@ function buildHotLeadTelegramMessage(params: {
     .join('\n');
 }
 
+async function loadHotAlertState(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<{ signals: string[]; hotAlertSentAt: string | null }> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('lead_signals, hot_alert_sent_at')
+    .eq('id', conversationId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return {
+    signals: normalizeLeadSignals(data?.lead_signals),
+    hotAlertSentAt: (data?.hot_alert_sent_at as string | null | undefined) ?? null,
+  };
+}
+
 export async function sendHotLeadAlert(params: {
   supabase: SupabaseClient;
   conversation: ConversationRow;
@@ -144,11 +189,29 @@ export async function sendHotLeadAlert(params: {
     return { sent: false, reason: 'score_below_threshold' };
   }
 
-  const signals = normalizeLeadSignals(conversation.lead_signals);
+  const { signals, hotAlertSentAt } = await loadHotAlertState(supabase, conversation.id);
 
-  if (!params.force && !shouldSendHotAlert(signals)) {
+  if (!params.force && !shouldSendHotAlert(signals, hotAlertSentAt)) {
     console.log(`[hot-lead-alert] skipped — already sent for conv=${conversation.id}`);
     return { sent: false, reason: 'already_sent' };
+  }
+
+  if (!params.force) {
+    const { data: freshness } = await supabase
+      .from('conversations')
+      .select('last_message_at, enriched_at')
+      .eq('id', conversation.id)
+      .maybeSingle();
+
+    if (
+      isStaleHotLead(
+        freshness?.last_message_at as string | null | undefined,
+        freshness?.enriched_at as string | null | undefined,
+      )
+    ) {
+      console.log(`[hot-lead-alert] skipped — stale lead for conv=${conversation.id}`);
+      return { sent: false, reason: 'stale_lead' };
+    }
   }
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -178,15 +241,16 @@ export async function sendHotLeadAlert(params: {
       return { sent: false, reason: `telegram_${response.status}` };
     }
 
+    const sentAt = new Date().toISOString();
     const userSignals = stripHotAlertSignals(signals);
-    const updatedSignals = [
-      ...userSignals,
-      `${HOT_ALERT_PREFIX}${new Date().toISOString()}`,
-    ];
+    const updatedSignals = [...userSignals, `${HOT_ALERT_PREFIX}${sentAt}`];
 
     const { error: persistError } = await supabase
       .from('conversations')
-      .update({ lead_signals: updatedSignals })
+      .update({
+        lead_signals: updatedSignals,
+        hot_alert_sent_at: sentAt,
+      })
       .eq('id', conversation.id);
 
     if (persistError) {
@@ -225,7 +289,10 @@ export async function notifyHotLeadIfNew(params: {
     return { sent: false, reason: 'not_hot' };
   }
 
-  const neverAlerted = !parseHotAlertAt(params.conversation.lead_signals);
+  const neverAlerted = !resolveHotAlertSentAt(
+    params.conversation.hot_alert_sent_at,
+    params.conversation.lead_signals,
+  );
   if (!crossedThreshold && !neverAlerted) {
     return { sent: false, reason: 'already_hot_no_new_crossing' };
   }
@@ -241,7 +308,7 @@ export async function notifyHotLeadFromConversation(
   const { data: conv, error } = await supabase
     .from('conversations')
     .select(
-      'id, customer_phone, channel, session_id, lead_score, lead_temperature, lead_intent, lead_city, lead_country, lead_signals, enriched_at',
+      'id, customer_phone, channel, session_id, lead_score, lead_temperature, lead_intent, lead_city, lead_country, lead_signals, enriched_at, hot_alert_sent_at',
     )
     .eq('id', conversationId)
     .maybeSingle();

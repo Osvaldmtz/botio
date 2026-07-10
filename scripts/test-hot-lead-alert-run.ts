@@ -7,6 +7,7 @@ import {
   notifyHotLeadFromConversation,
   normalizeLeadSignals,
   shouldSendHotAlert,
+  isStaleHotLead,
 } from '../lib/hot-lead-notifier';
 
 function loadEnvLocal(): void {
@@ -224,7 +225,7 @@ async function main(): Promise<void> {
     .eq('id', conversationId)
     .single();
   assert(
-    !shouldSendHotAlert(normalizeLeadSignals(convSignals?.lead_signals)),
+    !shouldSendHotAlert(normalizeLeadSignals(convSignals?.lead_signals), null),
     'cron pre-check should skip already-alerted conversation',
   );
 
@@ -240,6 +241,11 @@ async function main(): Promise<void> {
     .single();
   assert(!!queueAfterSkip?.processed_at, 'cron should mark skipped queue item as processed');
   console.log('[test] cron queue idempotency OK');
+
+  const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+  assert(isStaleHotLead(threeHoursAgo), 'lead inactive >2h should be stale');
+  assert(!isStaleHotLead(new Date().toISOString()), 'fresh lead should not be stale');
+  console.log('[test] stale lead guard OK');
 
   const webchatId = await ensureConversation('webchat');
   await seedMessages(webchatId, hotMessages);
