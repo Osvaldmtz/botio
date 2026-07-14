@@ -33,8 +33,12 @@ export function buildTrialActivationSuccessMessage(params: {
   const greeting = name ? `¡Listo ${name}!` : '¡Listo!';
 
   if (params.reactivated) {
+    const passwordLine = params.tempPassword
+      ? `\n🔑 Contraseña temporal: ${params.tempPassword}\n(Puedes cambiarla después de entrar)\n`
+      : '\nSi olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n';
+
     return (
-      `${greeting} Tu trial ${planName} está activo 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${params.email}.\n\n` +
+      `${greeting} Tu trial ${planName} está activo 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${params.email}.${passwordLine}\n` +
       `Tu trial ${planName} de 15 días empezó hoy. Termina el ${trialDate}.\n\n` +
       (plan === 'max' ? `Incluye:\n${buildTrialMaxFeaturesBlock()}\n\n` : '') +
       `¿Te ayudo con el setup inicial?`
@@ -42,7 +46,7 @@ export function buildTrialActivationSuccessMessage(params: {
   }
 
   const passwordLine = params.tempPassword
-    ? `\nContraseña temporal: ${params.tempPassword}\n(Puedes cambiarla después de entrar)\n`
+    ? `\n🔑 Contraseña temporal: ${params.tempPassword}\n(Puedes cambiarla después de entrar)\n`
     : '\n';
 
   const maxFeatures =
@@ -118,10 +122,47 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
   return (
     `¡Hola ${name}! 👋 Soy Sofía de Kalyo.\n\n` +
     `Reactivamos tu trial ${planName} por 15 días más. Vence el ${endDate}.${maxBlock}\n` +
-    `Entra con tu cuenta de siempre:\n` +
+    `🔐 *Acceso a tu cuenta:*\n` +
     `🌐 https://app.kalyo.io/login\n` +
-    `📧 Email: ${input.email}\n\n` +
-    `Si olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n\n` +
+    `📧 Email: ${input.email}\n` +
+    (input.tempPassword
+      ? `🔑 Contraseña: ${input.tempPassword}\n\n(Te recomendamos cambiarla en Configuración cuando entres)\n\n`
+      : `\nSi olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n\n`) +
     `¿Dudas? Aquí estoy. 🚀`
   );
+}
+
+export function buildAdminOperatorTrialConfirmation(params: {
+  fullName: string;
+  email: string;
+  phone: string;
+  trialEndsAt: string;
+  tempPassword?: string;
+  reactivated?: boolean;
+  welcomeSent: boolean;
+  trialPlan?: TrialPlanChoice;
+}): string {
+  const planName = trialPlanLabel(params.trialPlan ?? 'max');
+  const trialDate = formatTrialEndDate(params.trialEndsAt);
+  const name = params.fullName.trim() || params.email;
+
+  let message = `✅ Trial ${planName} activado para ${name}\n\n`;
+  message += `📧 Email: ${params.email}\n`;
+  if (params.tempPassword) {
+    message += `🔑 Contraseña temporal: ${params.tempPassword}\n`;
+  }
+  message += `📱 WhatsApp: ${params.phone}\n`;
+  message += `⏰ Trial termina: ${trialDate}\n\n`;
+
+  if (params.welcomeSent) {
+    message += params.tempPassword
+      ? 'El mensaje de bienvenida con email y contraseña ya fue enviado a su WhatsApp.\n'
+      : 'El mensaje de bienvenida ya fue enviado a su WhatsApp.\n';
+  } else {
+    message +=
+      'El trial quedó activo; el welcome no se reenvió (posible enrolamiento previo).\n';
+  }
+
+  message += 'Puede entrar a: https://app.kalyo.io/login';
+  return message;
 }

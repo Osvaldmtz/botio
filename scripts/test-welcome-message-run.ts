@@ -135,6 +135,35 @@ async function testWelcomeBodyMatchesTemplate(): Promise<void> {
   assert(withCreds.includes('Kalyo-2026-ABCD'), 'temp password in welcome');
 }
 
+async function testCredentialsSkipTemplateUsePlainText(): Promise<void> {
+  const calls: string[] = [];
+
+  const result = await sendWelcomeMessage({
+    to: '+52999001234',
+    name: 'Ana',
+    creds,
+    email: 'ana@test.com',
+    tempPassword: 'Kalyo-2026-ABCD',
+    templateSid: 'HXtest_template',
+    twilio: makeTwilioFns({
+      sendTemplate: async () => {
+        calls.push('template');
+        return { sid: 'SM_should_not_run' };
+      },
+      sendPlain: async (args) => {
+        calls.push('plain');
+        assert(args.body.includes('Kalyo-2026-ABCD'), 'plain body includes password');
+        assert(args.body.includes('ana@test.com'), 'plain body includes email');
+        return { sid: 'SM_plain_creds' };
+      },
+    }),
+  });
+
+  assert(result.success === true, 'plain text with credentials succeeds');
+  assert(result.method === 'plain_text', 'method is plain_text');
+  assert(calls.join(',') === 'plain', 'template skipped when credentials present');
+}
+
 async function runTests(): Promise<void> {
   console.log('Welcome message tests\n');
 
@@ -152,6 +181,9 @@ async function runTests(): Promise<void> {
 
   await testWelcomeBodyMatchesTemplate();
   console.log('✓ welcome body matches template content');
+
+  await testCredentialsSkipTemplateUsePlainText();
+  console.log('✓ credentials present → plain text only (no template)');
 
   console.log('\nAll welcome message tests passed.');
 }

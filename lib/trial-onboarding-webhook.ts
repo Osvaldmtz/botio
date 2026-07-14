@@ -159,7 +159,9 @@ export async function sendWelcomeMessage(params: {
       ? { email: params.email, tempPassword: params.tempPassword, trialPlan: params.trialPlan ?? 'max' }
       : { trialPlan: params.trialPlan ?? 'max' };
 
-  if (templateSid) {
+  const usePlainTextOnly = Boolean(params.email && params.tempPassword);
+
+  if (templateSid && !usePlainTextOnly) {
     try {
       const result = await twilio.sendTemplate({
         accountSid: creds.accountSid,

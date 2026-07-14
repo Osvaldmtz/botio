@@ -2,8 +2,8 @@ import 'server-only';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { GenerateReplyOptions } from '@/lib/claude';
 import { activateTrial } from '@/lib/kalyo';
-import { buildTrialActivationSuccessMessage } from '@/lib/kalyo-trial-messages';
-import { trialPlanLabel, type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
+import { buildTrialActivationSuccessMessage, buildAdminOperatorTrialConfirmation } from '@/lib/kalyo-trial-messages';
+import { type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
 import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { savePendingDemoSlots } from '@/lib/demo-conversation';
@@ -24,8 +24,6 @@ import { ensureTrialTrackingConsistency } from '@/lib/trial-tracking-consistency
 import { detectPsychologistProfile } from '@/lib/profile-detection';
 import { buildProfilePromptBlock } from '@/lib/profile-flows';
 import type { ConversationMessage } from '@/lib/lead-enrichment';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { buildKalyoOfficialPricingPrompt } from '@/lib/kalyo-pricing-data';
 import { EMBAJADOR_SYSTEM_PROMPT } from '@/lib/embajador-prompt';
 import { isAmbassadorFlowsEnabled } from '@/lib/ambassador-filters';
@@ -528,7 +526,7 @@ Si te piden activar trial para otra persona (onboarding manual), pide:
 
 Cuando tengas los tres datos, llama admin_activate_trial_for_lead con email, full_name y phone del LEAD (no uses tu propio número).
 
-Responde al operador confirmando: trial Max activado, welcome enviado al WhatsApp del lead, y fecha de fin de trial. Si welcome_sent es false pero status success, indica que el trial quedó activo pero el welcome ya se había enviado antes.
+Responde al operador confirmando: trial Max activado, welcome enviado al WhatsApp del lead con email y contraseña temporal, y fecha de fin de trial. Incluye en tu respuesta el email y la contraseña temporal que devuelve la herramienta. Si welcome_sent es false pero status success, indica que el trial quedó activo pero el welcome ya se había enviado antes.
 
 NO uses create_account_and_activate_trial ni activate_pro_trial para onboardings de terceros — usa solo admin_activate_trial_for_lead.
 `;
@@ -756,14 +754,6 @@ function parseTrialPlanFromInput(input: unknown): TrialPlanChoice {
   if (typeof input !== 'object' || input === null) return 'max';
   const plan = (input as Record<string, unknown>).plan;
   return plan === 'pro' ? 'pro' : 'max';
-}
-
-function formatTrialEndDate(iso: string): string {
-  try {
-    return format(new Date(iso), "d MMM yyyy", { locale: es });
-  } catch {
-    return iso.slice(0, 10);
-  }
 }
 
 function buildAccountCreationSuccessMessage(
@@ -1091,11 +1081,6 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             };
           }
 
-          const trialDate = formatTrialEndDate(result.trial_ends_at);
-          const welcomeNote = result.welcome_sent
-            ? `Welcome enviado a ${result.phone}.`
-            : `Trial activo; el welcome no se reenvió (posible duplicado previo).`;
-
           return {
             status: 'success',
             email: result.email,
@@ -1103,7 +1088,16 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             trial_ends_at: result.trial_ends_at,
             welcome_sent: result.welcome_sent,
             reactivated: result.reactivated,
-            bot_message: `Listo. Trial ${trialPlanLabel('max')} activado para ${fullName} (${result.email}) hasta ${trialDate}. ${welcomeNote}`,
+            temp_password: result.temp_password,
+            bot_message: buildAdminOperatorTrialConfirmation({
+              fullName,
+              email: result.email,
+              phone: result.phone,
+              trialEndsAt: result.trial_ends_at,
+              tempPassword: result.temp_password,
+              reactivated: result.reactivated,
+              welcomeSent: result.welcome_sent,
+            }),
           };
         },
         schedule_demo: async (input: unknown) => {

@@ -120,10 +120,34 @@ export async function createKalyoTrialAccount(input: {
       };
     }
 
+    const password = generateKalyoPassword();
+    if (!existing.auth_id) {
+      return {
+        success: false,
+        email,
+        error: 'creation_failed',
+        error_detail: 'Existing account has no auth_id for password reset',
+      };
+    }
+
+    const { error: passwordError } = await supabase.auth.admin.updateUserById(existing.auth_id, {
+      password,
+    });
+    if (passwordError) {
+      console.error(`[account-creator] failed | error=password_reset | detail=${passwordError.message}`);
+      return {
+        success: false,
+        email,
+        error: 'creation_failed',
+        error_detail: passwordError.message,
+      };
+    }
+
     console.log(`[account-creator] success | email=${email} | trial_until=${activated.trial_ends_at} | reactivated=true`);
     return {
       success: true,
       email,
+      password,
       user_id: existing.auth_id,
       trial_ends_at: activated.trial_ends_at,
       reactivated: true,
