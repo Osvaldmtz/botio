@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { isTeamMember } from '@/lib/team-members';
 
 export type ChurnedSubscriptionDetail = {
   subscription_id: string;
@@ -8,6 +9,7 @@ export type ChurnedSubscriptionDetail = {
   plan_label: string | null;
   mrr_usd: number;
   canceled_at: string;
+  excluded_reason?: 'resubscribed' | 'trial_only' | 'team_member';
 };
 
 export type MRRMetrics = {
@@ -53,6 +55,57 @@ async function listAllActiveSubscriptions(stripe: Stripe): Promise<Stripe.Subscr
   return all;
 }
 
+function customerIdFrom(sub: Stripe.Subscription): string {
+  const customer = sub.customer;
+  return typeof customer === 'string' ? customer : (customer?.id ?? '');
+}
+
+async function subscriptionEverPaid(stripe: Stripe, subscriptionId: string): Promise<boolean> {
+  const invoices = await stripe.invoices.list({ subscription: subscriptionId, limit: 10 });
+  return invoices.data.some((inv) => inv.status === 'paid' && (inv.amount_paid ?? 0) > 0);
+}
+
+type ChurnCandidate = {
+  sub: Stripe.Subscription;
+  canceledAt: number;
+  subMrr: number;
+  planLabel: string | null;
+  customerId: string;
+  email: string | null;
+  name: string | null;
+};
+
+async function classifyChurnCandidate(
+  stripe: Stripe,
+  candidate: ChurnCandidate,
+  activeCustomerIds: Set<string>,
+): Promise<{ count: boolean; detail: ChurnedSubscriptionDetail }> {
+  const detail: ChurnedSubscriptionDetail = {
+    subscription_id: candidate.sub.id,
+    customer_id: candidate.customerId,
+    email: candidate.email,
+    name: candidate.name,
+    plan_label: candidate.planLabel,
+    mrr_usd: Math.round(candidate.subMrr * 100) / 100,
+    canceled_at: new Date(candidate.canceledAt * 1000).toISOString(),
+  };
+
+  if (isTeamMember(candidate.email)) {
+    return { count: false, detail: { ...detail, excluded_reason: 'team_member' } };
+  }
+
+  if (activeCustomerIds.has(candidate.customerId)) {
+    return { count: false, detail: { ...detail, excluded_reason: 'resubscribed' } };
+  }
+
+  const everPaid = await subscriptionEverPaid(stripe, candidate.sub.id);
+  if (!everPaid) {
+    return { count: false, detail: { ...detail, excluded_reason: 'trial_only' } };
+  }
+
+  return { count: true, detail };
+}
+
 async function getMRR(): Promise<MRRMetrics> {
   const secret = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secret) {
@@ -88,10 +141,12 @@ async function getMRR(): Promise<MRRMetrics> {
     const monthStart = Math.floor(firstDayOfMonth.getTime() / 1000);
 
     const newSubs = subs.filter((s) => s.created >= monthStart);
+    const activeCustomerIds = new Set(subs.map(customerIdFrom));
 
     let churnedThisMonth = 0;
     let churnedMrr = 0;
     const churnedDetails: ChurnedSubscriptionDetail[] = [];
+    const churnCandidates: ChurnCandidate[] = [];
     let canceledStartingAfter: string | undefined;
     for (;;) {
       const canceledPage = await stripe.subscriptions.list({
@@ -102,38 +157,46 @@ async function getMRR(): Promise<MRRMetrics> {
       });
       for (const sub of canceledPage.data) {
         const canceledAt = sub.canceled_at ?? sub.ended_at ?? 0;
-        if (canceledAt >= monthStart) {
-          churnedThisMonth += 1;
-          let subMrr = 0;
-          let planLabel: string | null = null;
-          for (const item of sub.items.data) {
-            const price = item.price;
-            if (price && typeof price !== 'string') {
-              subMrr += monthlyUsdFromPrice(price, item.quantity ?? 1);
-              planLabel = price.nickname ?? price.id;
-            }
+        if (canceledAt < monthStart) continue;
+
+        let subMrr = 0;
+        let planLabel: string | null = null;
+        for (const item of sub.items.data) {
+          const price = item.price;
+          if (price && typeof price !== 'string') {
+            subMrr += monthlyUsdFromPrice(price, item.quantity ?? 1);
+            planLabel = price.nickname ?? price.id;
           }
-          churnedMrr += subMrr;
-          const customer = sub.customer;
-          churnedDetails.push({
-            subscription_id: sub.id,
-            customer_id: typeof customer === 'string' ? customer : (customer?.id ?? ''),
-            email:
-              customer && typeof customer !== 'string' && !customer.deleted
-                ? (customer.email ?? null)
-                : null,
-            name:
-              customer && typeof customer !== 'string' && !customer.deleted
-                ? (customer.name ?? null)
-                : null,
-            plan_label: planLabel,
-            mrr_usd: Math.round(subMrr * 100) / 100,
-            canceled_at: new Date(canceledAt * 1000).toISOString(),
-          });
         }
+
+        const customer = sub.customer;
+        churnCandidates.push({
+          sub,
+          canceledAt,
+          subMrr,
+          planLabel,
+          customerId: customerIdFrom(sub),
+          email:
+            customer && typeof customer !== 'string' && !customer.deleted
+              ? (customer.email ?? null)
+              : null,
+          name:
+            customer && typeof customer !== 'string' && !customer.deleted
+              ? (customer.name ?? null)
+              : null,
+        });
       }
       if (!canceledPage.has_more || canceledPage.data.length === 0) break;
       canceledStartingAfter = canceledPage.data[canceledPage.data.length - 1]?.id;
+    }
+
+    for (const candidate of churnCandidates) {
+      const { count, detail } = await classifyChurnCandidate(stripe, candidate, activeCustomerIds);
+      churnedDetails.push(detail);
+      if (count) {
+        churnedThisMonth += 1;
+        churnedMrr += candidate.subMrr;
+      }
     }
 
     churnedDetails.sort((a, b) => a.canceled_at.localeCompare(b.canceled_at));

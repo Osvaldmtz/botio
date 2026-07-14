@@ -214,7 +214,7 @@ export function MetricsDashboard() {
           {
             key: 'churn',
             label: 'Churned',
-            value: `-${mrr.churned_this_month}`,
+            value: mrr.churned_this_month > 0 ? `-${mrr.churned_this_month}` : '0',
             delta: mrr.churned_this_month > 0 ? 'down' : 'neutral',
           },
         ]}
