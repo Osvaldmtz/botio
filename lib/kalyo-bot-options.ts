@@ -526,7 +526,9 @@ Si te piden activar trial para otra persona (onboarding manual), pide:
 
 Cuando tengas los tres datos, llama admin_activate_trial_for_lead con email, full_name y phone del LEAD (no uses tu propio número).
 
-Responde al operador confirmando: trial Max activado, welcome enviado al WhatsApp del lead con email y contraseña temporal, y fecha de fin de trial. Incluye en tu respuesta el email y la contraseña temporal que devuelve la herramienta. Si welcome_sent es false pero status success, indica que el trial quedó activo pero el welcome ya se había enviado antes.
+REGLA CRÍTICA: NUNCA digas que el trial está activado sin haber llamado admin_activate_trial_for_lead en ese mismo turno. Si la herramienta falla, repórtalo — no inventes éxito.
+
+Responde al operador copiando TEXTUALMENTE el campo bot_message que devuelve la herramienta (incluye email y contraseña temporal). Si welcome_sent es false pero status success, indica que el trial quedó activo pero el welcome no se reenvió (posible duplicado previo) — aun así incluye la contraseña temporal del tool result.
 
 NO uses create_account_and_activate_trial ni activate_pro_trial para onboardings de terceros — usa solo admin_activate_trial_for_lead.
 `;
@@ -1073,11 +1075,30 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
                 bot_message: `El email ya existe en Kalyo. Si necesitas reactivar trial, revisa en Kaly Admin o pide al usuario hacer login.`,
               };
             }
+            if (result.error === 'password_missing' || result.error === 'kalyo_verify_failed') {
+              return {
+                status: 'error',
+                error: result.error,
+                detail: result.detail,
+                bot_message:
+                  `Error interno activando trial (${result.error}). NO confirmes éxito al operador. ` +
+                  `Detalle: ${result.detail ?? 'sin detalle'}. Reintenta o activa manualmente desde Kaly Admin.`,
+              };
+            }
             return {
               status: 'error',
               error: result.error,
               detail: result.detail,
               bot_message: `No pude activar el trial: ${result.error}. ${result.detail ?? ''}`.trim(),
+            };
+          }
+
+          if (!result.temp_password) {
+            return {
+              status: 'error',
+              error: 'password_missing',
+              bot_message:
+                'Error interno: el trial quedó sin contraseña temporal. NO confirmes éxito — reintenta la activación.',
             };
           }
 

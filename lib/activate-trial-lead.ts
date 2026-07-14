@@ -1,6 +1,11 @@
 import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
-import { enrollTrialFromKalyoWebhook } from '@/lib/trial-onboarding-webhook';
+import { getKalyoClient } from '@/lib/kalyo-supabase';
+import {
+  enrollTrialFromKalyoWebhook,
+  sendTrialCredentialsWelcome,
+} from '@/lib/trial-onboarding-webhook';
 import { normalizePhoneForDB } from '@/lib/phone-validation';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export type ActivateTrialLeadResult =
   | {
@@ -10,13 +15,32 @@ export type ActivateTrialLeadResult =
       trial_ends_at: string;
       reactivated: boolean;
       welcome_sent: boolean;
-      temp_password?: string;
+      temp_password: string;
     }
   | {
       status: 'error';
       error: string;
       detail?: string;
     };
+
+async function verifyActiveKalyoTrial(email: string): Promise<boolean> {
+  const supabase = getKalyoClient();
+  const { data, error } = await supabase
+    .from('psychologists')
+    .select('trial_ends_at, plan_expires_at')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (error || !data) return false;
+  const now = Date.now();
+  const trialEnds = data.trial_ends_at
+    ? new Date(data.trial_ends_at as string).getTime()
+    : 0;
+  const planExpires = data.plan_expires_at
+    ? new Date(data.plan_expires_at as string).getTime()
+    : 0;
+  return trialEnds > now || planExpires > now;
+}
 
 export async function activateTrialForLead(params: {
   email: string;
@@ -54,6 +78,24 @@ export async function activateTrialForLead(params: {
     };
   }
 
+  if (!account.password?.trim()) {
+    return {
+      status: 'error',
+      error: 'password_missing',
+      detail: 'Trial account created without a temporary password',
+    };
+  }
+
+  const trialActive = await verifyActiveKalyoTrial(account.email);
+  if (!trialActive) {
+    return {
+      status: 'error',
+      error: 'kalyo_verify_failed',
+      detail: 'Kalyo trial was not active after account creation',
+    };
+  }
+
+  const supabase = createAdminClient();
   const enroll = await enrollTrialFromKalyoWebhook({
     email: account.email,
     name: fullName,
@@ -63,7 +105,29 @@ export async function activateTrialForLead(params: {
     trialPlan: params.trialPlan ?? 'max',
   });
 
-  const welcomeSent = enroll.success;
+  let welcomeSent = enroll.success;
+
+  if (!welcomeSent) {
+    const enrollReason =
+      enroll.success === false && 'reason' in enroll ? enroll.reason : 'unknown';
+    console.warn(
+      `[activate-trial-lead] enroll failed (${enrollReason}), retrying welcome | email=${email}`,
+    );
+    const welcome = await sendTrialCredentialsWelcome({
+      email: account.email,
+      name: fullName,
+      phone,
+      tempPassword: account.password,
+      trialPlan: params.trialPlan ?? 'max',
+      supabase,
+    });
+    welcomeSent = welcome.success;
+    if (!welcomeSent) {
+      console.error(
+        `[activate-trial-lead] welcome retry failed | email=${email} | reason=${welcome.reason ?? welcome.error ?? 'unknown'}`,
+      );
+    }
+  }
 
   return {
     status: 'success',

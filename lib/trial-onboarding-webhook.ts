@@ -447,6 +447,30 @@ async function resolveSupabaseClient(
   return createAdminClient();
 }
 
+export async function sendTrialCredentialsWelcome(params: {
+  email: string;
+  name: string;
+  phone: string;
+  tempPassword: string;
+  trialPlan?: TrialPlanChoice;
+  supabase?: SupabaseClient;
+}): Promise<WelcomeMessageResult> {
+  const supabase = await resolveSupabaseClient(params.supabase);
+  const creds = await loadKalyoTwilioCreds(supabase);
+  if (!creds) {
+    return { success: false, method: 'none', reason: 'no_twilio_creds' };
+  }
+
+  return sendWelcomeMessage({
+    to: normalizePhoneForDB(params.phone),
+    name: params.name,
+    creds,
+    email: params.email.trim().toLowerCase(),
+    tempPassword: params.tempPassword,
+    trialPlan: params.trialPlan ?? 'max',
+  });
+}
+
 export async function enrollTrialFromKalyoWebhook(
   input: TrialOnboardingEnrollInput,
   options?: {

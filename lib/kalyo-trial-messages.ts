@@ -158,6 +158,10 @@ export function buildAdminOperatorTrialConfirmation(params: {
     message += params.tempPassword
       ? 'El mensaje de bienvenida con email y contraseña ya fue enviado a su WhatsApp.\n'
       : 'El mensaje de bienvenida ya fue enviado a su WhatsApp.\n';
+  } else if (params.tempPassword) {
+    message +=
+      '⚠️ El trial quedó activo pero el welcome por WhatsApp no se confirmó. ' +
+      'Reenvía manualmente email y contraseña al lead.\n';
   } else {
     message +=
       'El trial quedó activo; el welcome no se reenvió (posible enrolamiento previo).\n';

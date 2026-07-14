@@ -40,6 +40,7 @@ import {
   applyDemoConfirmationGuard,
   notifyDemoFlowWarning,
 } from '@/lib/demo-response-guard';
+import { applyAdminTrialActivationGuard } from '@/lib/trial-activation-guard';
 import { applyEscalationNotifyGuard } from '@/lib/escalation-notify-guard';
 import { handleTrialOnboardingMessage } from '@/lib/trial-onboarding-interceptor';
 import { handleObjectionMessage } from '@/lib/objection-interceptor';
@@ -984,6 +985,16 @@ export async function processIncomingMessage(
   if (guardResult.guarded) {
     await notifyDemoFlowWarning(conversation.id);
     replyText = guardResult.replyText;
+  }
+
+  const trialGuard = applyAdminTrialActivationGuard({
+    replyText,
+    toolsCalled,
+    toolResults,
+    conversationId: conversation.id,
+  });
+  if (trialGuard.guarded) {
+    replyText = trialGuard.replyText;
   }
 
   if (isKalyoBotId(bot.id) && !isAmbassadorLead && channel === 'whatsapp') {
