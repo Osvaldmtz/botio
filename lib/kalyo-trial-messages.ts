@@ -145,28 +145,38 @@ export function buildAdminOperatorTrialConfirmation(params: {
   const planName = trialPlanLabel(params.trialPlan ?? 'max');
   const trialDate = formatTrialEndDate(params.trialEndsAt);
   const name = params.fullName.trim() || params.email;
+  const firstName = name.split(/\s+/)[0] || name;
 
-  let message = `✅ Trial ${planName} activado para ${name}\n\n`;
-  message += `📧 Email: ${params.email}\n`;
-  if (params.tempPassword) {
-    message += `🔑 Contraseña temporal: ${params.tempPassword}\n`;
+  if (params.reactivated && !params.tempPassword) {
+    return (
+      `✅ Trial reactivado\n\n` +
+      `📧 ${params.email}\n` +
+      `Cliente ya tenía cuenta, sin password nueva.\n` +
+      `Si olvidó, dile que use 'Olvidé mi contraseña'.`
+    );
   }
-  message += `📱 WhatsApp: ${params.phone}\n`;
-  message += `⏰ Trial termina: ${trialDate}\n\n`;
+
+  const header = params.reactivated
+    ? `✅ Trial ${planName} reactivado`
+    : `✅ Trial ${planName} activado`;
+
+  let message = `${header}\n\n`;
+  message += `👤 ${name}\n`;
+  message += `📧 ${params.email}\n`;
+  message += `📱 ${params.phone}\n`;
+  if (params.tempPassword) {
+    message += `🔑 Password: ${params.tempPassword}\n`;
+  }
+  message += `📅 Vence: ${trialDate}\n\n`;
 
   if (params.welcomeSent) {
-    message += params.tempPassword
-      ? 'El mensaje de bienvenida con email y contraseña ya fue enviado a su WhatsApp.\n'
-      : 'El mensaje de bienvenida ya fue enviado a su WhatsApp.\n';
+    message += `Welcome enviado a ${firstName}.`;
   } else if (params.tempPassword) {
     message +=
-      '⚠️ El trial quedó activo pero el welcome por WhatsApp no se confirmó. ' +
-      'Reenvía manualmente email y contraseña al lead.\n';
+      `⚠️ Trial activo pero welcome no confirmado. Reenvía manualmente credenciales a ${firstName}.`;
   } else {
-    message +=
-      'El trial quedó activo; el welcome no se reenvió (posible enrolamiento previo).\n';
+    message += `Trial activo; welcome no reenviado (posible enrolamiento previo).`;
   }
 
-  message += 'Puede entrar a: https://app.kalyo.io/login';
   return message;
 }

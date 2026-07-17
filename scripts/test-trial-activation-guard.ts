@@ -51,6 +51,22 @@ function testAllowsNormalReply(): void {
   assert(result.guarded === false, 'normal reply unchanged');
 }
 
+function testBlocksHallucinatedActivationWithPassword(): void {
+  const result = applyAdminTrialActivationGuard({
+    replyText:
+      '✅ **Trial Max activado para Yubia**\n\n📧 Email: y@test.com\n🔑 Contraseña temporal: Kalyo-2026-KPQX',
+    toolsCalled: [],
+    toolResults: {},
+    conversationId: 'conv-5',
+  });
+
+  assert(result.guarded === true, 'hallucination with fake password should be blocked');
+  assert(
+    result.replyText.includes('no se ejecutó la herramienta'),
+    'blocked message explains missing tool',
+  );
+}
+
 function testCreateAccountToolMessage(): void {
   const botMessage = '¡Listo! Tu cuenta está activa con contraseña Kalyo-2026-XYZ';
   const result = applyAdminTrialActivationGuard({
@@ -72,6 +88,8 @@ testBlocksHallucinatedActivation();
 console.log('  ✓ blocks hallucinated activation');
 testAllowsNormalReply();
 console.log('  ✓ allows normal replies');
+testBlocksHallucinatedActivationWithPassword();
+console.log('  ✓ blocks hallucinated activation with fake password');
 testCreateAccountToolMessage();
 console.log('  ✓ uses create_account bot_message');
 

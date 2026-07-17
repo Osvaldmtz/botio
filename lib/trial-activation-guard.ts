@@ -16,9 +16,12 @@ function extractToolBotMessage(
   return typeof msg === 'string' && msg.trim() ? msg.trim() : null;
 }
 
-function looksLikeTrialActivationHallucination(text: string): boolean {
-  if (!TRIAL_ACTIVATION_HALLUCINATION_RE.test(text)) return false;
-  return !/contraseña\s+temporal|🔑/i.test(text);
+function looksLikeTrialActivationSuccess(text: string): boolean {
+  if (TRIAL_ACTIVATION_HALLUCINATION_RE.test(text)) return true;
+  return (
+    /\btrial\s+(?:max|pro)\s+activado\b/i.test(text) &&
+    /(?:contraseña\s+temporal|🔑|password\s*:)/i.test(text)
+  );
 }
 
 export function applyAdminTrialActivationGuard(params: {
@@ -42,10 +45,7 @@ export function applyAdminTrialActivationGuard(params: {
     params.toolsCalled.includes(name),
   );
 
-  if (
-    !usedAdminTrialTool &&
-    looksLikeTrialActivationHallucination(params.replyText)
-  ) {
+  if (!usedAdminTrialTool && looksLikeTrialActivationSuccess(params.replyText)) {
     console.error(
       `[trial-activation-guard] blocked hallucinated trial activation | conv=${params.conversationId}`,
     );

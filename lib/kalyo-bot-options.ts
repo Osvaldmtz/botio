@@ -2,7 +2,7 @@ import 'server-only';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { GenerateReplyOptions } from '@/lib/claude';
 import { activateTrial } from '@/lib/kalyo';
-import { buildTrialActivationSuccessMessage, buildAdminOperatorTrialConfirmation } from '@/lib/kalyo-trial-messages';
+import { buildTrialActivationSuccessMessage } from '@/lib/kalyo-trial-messages';
 import { type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
 import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
@@ -27,7 +27,7 @@ import type { ConversationMessage } from '@/lib/lead-enrichment';
 import { buildKalyoOfficialPricingPrompt } from '@/lib/kalyo-pricing-data';
 import { EMBAJADOR_SYSTEM_PROMPT } from '@/lib/embajador-prompt';
 import { isAmbassadorFlowsEnabled } from '@/lib/ambassador-filters';
-import { activateTrialForLead } from '@/lib/activate-trial-lead';
+import { executeAdminActivateTrialForLead } from '@/lib/admin-trial-activation';
 import { isTeamOperatorPhone } from '@/lib/team-members';
 
 // --------------------------------------------------------------------------
@@ -520,11 +520,12 @@ MODO OPERADOR — equipo Kalyo (prioridad sobre flujo de lead normal)
 Estás hablando con un miembro del equipo de Kalyo, no con un psicólogo lead.
 
 Si te piden activar trial para otra persona (onboarding manual), pide:
-1. Email del psicólogo
-2. Nombre completo
-3. WhatsApp del psicólogo (formato +52... o +1...)
+1. Plan: Max (default) o Pro — si no especifican, usa Max
+2. Email del psicólogo
+3. Nombre completo
+4. WhatsApp del psicólogo (formato +52... o +1...)
 
-Cuando tengas los tres datos, llama admin_activate_trial_for_lead con email, full_name y phone del LEAD (no uses tu propio número).
+Cuando tengas los datos, llama admin_activate_trial_for_lead con email, full_name, phone del LEAD (no uses tu propio número) y plan ("max" o "pro").
 
 REGLA CRÍTICA: NUNCA digas que el trial está activado sin haber llamado admin_activate_trial_for_lead en ese mismo turno. Si la herramienta falla, repórtalo — no inventes éxito.
 
@@ -583,7 +584,7 @@ const CREATE_ACCOUNT_AND_ACTIVATE_TRIAL_TOOL: Anthropic.Messages.Tool = {
 const ADMIN_ACTIVATE_TRIAL_FOR_LEAD_TOOL: Anthropic.Messages.Tool = {
   name: 'admin_activate_trial_for_lead',
   description:
-    'Team-only: create Kalyo account + activate 15-day Max trial (default, no coupon) for a psychologist and send welcome WhatsApp to their number. Use when a Kalyo team operator asks to onboard someone else (not themselves). Coupon only if operator explicitly requests it.',
+    'Team-only: create Kalyo account + activate 15-day trial (Max default, Pro if operator requests) for a psychologist and send welcome WhatsApp to their number. Use when a Kalyo team operator asks to onboard someone else (not themselves).',
   input_schema: {
     type: 'object',
     properties: {
@@ -599,6 +600,7 @@ const ADMIN_ACTIVATE_TRIAL_FOR_LEAD_TOOL: Anthropic.Messages.Tool = {
         type: 'string',
         description: 'Lead WhatsApp number in E.164 format (e.g. +525551234567).',
       },
+      ...TRIAL_PLAN_INPUT_SCHEMA,
     },
     required: ['email', 'full_name', 'phone'],
   },
@@ -1054,72 +1056,15 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           const email = typeof obj.email === 'string' ? obj.email.trim() : '';
           const fullName = typeof obj.full_name === 'string' ? obj.full_name.trim() : '';
           const phone = typeof obj.phone === 'string' ? obj.phone.trim() : '';
+          const trialPlan = parseTrialPlanFromInput(input);
 
-          const result = await activateTrialForLead({
+          return executeAdminActivateTrialForLead({
             email,
             fullName,
             phone,
+            trialPlan,
             source: 'admin_via_botio',
           });
-
-          if (result.status === 'error') {
-            if (result.error === 'trial_already_used') {
-              return {
-                status: 'trial_already_used',
-                bot_message: `Ese email ya tiene trial activo o ya lo usó. Pide al psicólogo entrar en https://app.kalyo.io/login`,
-              };
-            }
-            if (result.error === 'email_exists') {
-              return {
-                status: 'email_exists',
-                bot_message: `El email ya existe en Kalyo. Si necesitas reactivar trial, revisa en Kaly Admin o pide al usuario hacer login.`,
-              };
-            }
-            if (result.error === 'password_missing' || result.error === 'kalyo_verify_failed') {
-              return {
-                status: 'error',
-                error: result.error,
-                detail: result.detail,
-                bot_message:
-                  `Error interno activando trial (${result.error}). NO confirmes éxito al operador. ` +
-                  `Detalle: ${result.detail ?? 'sin detalle'}. Reintenta o activa manualmente desde Kaly Admin.`,
-              };
-            }
-            return {
-              status: 'error',
-              error: result.error,
-              detail: result.detail,
-              bot_message: `No pude activar el trial: ${result.error}. ${result.detail ?? ''}`.trim(),
-            };
-          }
-
-          if (!result.temp_password) {
-            return {
-              status: 'error',
-              error: 'password_missing',
-              bot_message:
-                'Error interno: el trial quedó sin contraseña temporal. NO confirmes éxito — reintenta la activación.',
-            };
-          }
-
-          return {
-            status: 'success',
-            email: result.email,
-            phone: result.phone,
-            trial_ends_at: result.trial_ends_at,
-            welcome_sent: result.welcome_sent,
-            reactivated: result.reactivated,
-            temp_password: result.temp_password,
-            bot_message: buildAdminOperatorTrialConfirmation({
-              fullName,
-              email: result.email,
-              phone: result.phone,
-              trialEndsAt: result.trial_ends_at,
-              tempPassword: result.temp_password,
-              reactivated: result.reactivated,
-              welcomeSent: result.welcome_sent,
-            }),
-          };
         },
         schedule_demo: async (input: unknown) => {
           const obj =
