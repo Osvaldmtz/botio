@@ -138,7 +138,7 @@ function looksLikeNameOnlyMessage(text: string): boolean {
   if (ADMIN_TRIAL_TRIGGER_RE.test(trimmed)) return false;
   if (/\+\d{10,}/.test(trimmed)) return false;
   if (/^(?:correo|email|whatsapp|nombre)\s*:/i.test(trimmed)) return false;
-  return /^[\p{L}\p{M}\s'.-]+$/u.test(trimmed);
+  return /^[A-Za-zÀ-ÖØ-öø-ÿ\u00C0-\u024F\s'.-]+$/.test(trimmed);
 }
 
 export function parseAdminTrialRequestFromText(text: string): Partial<AdminTrialParsedRequest> {

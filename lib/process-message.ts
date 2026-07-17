@@ -95,6 +95,7 @@ export type ProcessMessageSource =
   | 'auto_demo_check'
   | 'auto_demo_reminder'
   | 'trial_onboarding'
+  | 'admin_trial_interceptor'
   | 'objection_handler'
   | 'ambassador_handler'
   | 'purchase_intent_handler'
