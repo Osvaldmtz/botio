@@ -35,7 +35,10 @@ export async function executeAdminActivateTrialForLead(params: {
     if (result.error === 'trial_already_used') {
       return {
         status: 'trial_already_used',
-        bot_message: `Ese email ya tiene trial activo o ya lo usó. Pide al psicólogo entrar en https://app.kalyo.io/login`,
+        email: params.email,
+        bot_message:
+          `El email ${params.email} ya tiene trial activo o ya lo usó. ` +
+          `Pide al psicólogo entrar en https://app.kalyo.io/login`,
       };
     }
     if (result.error === 'email_exists') {

@@ -17,10 +17,13 @@ export async function handleAdminTrialActivationMessage(params: {
   messageBody: string;
   conversationMessages: Array<{ role: string; content: string }>;
 }): Promise<AdminTrialInterceptResult | null> {
-  const allMessages = [
-    ...params.conversationMessages,
-    { role: 'user', content: params.messageBody },
-  ];
+  const historyAlreadyHasCurrent =
+    params.conversationMessages.at(-1)?.role === 'user' &&
+    params.conversationMessages.at(-1)?.content === params.messageBody;
+
+  const allMessages = historyAlreadyHasCurrent
+    ? params.conversationMessages
+    : [...params.conversationMessages, { role: 'user', content: params.messageBody }];
 
   if (!shouldInterceptAdminTrialActivation(params.messageBody, params.conversationMessages)) {
     return null;

@@ -2,6 +2,7 @@ import {
   parseAdminTrialPlanFromText,
   parseAdminTrialRequestFromMessages,
   parseAdminTrialRequestFromText,
+  shouldInterceptAdminTrialActivation,
 } from '../lib/admin-trial-parsing';
 
 function assert(condition: boolean, message: string): void {
@@ -120,6 +121,55 @@ function testMultilineFormat(): void {
   assert(parsed!.trialPlan === 'max', 'multiline max plan');
 }
 
+function testStaleHistoryDoesNotOverrideCompleteRequest(): void {
+  const carlosMsg =
+    'Activar trial Max para :\npsic.carlosfranco@gmail.com\nCarlos Franco\n+523511119898';
+  const history = [
+    {
+      role: 'user',
+      content:
+        'Activar trial para\nNombre: Psic. Clinica\nCorreo: zapapinga24@gmail.com\nWhatsapp: +525532397848',
+    },
+    { role: 'assistant', content: '¿Nombre completo real?' },
+    { role: 'user', content: 'Paola Garcia' },
+    { role: 'assistant', content: 'ok' },
+    {
+      role: 'user',
+      content:
+        'Activar Plan PRO para \nNombre :Paola Garcia\n📧 zapapinga24@gmail.com\nWhatsapp +525532397848',
+    },
+    { role: 'assistant', content: 'ok' },
+    {
+      role: 'user',
+      content:
+        'Activar trial Max para :\nyubiaestefany@gmail.com\nYubia Barragán López\n‪+52\u00a0492\u00a0161\u00a08527',
+    },
+    { role: 'assistant', content: 'ok' },
+    { role: 'user', content: carlosMsg },
+    { role: 'user', content: carlosMsg },
+  ];
+  const parsed = parseAdminTrialRequestFromMessages(history);
+  assert(parsed !== null, 'Carlos request should parse');
+  assert(parsed!.email === 'psic.carlosfranco@gmail.com', 'uses latest email, not stale Paola');
+  assert(parsed!.fullName === 'Carlos Franco', 'uses latest name');
+  assert(parsed!.phone === '+523511119898', 'uses latest phone');
+}
+
+function testFollowUpQuestionDoesNotIntercept(): void {
+  const history = [
+    {
+      role: 'user',
+      content:
+        'Activar trial Max para :\npsic.carlosfranco@gmail.com\nCarlos Franco\n+523511119898',
+    },
+    { role: 'assistant', content: 'error' },
+  ];
+  assert(
+    !shouldInterceptAdminTrialActivation('seguro que ya lo tuvo , cuando ?', history),
+    'follow-up question should not re-trigger activation',
+  );
+}
+
 console.log('Admin trial interceptor tests\n');
 testCommaFormat();
 console.log('  ✓ comma format');
@@ -139,6 +189,10 @@ testTrialProLabeledFormat();
 console.log('  ✓ trial pro labeled format');
 testMultilineFormat();
 console.log('  ✓ multiline format');
+testStaleHistoryDoesNotOverrideCompleteRequest();
+console.log('  ✓ stale history does not override complete request');
+testFollowUpQuestionDoesNotIntercept();
+console.log('  ✓ follow-up question does not intercept');
 testPlanParser();
 console.log('  ✓ plan parser');
 console.log('\nAll admin trial interceptor tests passed.');

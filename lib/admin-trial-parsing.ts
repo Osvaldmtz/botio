@@ -172,6 +172,15 @@ export function parseAdminTrialRequestFromText(text: string): Partial<AdminTrial
   };
 }
 
+function isCompleteAdminTrialRequest(parsed: Partial<AdminTrialParsedRequest>): boolean {
+  return Boolean(
+    parsed.email &&
+      parsed.phone &&
+      parsed.fullName &&
+      !looksLikePlaceholderName(parsed.fullName),
+  );
+}
+
 export function parseAdminTrialRequestFromMessages(
   messages: Array<{ role: string; content: string }>,
 ): AdminTrialParsedRequest | null {
@@ -180,6 +189,19 @@ export function parseAdminTrialRequestFromMessages(
 
   const hasTrialIntent = userMessages.some((m) => ADMIN_TRIAL_TRIGGER_RE.test(m.content));
   const latest = userMessages[userMessages.length - 1]?.content ?? '';
+
+  const latestParsed = parseAdminTrialRequestFromText(latest);
+  if (
+    ADMIN_TRIAL_TRIGGER_RE.test(latest) &&
+    isCompleteAdminTrialRequest(latestParsed)
+  ) {
+    return {
+      email: latestParsed.email!,
+      phone: latestParsed.phone!,
+      fullName: latestParsed.fullName!.trim(),
+      trialPlan: latestParsed.trialPlan ?? resolveTrialPlanFromMessages(userMessages),
+    };
+  }
 
   let email: string | undefined;
   let phone: string | undefined;
@@ -221,8 +243,13 @@ export function shouldInterceptAdminTrialActivation(
   messages: Array<{ role: string; content: string }>,
 ): boolean {
   if (ADMIN_TRIAL_TRIGGER_RE.test(messageBody)) return true;
-  if (parseAdminTrialRequestFromMessages([...messages, { role: 'user', content: messageBody }])) {
-    return true;
+  if (looksLikeNameOnlyMessage(messageBody)) {
+    return (
+      parseAdminTrialRequestFromMessages([
+        ...messages,
+        { role: 'user', content: messageBody },
+      ]) !== null
+    );
   }
   return false;
 }
