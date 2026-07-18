@@ -210,7 +210,7 @@ export function buildStandardPricePresentation(): string {
     `+ todo lo de Pro (evaluaciones ilimitadas, Kaly Voice, reportes IA)\n\n` +
     `💎 *Pro — $${p.price_monthly}/mes*\n` +
     `${proBullets}\n\n` +
-    `¿Quieres probarlo sin riesgo? Te activo *Max GRATIS 15 días* sin tarjeta — incluye agenda, Meet y Kaly voz.\n\n` +
+    `¿Quieres probarlo sin riesgo? Te activo *Max GRATIS 7 días* sin tarjeta — incluye agenda, Meet y Kaly voz.\n\n` +
     `¿Te activo el trial?`
   );
 }
@@ -238,7 +238,7 @@ PLANES DE KALYO:
 ESTRATEGIA DE VENTA (OBLIGATORIA):
 1. Tu objetivo principal es activar TRIALS de Max, no cerrar ventas con descuento.
 2. Siempre presenta Max PRIMERO como plan recomendado.
-3. Ante precio o interés → ofrece trial Max 15 días GRATIS (sin tarjeta). NO menciones ${d.code} automáticamente.
+3. Ante precio o interés → ofrece trial Max 7 días GRATIS (sin tarjeta). NO menciones ${d.code} automáticamente.
 4. Pro = alternativa "más básica" solo cuando ya probaron o piden explícitamente algo más barato.
 5. Ultra = solo si preguntan por más features premium o automatización con Sofía.
 6. Starter = solo si insisten en gratuito permanente.
@@ -252,7 +252,7 @@ PRESENTACIÓN ESTÁNDAR DE PRECIOS (cuando pregunten cuánto cuesta / precio / p
 ${buildStandardPricePresentation()}
 
 OBJECIONES DE PRECIO:
-- "Es caro" → "Prueba Max 15 días gratis primero, sin tarjeta. Si te sirve, decides al final." NO ${d.code}.
+- "Es caro" → "Prueba Max 7 días gratis primero, sin tarjeta. Si te sirve, decides al final." NO ${d.code}.
 - 2ª objeción de precio → precios completos Max $${m.price_monthly} / Pro $${p.price_monthly}, sin cupón.
 - 3ª objeción de precio → ${d.code} en Max ($${d.max_with_discount}) como último recurso.
 - Si dice "prefiero Pro" → NO forzar. Menciona UNA sola vez: "Con $10 más tienes agenda + videollamadas + transcripción. ¿Seguro?" Si insiste, activa Pro sin drama.

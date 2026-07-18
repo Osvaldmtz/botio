@@ -35,7 +35,7 @@ export function formatObjectionResponse(
         `✓ Con UNA sola sesión cobrada cubres el mes completo\n` +
         `✓ Te ahorra horas en reportes y documentación\n` +
         `✓ Max incluye agenda, videollamadas y transcripción de sesiones\n\n` +
-        `Prueba Max *15 días gratis* primero, sin tarjeta — incluye Kaly voz y Meet. Si te sirve, decides al final.\n\n` +
+        `Prueba Max *7 días gratis* primero, sin tarjeta — incluye Kaly voz y Meet. Si te sirve, decides al final.\n\n` +
         `¿Te activo el trial? Solo necesito saber si ya tienes cuenta o es tu primera vez.`
       );
     }
@@ -72,7 +72,7 @@ export function formatObjectionResponse(
   if (type === 'thinking') {
     if (!isRepeat) {
       return (
-        `${prefixWithName('Claro', name)} es una decisión importante. Mientras lo piensas, puedes probar el trial Max de 15 días GRATIS (sin tarjeta) — incluye agenda, Meet y Kaly voz:\n\n` +
+        `${prefixWithName('Claro', name)} es una decisión importante. Mientras lo piensas, puedes probar el trial Max de 7 días GRATIS (sin tarjeta) — incluye agenda, Meet y Kaly voz:\n\n` +
         `https://app.kalyo.io/login\n\n` +
         `Así ves todo sin presión. Si te gusta, al vencer te recomiendo Max ($${KALYO_PRICING.max.price_monthly}/mes) o Pro si prefieres algo más básico. ¿Te activo el trial? Solo necesito tu nombre completo y email.`
       );
@@ -92,7 +92,7 @@ export function formatObjectionResponse(
         `📊 91+ tests con reportes IA avanzados (sin escribir reportes a mano)\n` +
         `🇲🇽 Hecho en LATAM para psicólogos LATAM (DSM-5, español)\n\n` +
         `Max ($${KALYO_PRICING.max.price_monthly}/mes) es el recomendado. Pro ($${KALYO_PRICING.pro.price_monthly}/mes) si buscas algo más básico.\n\n` +
-        `¿Te interesa probar Max 15 días gratis primero?`
+        `¿Te interesa probar Max 7 días gratis primero?`
       );
     }
     return (
@@ -105,7 +105,7 @@ export function formatObjectionResponse(
       return (
         `${prefixWithName('Te entiendo', name)} todos andamos contra el tiempo. ¿Qué te parece si:\n\n` +
         `1️⃣ Te activo el trial gratis ahora (30 segundos)\n` +
-        `2️⃣ Lo pruebas cuando puedas estos 15 días\n` +
+        `2️⃣ Lo pruebas cuando puedas estos 7 días\n` +
         `3️⃣ Si te sirve, sigues con Max o Pro. Si no, no pasa nada\n\n` +
         `¿Te activo el trial?`
       );
@@ -141,7 +141,7 @@ export function formatObjectionResponse(
       `✓ Estructurar tu práctica desde día 1\n` +
       `✓ Hacer evaluaciones con IA y verte profesional ante cada paciente\n` +
       `✓ Tener registros impecables\n\n` +
-      `El trial Max es GRATIS 15 días — pruebas agenda, Meet y Kaly voz sin invertir. Si te sirve, Max ($${KALYO_PRICING.max.price_monthly}/mes) es el recomendado al pagar.\n\n` +
+      `El trial Max es GRATIS 7 días — pruebas agenda, Meet y Kaly voz sin invertir. Si te sirve, Max ($${KALYO_PRICING.max.price_monthly}/mes) es el recomendado al pagar.\n\n` +
       `¿Te activo el trial? Necesito tu nombre completo y email.`
     );
   }

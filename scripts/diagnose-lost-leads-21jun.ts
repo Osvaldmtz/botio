@@ -352,7 +352,7 @@ problema técnico y no pude responderte en su momento.
 Mil disculpas por la espera. ¿Sigues interesado/a en
 conocer Kalyo? Te cuento todo lo que necesites.
 
-(Te activo trial gratis de 15 días si quieres probar)"`);
+(Te activo trial gratis de 7 días si quieres probar)"`);
 
   console.log('\n── PASO 5: Recomendación ──');
   const recoverable = perdidos.length + aMedias.length;

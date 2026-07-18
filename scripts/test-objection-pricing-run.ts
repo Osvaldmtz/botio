@@ -12,7 +12,7 @@ const proLink = getPaymentLink('pro');
 const maxCoupon = getPaymentLink('max', 'PRIMER50');
 
 const firstPrice = formatObjectionResponse('price', { isRepeat: false, priceObjectionCount: 1 });
-assert(firstPrice.includes('15 días'), 'first response offers trial');
+assert(firstPrice.includes('7 días'), 'first response offers trial');
 assert(firstPrice.includes('gratis'), 'first response mentions free trial');
 assert(!firstPrice.includes('PRIMER50'), 'first response does not mention PRIMER50');
 assert(firstPrice.includes('¿Te activo el trial?'), 'first response asks to activate trial');

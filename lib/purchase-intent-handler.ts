@@ -41,7 +41,7 @@ const REPLY_PAY_NOW = `¡Perfecto! 🎉 Nuestros planes:
 
 ¿Cuál te interesa? Te paso el link directo.
 
-Si aún no has probado, también puedes arrancar con *Max GRATIS 15 días* sin tarjeta. ¿Te activo el trial?`;
+Si aún no has probado, también puedes arrancar con *Max GRATIS 7 días* sin tarjeta. ¿Te activo el trial?`;
 
 async function notifyPurchaseIntentTelegram(params: {
   plan: string;

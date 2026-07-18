@@ -60,7 +60,7 @@ VALUES (
       "first_message": "¡Hola! Soy Sofía de Kalyo 👋 Ayudamos a psicólogos a evaluar pacientes con +100 pruebas clínicas validadas, todo desde el navegador. ¿Qué te gustaría saber primero: evaluaciones, precios, o cómo funciona la prueba gratis?"
     },
     "B": {
-      "first_message": "¡Hola psicólogo/a! 👋 Tenemos +100 evaluaciones validadas y reportes con IA. ¿Quieres probar 15 días gratis sin tarjeta, agendar una demo en vivo con Osvaldo, o que te cuente más?"
+      "first_message": "¡Hola psicólogo/a! 👋 Tenemos +100 evaluaciones validadas y reportes con IA. ¿Quieres probar 7 días gratis sin tarjeta, agendar una demo en vivo con Osvaldo, o que te cuente más?"
     }
   }'::jsonb,
   50

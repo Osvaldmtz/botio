@@ -6,6 +6,7 @@
 import { join } from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { KALYO_TRIAL_MS } from '../lib/kalyo-trial-plans';
 import { ensureTrialTrackingConsistency } from '../lib/trial-tracking-consistency';
 import { fetchLearningMetrics } from '../lib/learning-queries';
 import {
@@ -93,7 +94,7 @@ async function cleanup(): Promise<void> {
 
 async function testAlreadyActiveSync(): Promise<void> {
   const convId = await createTestConversation(supabase, testPhone, testEmail);
-  const trialEndsAt = new Date(Date.now() + 15 * 24 * 3600 * 1000).toISOString();
+  const trialEndsAt = new Date(Date.now() + KALYO_TRIAL_MS).toISOString();
 
   const result = await ensureTrialTrackingConsistency(supabase, {
     conversationId: convId,

@@ -30,13 +30,13 @@ const CACHE_PATTERNS: CachePattern[] = [
     name: 'que_es_kalyo',
     regex: /^(que es kalyo|que hace kalyo|para que sirve kalyo)$/,
     response:
-      'Kalyo es una plataforma SaaS para psicólogos clínicos en LATAM. Te ayudamos a digitalizar tu práctica: gestión de pacientes, 91+ evaluaciones clínicas validadas, reportes PDF con IA. ¿Te gustaría conocer los planes (Max recomendado) o probar 15 días gratis?',
+      'Kalyo es una plataforma SaaS para psicólogos clínicos en LATAM. Te ayudamos a digitalizar tu práctica: gestión de pacientes, 91+ evaluaciones clínicas validadas, reportes PDF con IA. ¿Te gustaría conocer los planes (Max recomendado) o probar 7 días gratis?',
   },
   {
     name: 'quick_1',
     regex: /^(1|evaluaciones?)$/,
     response:
-      'Tenemos 91+ evaluaciones clínicas validadas incluyendo PHQ-9, GAD-7, PCL-5, Beck, Hamilton, AUDIT, SCL-90, STAI, BDI y más. Cada una genera reporte PDF con interpretación por IA. ¿Quieres probar 15 días gratis del plan Max?',
+      'Tenemos 91+ evaluaciones clínicas validadas incluyendo PHQ-9, GAD-7, PCL-5, Beck, Hamilton, AUDIT, SCL-90, STAI, BDI y más. Cada una genera reporte PDF con interpretación por IA. ¿Quieres probar 7 días gratis del plan Max?',
   },
   {
     name: 'quick_2',
@@ -47,12 +47,12 @@ const CACHE_PATTERNS: CachePattern[] = [
     name: 'quick_3',
     regex: /^(3|prueba gratis|trial)$/,
     response:
-      '¡Excelente! Te activo el trial Max de 15 días sin tarjeta de crédito — incluye agenda, Kalyo Meet, grabación y Kaly voz. ¿Ya tienes cuenta en Kalyo o es tu primera vez?',
+      '¡Excelente! Te activo el trial Max de 7 días sin tarjeta de crédito — incluye agenda, Kalyo Meet, grabación y Kaly voz. ¿Ya tienes cuenta en Kalyo o es tu primera vez?',
   },
   {
     name: 'gracias',
     regex: /^(gracias|muchas gracias|mil gracias|thanks)$/,
-    response: '¡De nada! 😊 ¿Te gustaría activar tu prueba gratuita de 15 días?',
+    response: '¡De nada! 😊 ¿Te gustaría activar tu prueba gratuita de 7 días?',
   },
   {
     name: 'despedida',

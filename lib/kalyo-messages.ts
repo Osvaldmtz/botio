@@ -23,7 +23,7 @@ export function appendQuickReplyPrompt(body: string): string {
 }
 
 const PURCHASE_OR_TRIAL_INTENT_RE =
-  /quiero\s+(?:el\s+)?(?:plan\s+)?pro|quiero\s+comprar|quiero\s+(?:el\s+)?trial|lo\s+quiero|voy\s+a\s+contratar|regalame\s+los\s+15|me\s+ingresa|me\s+apunto|lo\s+tomo|lo\s+contrato|quiero\s+pagar|c[oó]mo\s+pago|lo\s+activo|quiero\s+suscribir|acepto|quiero\s+comprarlo|prueba\s+gratis|activar\s+(?:mi\s+)?(?:trial|prueba)/i;
+  /quiero\s+(?:el\s+)?(?:plan\s+)?pro|quiero\s+comprar|quiero\s+(?:el\s+)?trial|lo\s+quiero|voy\s+a\s+contratar|regalame\s+los\s+7|me\s+ingresa|me\s+apunto|lo\s+tomo|lo\s+contrato|quiero\s+pagar|c[oó]mo\s+pago|lo\s+activo|quiero\s+suscribir|acepto|quiero\s+comprarlo|prueba\s+gratis|activar\s+(?:mi\s+)?(?:trial|prueba)/i;
 
 const SIMPLE_GREETING_RE =
   /^(hola|buenos dias|buenas tardes|buenas noches|que tal|hey|holi)$/;
@@ -38,7 +38,7 @@ export function isSimpleGreetingMessage(text: string): boolean {
 }
 
 export function replySkipsQuickReplies(replyText: string): boolean {
-  return /¿ya tienes cuenta|nombre completo y email|compartes tu email|trial pro de 15/i.test(
+  return /¿ya tienes cuenta|nombre completo y email|compartes tu email|trial pro de 7/i.test(
     replyText,
   );
 }
@@ -72,7 +72,7 @@ export function mapQuickReplySelection(text: string): string | null {
     return 'El usuario eligió Precios — presenta Max primero como recomendado, luego Pro como alternativa más básica. Usa datos oficiales de planes. NO incluyas quick replies al final.';
   }
   if (/^3$|prueba|trial|gratis/i.test(normalized)) {
-    return 'El usuario eligió Prueba gratis — inicia el Flujo Único de Trial: ofrece trial Max 15 días sin tarjeta (agenda, Meet, Kaly voz) y pregunta "¿Ya tienes cuenta en Kalyo o es tu primera vez?". NO incluyas quick replies al final.';
+    return 'El usuario eligió Prueba gratis — inicia el Flujo Único de Trial: ofrece trial Max 7 días sin tarjeta (agenda, Meet, Kaly voz) y pregunta "¿Ya tienes cuenta en Kalyo o es tu primera vez?". NO incluyas quick replies al final.';
   }
   return null;
 }

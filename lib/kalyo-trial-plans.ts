@@ -1,4 +1,4 @@
-export const KALYO_TRIAL_DAYS = 15;
+export const KALYO_TRIAL_DAYS = 7;
 export const KALYO_TRIAL_MS = KALYO_TRIAL_DAYS * 24 * 60 * 60 * 1000;
 
 /** Max trial — maps to Kalyo `professional` plan enum. */

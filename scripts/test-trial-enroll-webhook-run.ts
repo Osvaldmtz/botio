@@ -6,6 +6,7 @@ import {
   validateTrialEnrollBody,
 } from '../lib/trial-onboarding-webhook';
 import { emailToWebOnlyPhone, isWebOnlyPhone } from '../lib/web-only-phone';
+import { KALYO_TRIAL_MS } from '../lib/kalyo-trial-plans';
 
 function loadEnvLocal(): void {
   const envPath = join(process.cwd(), '.env.local');
@@ -135,14 +136,14 @@ async function runTests(): Promise<void> {
   const expiredEmail = `enroll-expired-${Date.now()}@kalyo-test.local`;
   const expiredPhone = `+5299904${String(Date.now()).slice(-5)}`;
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const fifteenDaysAfterThat = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+  const sevenDaysAfterThat = new Date(Date.now() - KALYO_TRIAL_MS).toISOString();
 
   await supabase.from('trial_onboarding_messages').insert({
     customer_phone: expiredPhone,
     trial_user_email: expiredEmail,
     trial_user_name: 'Expired Test User',
     trial_started_at: thirtyDaysAgo,
-    trial_ends_at: fifteenDaysAfterThat,
+    trial_ends_at: sevenDaysAfterThat,
   });
 
   const reEnroll = await enrollTrialFromKalyoWebhook(

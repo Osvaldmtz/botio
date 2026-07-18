@@ -69,7 +69,7 @@ const HUMAN_RE =
   /human[oa]|asesor[a]?|(?:hablar|habla|quiero)\s+con\s+(?:alguien|una?\s+persona)|persona\b|agente\b/i;
 const PATIENTS_RE = /(\d+)\s*pacientes?/i;
 const URGENCY_RE = /urgente|ya|hoy|ahora|esta semana/i;
-const TRIAL_RE = /trial|prueba\s+gratis|prueba\s+gratuita|demo|15\s*d[ií]as/i;
+const TRIAL_RE = /trial|prueba\s+gratis|prueba\s+gratuita|demo|7\s*d[ií]as/i;
 const PSYCHOLOGIST_RE =
   /psic[oó]log|terapeuta|cl[ií]nica|terapia|cedula profesional|c[eé]dula profesional|certificaci[oó]n/i;
 const STUDENT_RE = /estudiante|universidad|facultad|maestr[ií]a en curso|carrera de psicolog/i;

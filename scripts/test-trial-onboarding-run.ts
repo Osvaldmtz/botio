@@ -15,6 +15,7 @@ import {
   handleTrialOnboardingMessage,
   isUnsubscribeMessage,
 } from '../lib/trial-onboarding-interceptor';
+import { KALYO_TRIAL_MS } from '../lib/kalyo-trial-plans';
 
 function loadEnvLocal(): void {
   const envPath = join(process.cwd(), '.env.local');
@@ -92,7 +93,7 @@ async function insertOnboarding(params: {
   startedAt: Date;
   day13Sent?: boolean;
 }): Promise<string> {
-  const endsAt = new Date(params.startedAt.getTime() + 15 * 24 * 60 * 60 * 1000);
+  const endsAt = new Date(params.startedAt.getTime() + KALYO_TRIAL_MS);
   const { data, error } = await supabase
     .from('trial_onboarding_messages')
     .insert({
@@ -118,7 +119,7 @@ async function runTests(): Promise<void> {
   assert(formatDay1(user).includes('María Test'), 'day1 includes name');
   assert(formatDay3(user).includes('Asistente de voz'), 'day3 template');
   assert(
-    buildTrialOnboardingTelegramText({ day: 1, name: 'María Test', email: testEmail, daysLeft: 14 }).includes(
+    buildTrialOnboardingTelegramText({ day: 1, name: 'María Test', email: testEmail, daysLeft: 6 }).includes(
       'Onboarding Día 1',
     ),
     'telegram template',

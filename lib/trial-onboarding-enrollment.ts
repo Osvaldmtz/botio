@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-const TRIAL_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+import { KALYO_TRIAL_MS } from '@/lib/kalyo-trial-plans';
 
 export type EnrollTrialOnboardingInput = {
   customerPhone: string;
@@ -21,7 +20,7 @@ export async function enrollTrialOnboarding(
 
   const startedAt = input.trialStartedAt ?? new Date().toISOString();
   const endsAt =
-    input.trialEndsAt ?? new Date(new Date(startedAt).getTime() + TRIAL_DAYS_MS).toISOString();
+    input.trialEndsAt ?? new Date(new Date(startedAt).getTime() + KALYO_TRIAL_MS).toISOString();
 
   const { data: existing } = await supabase
     .from('trial_onboarding_messages')

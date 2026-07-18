@@ -67,7 +67,7 @@ function formatThinkingFollowup(name: string): string {
 function formatNoTimeFollowup(name: string): string {
   return (
     `${holaName(name)} espero estés mejor de tiempo. Solo pasaba a recordarte que Kalyo sigue aquí ` +
-    `cuando quieras probarlo (trial gratis 15 días). ¿Te interesa?`
+    `cuando quieras probarlo (trial gratis 7 días). ¿Te interesa?`
   );
 }
 

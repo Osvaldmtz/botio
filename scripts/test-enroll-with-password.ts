@@ -8,6 +8,7 @@ import {
   validateTrialEnrollDirectBody,
   type DirectWelcomeTwilioFns,
 } from '../lib/trial-enroll-direct';
+import { KALYO_TRIAL_MS } from '../lib/kalyo-trial-plans';
 
 function loadEnvLocal(): void {
   const envPath = join(process.cwd(), '.env.local');
@@ -75,7 +76,7 @@ async function testNewAccountWithPassword(supabase: SupabaseClient): Promise<voi
   const capture = { calls: 0 as number, body: undefined as string | undefined, to: undefined as string | undefined };
   const twilio = makeTwilioMock(capture);
 
-  const trialEndsAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
+  const trialEndsAt = new Date(Date.now() + KALYO_TRIAL_MS).toISOString();
 
   const result = await enrollTrialDirect(
     {
@@ -128,7 +129,7 @@ async function testReactivationWithoutPassword(supabase: SupabaseClient): Promis
   const email = `enroll-direct-react-${Date.now()}@kalyo-test.local`;
   const capture = { calls: 0 as number, body: undefined as string | undefined, to: undefined as string | undefined };
   const twilio = makeTwilioMock(capture);
-  const trialEndsAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
+  const trialEndsAt = new Date(Date.now() + KALYO_TRIAL_MS).toISOString();
 
   const result = await enrollTrialDirect(
     {
@@ -161,7 +162,7 @@ function testValidationErrors(): void {
     full_name: 'Test',
     phone: '+5255512345678',
     trial_started_at: new Date().toISOString(),
-    trial_ends_at: new Date(Date.now() + 15 * 86400000).toISOString(),
+    trial_ends_at: new Date(Date.now() + KALYO_TRIAL_MS).toISOString(),
     is_new_account: true,
     source: 'kaly_admin',
   });

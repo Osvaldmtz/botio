@@ -92,27 +92,27 @@ export function buildFollowupMessage(firstUserMessage: string | null): string {
   if (isAdPrefillMessage(text) || /psi|psic[oó]log|evaluaci[oó]n/i.test(text)) {
     return (
       'Hola 👋 Vi que te interesa Kalyo para tu práctica. ' +
-      '¿Te quedó alguna duda sobre las evaluaciones clínicas o quieres que te active la prueba gratis de 15 días?'
+      '¿Te quedó alguna duda sobre las evaluaciones clínicas o quieres que te active la prueba gratis de 7 días?'
     );
   }
 
   if (/precio|plan|costo|\$|usd|suscri/i.test(text)) {
     return (
       'Hola 👋 ¿Pudiste revisar los planes de Kalyo? ' +
-      'Si quieres, te explico cuál conviene más para tu caso o activo tu prueba Max gratis de 15 días.'
+      'Si quieres, te explico cuál conviene más para tu caso o activo tu prueba Max gratis de 7 días.'
     );
   }
 
   if (/prueba|trial|gratis|gratuit/i.test(text)) {
     return (
       'Hola 👋 ¿Seguiste con la prueba gratis de Kalyo? ' +
-      'Si ya te registraste, escríbeme tu email y activo tu Max de 15 días al instante. Entra en https://app.kalyo.io/login cuando quieras.'
+      'Si ya te registraste, escríbeme tu email y activo tu Max de 7 días al instante. Entra en https://app.kalyo.io/login cuando quieras.'
     );
   }
 
   return (
     'Hola 👋 ¿Pudiste revisar la información sobre Kalyo? ' +
-    'Si quieres, puedo activarte tu prueba gratuita de 15 días ahora mismo — sin tarjeta de crédito. ¿Te interesa?'
+    'Si quieres, puedo activarte tu prueba gratuita de 7 días ahora mismo — sin tarjeta de crédito. ¿Te interesa?'
   );
 }
 

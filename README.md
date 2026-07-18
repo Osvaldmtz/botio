@@ -151,7 +151,7 @@ Receives inbound Messenger and Instagram DMs for a bot and replies via the Meta 
 
 ## Kalyo Pro-trial integration
 
-One specific bot (identified by `KALYO_BOT_ID`) has an extra tool exposed to Claude: `activate_pro_trial`. When a user writes to that bot asking to start their free Pro trial and provides their email, Claude calls the tool, which looks up the email in the Kalyo Supabase project and upgrades the matching `psychologists` row to Pro for 15 days (`plan = 'professional'`, `trial_ends_at` and `plan_expires_at` set to now + 15d).
+One specific bot (identified by `KALYO_BOT_ID`) has an extra tool exposed to Claude: `activate_pro_trial`. When a user writes to that bot asking to start their free Pro trial and provides their email, Claude calls the tool, which looks up the email in the Kalyo Supabase project and upgrades the matching `psychologists` row to Pro for 7 days (`plan = 'professional'`, `trial_ends_at` and `plan_expires_at` set to now + 7d).
 
 **Env vars (required to enable the tools):**
 
@@ -166,8 +166,8 @@ The Kalyo bot currently exposes two tools: `activate_pro_trial` (below) and `not
 
 **Tool outcomes:**
 
-- `success` — row updated; Claude confirms the trial is active for 15 days.
-- `already_active` — psychologist is already on `plan = 'professional'` with an expiration date beyond the new 15-day window. The tool does NOT overwrite, so a real paid subscription cannot be accidentally shortened.
+- `success` — row updated; Claude confirms the trial is active for 7 days.
+- `already_active` — psychologist is already on `plan = 'professional'` with an expiration date beyond the new 7-day window. The tool does NOT overwrite, so a real paid subscription cannot be accidentally shortened.
 - `already_used` — psychologist had a trial in the past (`trial_ends_at` is before now) and is no longer on `professional`. One trial per account; Claude replies with a fixed Spanish message pointing to https://kalyo.io for a paid subscription.
 - `not_found` — email not in `psychologists`. Claude tells the user to register at https://kalyo.io first, then send their email again.
 - `error` — tool call failed (invalid email, DB error, missing env vars). Claude apologizes and asks the user to retry.

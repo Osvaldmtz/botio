@@ -45,7 +45,7 @@ export function formatDay7(user: TrialOnboardingUser, daysLeft: number): string 
   const name = displayName(user);
   const opener = name ? `${name}, llevas` : 'Llevas';
   return (
-    `${opener} 7 días con tu trial Max (te quedan ${daysLeft}).\n\n` +
+    `${opener} 5 días con tu trial Max (te quedan ${daysLeft}).\n\n` +
     `¿Ya probaste Kaly voz? Dile algo como:\n` +
     `🎙️ *"Agenda cita mañana 3pm con María"*\n\n` +
     `Kaly ejecuta por ti sin tocar la pantalla — agenda, expedientes y notas.\n\n` +
@@ -58,7 +58,7 @@ export function formatDay13(user: TrialOnboardingUser): string {
   const name = displayName(user);
   const opener = name ? `⚠️ ${name}, tu trial` : '⚠️ Tu trial';
   return (
-    `${opener} Max termina en 2 días.\n\n` +
+    `${opener} Max termina mañana.\n\n` +
     `¿Te quedas con *Max* ($${KALYO_PRICING.max.price_monthly}/mes) o prefieres *Pro* ($${KALYO_PRICING.pro.price_monthly}/mes)?\n\n` +
     `🚀 Max (recomendado): ${getPaymentLink('max')}\n` +
     `💎 Pro (más básico): ${getPaymentLink('pro')}\n\n` +

@@ -45,9 +45,9 @@ const DAY_CONFIG: Record<
 > = {
   1: { column: 'day_1_sent_at', minHoursAgo: 23, maxHoursAgo: 25 },
   3: { column: 'day_3_sent_at', minHoursAgo: 71, maxHoursAgo: 73 },
-  7: { column: 'day_7_sent_at', minHoursAgo: 167, maxHoursAgo: 169 },
-  13: { column: 'day_13_sent_at', minHoursAgo: 311, maxHoursAgo: 313 },
-  15: { column: 'day_15_sent_at', minHoursAgo: 359, maxHoursAgo: 361 },
+  7: { column: 'day_7_sent_at', minHoursAgo: 119, maxHoursAgo: 121 },
+  13: { column: 'day_13_sent_at', minHoursAgo: 143, maxHoursAgo: 145 },
+  15: { column: 'day_15_sent_at', minHoursAgo: 167, maxHoursAgo: 169 },
 };
 
 function startedAtWindow(minHoursAgo: number, maxHoursAgo: number): { from: string; to: string } {

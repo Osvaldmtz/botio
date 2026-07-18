@@ -3,7 +3,7 @@ import { isAmbassadorConversation, isAmbassadorFlowsEnabled } from '@/lib/ambass
 import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { renderName } from '@/lib/render-name';
 import { buildImmediateWelcomeMessage } from '@/lib/kalyo-trial-messages';
-import type { TrialPlanChoice } from '@/lib/kalyo-trial-plans';
+import { KALYO_TRIAL_MS, type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
 import { isTeamMember } from '@/lib/team-members';
 import { markTrialActivatedByContact, findConversationIdsByEmail } from '@/lib/conversation-outcome';
 import { emailToWebOnlyPhone, isWebOnlyPhone } from '@/lib/web-only-phone';
@@ -13,7 +13,6 @@ import {
   type WelcomeMessageResult,
 } from '@/lib/trial-onboarding-notifications';
 
-const TRIAL_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
 const DEFAULT_KALYO_BOT_ID = '64f6eed2-1522-48fe-a2c6-f858b767df06';
 const WELCOME_STATUS_DELAY_MS = 2000;
 
@@ -516,7 +515,7 @@ export async function enrollTrialFromKalyoWebhook(
   }
 
   const startedAt = input.trialStartedAt ?? new Date().toISOString();
-  const endsAt = new Date(new Date(startedAt).getTime() + TRIAL_DAYS_MS).toISOString();
+  const endsAt = new Date(new Date(startedAt).getTime() + KALYO_TRIAL_MS).toISOString();
 
   const { data: existing } = await supabase
     .from('trial_onboarding_messages')

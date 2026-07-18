@@ -1,4 +1,4 @@
--- Trial onboarding drip messages (days 1, 3, 7, 13, 15).
+-- Trial onboarding drip messages (days 1, 3, 5, 6, 7 — columns day_7/day_13/day_15 map to trial days 5/6/7).
 
 CREATE TABLE IF NOT EXISTS public.trial_onboarding_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

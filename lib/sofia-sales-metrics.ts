@@ -37,7 +37,7 @@ export async function fetchSofiaSalesMetrics(
     .select('id')
     .eq('role', 'assistant')
     .gte('created_at', since30d)
-    .ilike('content', '%15 días%')
+    .ilike('content', '%7 días%')
     .ilike('content', '%gratis%');
 
   const { data: trialByMeta } = await supabase

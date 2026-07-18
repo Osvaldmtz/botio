@@ -143,7 +143,7 @@ export async function handleObjectionMessage(params: {
     source: 'objection_handler',
     objectionType: objection.type,
     isRepeat: objection.is_repeat,
-    trialOffered: responseText.includes('15 días') && /gratis/i.test(responseText),
+    trialOffered: responseText.includes('7 días') && /gratis/i.test(responseText),
     couponOffered: responseText.includes('PRIMER50'),
   };
 }

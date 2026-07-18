@@ -75,7 +75,7 @@ Te paso la info:
 🚀 *Kalyo Max*: $39 USD/mes (recomendado — agenda + videollamadas + transcripción)
 💎 *Kalyo Pro*: $29 USD/mes (más básico — evaluaciones + Kaly Voice)
 
-Lo mejor para empezar: *15 días gratis sin tarjeta* en Max — incluye agenda, Meet y Kaly voz.
+Lo mejor para empezar: *7 días gratis sin tarjeta* en Max — incluye agenda, Meet y Kaly voz.
 
 ¿Te activo el trial? Solo necesito tu nombre y email. 🙌`;
   }
@@ -86,7 +86,7 @@ Lo mejor para empezar: *15 días gratis sin tarjeta* en Max — incluye agenda, 
 
 Soy Sofía de Kalyo. Recibí tu mensaje con tu email (${email}) pero hubo una falla técnica y no pude procesarlo en su momento. Mil disculpas por la espera.
 
-Buenas noticias: te puedo activar tu trial Max de 15 días gratis ahora mismo — incluye agenda, Meet y Kaly voz.
+Buenas noticias: te puedo activar tu trial Max de 7 días gratis ahora mismo — incluye agenda, Meet y Kaly voz.
 
 ¿Confirmas que quieres proceder con ese email? Solo respóndeme "sí" y te lo activo. 🚀`;
   }
@@ -107,7 +107,7 @@ Hace unas horas me escribiste pero tuvimos un problema técnico y no pude respon
 
 ¿Sigues interesado/a en conocer Kalyo? Te ofrezco:
 
-✓ *15 días gratis* (sin tarjeta de crédito)
+✓ *7 días gratis* (sin tarjeta de crédito)
 ✓ *100+ evaluaciones validadas* con IA
 ✓ Reportes automáticos con IA
 ✓ *Kaly* — asistente clínico por voz
