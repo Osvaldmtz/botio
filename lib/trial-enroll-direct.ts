@@ -3,6 +3,7 @@ import { isAmbassadorConversation } from '@/lib/ambassador-filters';
 import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { isTeamMember } from '@/lib/team-members';
 import { markTrialActivatedByContact } from '@/lib/conversation-outcome';
+import { markDay1WelcomeSent } from '@/lib/trial-onboarding-cron';
 import { notifyTrialEnrolled } from '@/lib/trial-onboarding-notifications';
 import { buildDirectEnrollmentWelcomeMessage } from '@/lib/kalyo-trial-messages';
 
@@ -500,6 +501,10 @@ export async function enrollTrialDirect(
       is_new_account: input.isNewAccount,
     },
   });
+
+  if (welcomeStatus === 'sent' || options?.skipWhatsApp) {
+    await markDay1WelcomeSent(supabase, enrollmentId);
+  }
 
   await notifyTrialEnrolled({
     name: input.fullName,

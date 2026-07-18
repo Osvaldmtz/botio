@@ -7,6 +7,7 @@ import { KALYO_TRIAL_MS, type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
 import { isTeamMember } from '@/lib/team-members';
 import { markTrialActivatedByContact, findConversationIdsByEmail } from '@/lib/conversation-outcome';
 import { emailToWebOnlyPhone, isWebOnlyPhone } from '@/lib/web-only-phone';
+import { markDay1WelcomeSent } from '@/lib/trial-onboarding-cron';
 import {
   notifyTrialEnrolled,
   type SendTelegramFn,
@@ -148,15 +149,18 @@ export async function sendWelcomeMessage(params: {
   email?: string;
   tempPassword?: string;
   trialPlan?: TrialPlanChoice;
+  trialEndsAt?: string;
 }): Promise<WelcomeMessageResult> {
   const { to, name, creds } = params;
   const templateSid = params.templateSid ?? process.env.KALYO_WELCOME_TEMPLATE_SID;
   const twilio = params.twilio ?? defaultWelcomeTwilioFns();
   const displayName = renderName(name) || 'ahí';
-  const welcomeOptions =
-    params.email && params.tempPassword
-      ? { email: params.email, tempPassword: params.tempPassword, trialPlan: params.trialPlan ?? 'max' }
-      : { trialPlan: params.trialPlan ?? 'max' };
+  const welcomeOptions = {
+    email: params.email,
+    tempPassword: params.tempPassword,
+    trialPlan: params.trialPlan ?? 'max',
+    trialEndsAt: params.trialEndsAt,
+  };
 
   const usePlainTextOnly = Boolean(params.email && params.tempPassword);
 
@@ -572,6 +576,7 @@ export async function enrollTrialFromKalyoWebhook(
       email,
       tempPassword: input.tempPassword,
       trialPlan: input.trialPlan ?? 'max',
+      trialEndsAt: endsAt,
     });
 
     const welcomeStatus = welcomeResult.success ? 'sent' : 'failed';
@@ -595,6 +600,7 @@ export async function enrollTrialFromKalyoWebhook(
         email,
         tempPassword: input.tempPassword,
         trialPlan: input.trialPlan ?? 'max',
+        trialEndsAt: endsAt,
       });
       await supabase.from('messages').insert({
         conversation_id: conversationId,
@@ -608,6 +614,7 @@ export async function enrollTrialFromKalyoWebhook(
           twilio_sid: welcomeResult.sid ?? null,
         },
       });
+      await markDay1WelcomeSent(supabase, row.id);
     }
   }
 

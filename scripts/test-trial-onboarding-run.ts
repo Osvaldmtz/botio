@@ -2,13 +2,14 @@ import { dirname, join } from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import {
-  formatDay1,
+  formatDay2,
   formatDay3,
   formatOnboardingMessage,
 } from '../lib/trial-onboarding-messages';
 import { buildTrialOnboardingTelegramText } from '../lib/trial-onboarding-notifications';
 import {
   fetchPendingOnboardingDay,
+  markDay1WelcomeSent,
   runTrialOnboardingCron,
 } from '../lib/trial-onboarding-cron';
 import {
@@ -91,7 +92,7 @@ async function ensureConversation(): Promise<string> {
 async function insertOnboarding(params: {
   conversationId: string;
   startedAt: Date;
-  day13Sent?: boolean;
+  day15Sent?: boolean;
 }): Promise<string> {
   const endsAt = new Date(params.startedAt.getTime() + KALYO_TRIAL_MS);
   const { data, error } = await supabase
@@ -103,7 +104,7 @@ async function insertOnboarding(params: {
       trial_started_at: params.startedAt.toISOString(),
       trial_ends_at: endsAt.toISOString(),
       conversation_id: params.conversationId,
-      day_13_sent_at: params.day13Sent ? new Date().toISOString() : null,
+      day_15_sent_at: params.day15Sent ? new Date().toISOString() : null,
     })
     .select('id')
     .single();
@@ -112,15 +113,15 @@ async function insertOnboarding(params: {
 }
 
 async function runTests(): Promise<void> {
-  console.log('Trial onboarding tests\n');
+  console.log('Trial onboarding integration tests\n');
   await cleanup();
 
   const user = { trial_user_name: 'María Test', trial_user_email: testEmail };
-  assert(formatDay1(user).includes('María Test'), 'day1 includes name');
-  assert(formatDay3(user).includes('Asistente de voz'), 'day3 template');
+  assert(formatDay2(user).includes('María Test'), 'day2 includes name');
+  assert(formatDay3(user).includes('PHQ-9'), 'day3 evaluations');
   assert(
-    buildTrialOnboardingTelegramText({ day: 1, name: 'María Test', email: testEmail, daysLeft: 6 }).includes(
-      'Onboarding Día 1',
+    buildTrialOnboardingTelegramText({ day: 2, name: 'María Test', email: testEmail, daysLeft: 5 }).includes(
+      'Onboarding Día 2',
     ),
     'telegram template',
   );
@@ -129,15 +130,16 @@ async function runTests(): Promise<void> {
   const conversationId = await ensureConversation();
   const mockCreds = { accountSid: 'ACtest', authToken: 'test', from: 'whatsapp:+10000000000' };
 
-  const day1Start = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const row1Id = await insertOnboarding({ conversationId, startedAt: day1Start });
+  const day2Start = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const row2Id = await insertOnboarding({ conversationId, startedAt: day2Start });
+  await markDay1WelcomeSent(supabase, row2Id);
 
-  const pending1 = await fetchPendingOnboardingDay(supabase, 1);
-  assert(pending1.some((r) => r.id === row1Id), 'day1 pending window');
+  const pending2 = await fetchPendingOnboardingDay(supabase, 2);
+  assert(pending2.some((r) => r.id === row2Id), 'day2 pending window');
 
   sentWhatsApp.length = 0;
   sentTelegram.length = 0;
-  const cron1 = await runTrialOnboardingCron({
+  const cron2 = await runTrialOnboardingCron({
     supabase,
     creds: mockCreds,
     sendFn: async (args) => {
@@ -147,32 +149,33 @@ async function runTests(): Promise<void> {
       sentTelegram.push(text);
     },
   });
-  assert((cron1.sent_day1 ?? 0) >= 1, 'day1 sent');
+  assert((cron2.sent_day2 ?? 0) >= 1, 'day2 sent');
   assert(sentWhatsApp.some((b) => b.includes('Onboarding Test')), 'whatsapp has name');
   assert(sentTelegram.length >= 1, 'telegram notified');
 
-  const { data: after1 } = await supabase
+  const { data: after2 } = await supabase
     .from('trial_onboarding_messages')
-    .select('day_1_sent_at')
-    .eq('id', row1Id)
+    .select('day_2_sent_at')
+    .eq('id', row2Id)
     .single();
-  assert(after1?.day_1_sent_at != null, 'day_1_sent_at set');
+  assert(after2?.day_2_sent_at != null, 'day_2_sent_at set');
 
   sentWhatsApp.length = 0;
-  const cron1Again = await runTrialOnboardingCron({
+  const cron2Again = await runTrialOnboardingCron({
     supabase,
     creds: mockCreds,
     sendFn: async (args) => {
       sentWhatsApp.push(args.body);
     },
   });
-  assert(sentWhatsApp.length === 0, 'day1 idempotent');
-  assert((cron1Again.sent_day1 ?? 0) === 0, 'no second day1');
+  assert(sentWhatsApp.length === 0, 'day2 idempotent');
+  assert((cron2Again.sent_day2 ?? 0) === 0, 'no second day2');
 
-  await supabase.from('trial_onboarding_messages').delete().eq('id', row1Id);
+  await supabase.from('trial_onboarding_messages').delete().eq('id', row2Id);
 
   const day3Start = new Date(Date.now() - 72 * 60 * 60 * 1000);
   const row3Id = await insertOnboarding({ conversationId, startedAt: day3Start });
+  await markDay1WelcomeSent(supabase, row3Id);
   const pending3 = await fetchPendingOnboardingDay(supabase, 3);
   assert(pending3.some((r) => r.id === row3Id), 'day3 pending');
 
@@ -192,7 +195,7 @@ async function runTests(): Promise<void> {
 
   await supabase.from('trial_onboarding_messages').delete().eq('id', row3Id);
 
-  const unsubRowId = await insertOnboarding({ conversationId, startedAt: day1Start });
+  const unsubRowId = await insertOnboarding({ conversationId, startedAt: day2Start });
   const unsub = await handleTrialOnboardingMessage({
     supabase,
     conversationId,
@@ -210,7 +213,8 @@ async function runTests(): Promise<void> {
 
   await supabase.from('trial_onboarding_messages').delete().eq('id', unsubRowId);
 
-  const failRowId = await insertOnboarding({ conversationId, startedAt: day1Start });
+  const failRowId = await insertOnboarding({ conversationId, startedAt: day2Start });
+  await markDay1WelcomeSent(supabase, failRowId);
   const cronFail = await runTrialOnboardingCron({
     supabase,
     creds: mockCreds,
@@ -221,17 +225,17 @@ async function runTests(): Promise<void> {
       throw new Error('telegram down');
     },
   });
-  assert((cronFail.sent_day1 ?? 0) >= 1, 'whatsapp ok when telegram fails');
+  assert((cronFail.sent_day2 ?? 0) >= 1, 'whatsapp ok when telegram fails');
   const { data: failData } = await supabase
     .from('trial_onboarding_messages')
-    .select('day_1_sent_at')
+    .select('day_2_sent_at')
     .eq('id', failRowId)
     .single();
-  assert(failData?.day_1_sent_at != null, 'sent_at set despite telegram fail');
+  assert(failData?.day_2_sent_at != null, 'sent_at set despite telegram fail');
   await supabase.from('trial_onboarding_messages').delete().eq('id', failRowId);
 
   await cleanup();
-  console.log('✓ All trial onboarding tests passed');
+  console.log('✓ All trial onboarding integration tests passed');
 }
 
 runTests().catch((err) => {

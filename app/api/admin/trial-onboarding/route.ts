@@ -20,19 +20,23 @@ function deriveStatus(row: {
 
 function lastMessageSent(row: {
   day_1_sent_at: string | null;
+  day_2_sent_at: string | null;
   day_3_sent_at: string | null;
   day_7_sent_at: string | null;
   day_13_sent_at: string | null;
   day_15_sent_at: string | null;
+  day_9_sent_at: string | null;
 }): string | null {
   const stamps = [
+    row.day_9_sent_at,
     row.day_15_sent_at,
     row.day_13_sent_at,
     row.day_7_sent_at,
     row.day_3_sent_at,
+    row.day_2_sent_at,
     row.day_1_sent_at,
   ].filter(Boolean) as string[];
-  return stamps[0] ?? null;
+  return stamps.sort((a, b) => b.localeCompare(a))[0] ?? null;
 }
 
 export async function GET(request: Request) {

@@ -15,7 +15,7 @@ function displayName(name: string | null | undefined, email: string): string {
 }
 
 export function buildTrialOnboardingTelegramText(params: {
-  day: 1 | 3 | 7 | 13 | 15;
+  day: 1 | 2 | 3 | 5 | 6 | 7 | 9;
   name?: string | null;
   email: string;
   daysLeft?: number;
@@ -101,7 +101,7 @@ export function buildTrialEnrolledTelegramText(params: {
     `📍 Source: ${params.source}\n` +
     `📅 Trial vence: ${trialDateStr}\n` +
     `${formatWelcomeDeliveryLine(params.welcomeResult)}\n\n` +
-    `El cliente recibirá los 5 mensajes de onboarding en días 1, 3, 5, 6 y 7.`
+    `El cliente recibirá onboarding en días 1 (welcome), 2, 3, 5, 6, 7 y opcional 9 (PRIMER50).`
   );
 }
 
@@ -126,7 +126,7 @@ export async function notifyTrialEnrolled(params: {
 }
 
 export async function notifyTrialOnboardingSent(params: {
-  day: 1 | 3 | 7 | 13 | 15;
+  day: 1 | 2 | 3 | 5 | 6 | 7 | 9;
   demoId: string;
   name?: string | null;
   email: string;

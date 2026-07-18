@@ -9,7 +9,7 @@ import {
   buildImmediateWelcomeMessage,
   buildTrialActivationSuccessMessage,
 } from '../lib/kalyo-trial-messages';
-import { formatDay13 } from '../lib/trial-onboarding-messages';
+import { formatDay6 } from '../lib/trial-onboarding-messages';
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
@@ -25,9 +25,15 @@ assert(detectTrialPlanPreference('quiero trial pro') === 'pro', 'detect trial pr
 assert(detectTrialPlanPreference('quiero el trial') === 'max', 'generic trial → max');
 assert(detectTrialPlanPreference('prefiero pro por favor') === 'pro', 'prefiero pro');
 
-const welcome = buildImmediateWelcomeMessage('Ana', { trialPlan: 'max' });
+const welcome = buildImmediateWelcomeMessage('Ana', {
+  trialPlan: 'max',
+  email: 'ana@test.com',
+  tempPassword: 'Kalyo-2026-ABCD',
+  trialEndsAt: '2026-07-23T00:00:00.000Z',
+});
 assert(welcome.includes('trial Max'), 'welcome mentions trial Max');
-assert(welcome.includes('Agenda + Kalyo Meet'), 'welcome lists Max features');
+assert(welcome.includes('Sofía'), 'welcome from Sofía');
+assert(welcome.includes('Kalyo-2026-ABCD'), 'welcome includes password');
 
 const activation = buildTrialActivationSuccessMessage({
   email: 'ana@test.com',
@@ -48,12 +54,13 @@ const directWelcome = buildDirectEnrollmentWelcomeMessage({
   trialPlan: 'max',
 });
 assert(directWelcome.includes('trial Max'), 'direct welcome says Max');
-assert(directWelcome.includes('Kaly voz'), 'direct welcome mentions Kaly voz');
+assert(directWelcome.includes('Sofía'), 'direct welcome from Sofía');
+assert(directWelcome.includes('primer paciente'), 'direct welcome first step');
 
-const day13 = formatDay13({ trial_user_email: 'ana@test.com', trial_user_name: 'Ana' });
-assert(day13.includes('trial Max termina'), 'day 13 mentions trial Max');
-assert(day13.includes('Max') && day13.includes('Pro'), 'day 13 asks Max vs Pro');
-assert(!day13.includes('PRIMER50'), 'day 13 has no coupon');
+const day6 = formatDay6({ trial_user_email: 'ana@test.com', trial_user_name: 'Ana' });
+assert(day6.includes('trial Max termina'), 'day 6 mentions trial Max');
+assert(day6.includes('Max') && day6.includes('Pro'), 'day 6 asks Max vs Pro');
+assert(!day6.includes('PRIMER50'), 'day 6 has no coupon');
 
 const proWelcome = buildDirectEnrollmentWelcomeMessage({
   fullName: 'Ana',

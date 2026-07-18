@@ -1,17 +1,12 @@
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import {
   TRIAL_MAX_FEATURE_BULLETS,
   trialPlanLabel,
   type TrialPlanChoice,
 } from '@/lib/kalyo-trial-plans';
+import { formatDay1Welcome, formatTrialEndDateLabel } from '@/lib/trial-onboarding-messages';
 
 function formatTrialEndDate(iso: string): string {
-  try {
-    return format(new Date(iso), 'd MMM yyyy', { locale: es });
-  } catch {
-    return iso.slice(0, 10);
-  }
+  return formatTrialEndDateLabel(iso);
 }
 
 export function buildTrialMaxFeaturesBlock(): string {
@@ -61,8 +56,23 @@ export function buildTrialActivationSuccessMessage(params: {
 
 export function buildImmediateWelcomeMessage(
   name: string,
-  options?: { email?: string; tempPassword?: string; trialPlan?: TrialPlanChoice },
+  options?: {
+    email?: string;
+    tempPassword?: string;
+    trialPlan?: TrialPlanChoice;
+    trialEndsAt?: string;
+  },
 ): string {
+  if (options?.trialEndsAt && options.email) {
+    return formatDay1Welcome({
+      trial_user_name: name,
+      trial_user_email: options.email,
+      trialEndsAt: options.trialEndsAt,
+      email: options.email,
+      tempPassword: options.tempPassword,
+    });
+  }
+
   const display = name.trim() || 'ahí';
   const planName = trialPlanLabel(options?.trialPlan ?? 'max');
   const credentials =
@@ -101,6 +111,16 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
   const plan = input.trialPlan ?? 'max';
   const planName = trialPlanLabel(plan);
   const maxBlock = plan === 'max' ? `\nIncluye:\n${buildTrialMaxFeaturesBlock()}\n` : '';
+
+  if (input.isNewAccount && input.tempPassword && plan === 'max') {
+    return formatDay1Welcome({
+      trial_user_name: input.fullName,
+      trial_user_email: input.email,
+      trialEndsAt: input.trialEndsAt,
+      email: input.email,
+      tempPassword: input.tempPassword,
+    });
+  }
 
   if (input.isNewAccount) {
     return (
