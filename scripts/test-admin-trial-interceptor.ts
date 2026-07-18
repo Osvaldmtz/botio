@@ -1,4 +1,6 @@
 import {
+  ADMIN_TRIAL_MISSING_PHONE_MESSAGE,
+  adminTrialPhoneValidationError,
   parseAdminTrialPlanFromText,
   parseAdminTrialRequestFromMessages,
   parseAdminTrialRequestFromText,
@@ -27,7 +29,7 @@ function testLabeledFormat(): void {
   assert(parsed.fullName === 'Psic. Clinica', 'labeled name');
 }
 
-function testPaolaFollowUp(): void {
+function testPaolaFollowUpIsAtomic(): void {
   const parsed = parseAdminTrialRequestFromMessages([
     {
       role: 'user',
@@ -37,10 +39,7 @@ function testPaolaFollowUp(): void {
     { role: 'assistant', content: '¿Nombre completo real?' },
     { role: 'user', content: 'Paola Garcia' },
   ]);
-  assert(parsed !== null, 'follow-up should parse');
-  assert(parsed!.fullName === 'Paola Garcia', 'follow-up name');
-  assert(parsed!.email === 'zapapinga24@gmail.com', 'follow-up email');
-  assert(parsed!.phone === '+525532397848', 'follow-up phone');
+  assert(parsed === null, 'name-only follow-up must not merge history');
 }
 
 function testPlaceholderBlocksSingleTurn(): void {
@@ -170,13 +169,82 @@ function testFollowUpQuestionDoesNotIntercept(): void {
   );
 }
 
+function testNewCommandDoesNotReusePreviousData(): void {
+  const parsed = parseAdminTrialRequestFromMessages([
+    {
+      role: 'user',
+      content: 'Activar trial: Paola Garcia, zapapinga24@gmail.com, +525532397848',
+    },
+    { role: 'assistant', content: '✅ Trial activado' },
+    {
+      role: 'user',
+      content: 'Activar trial Max Jose Martinez, sales@magnus.mx',
+    },
+  ]);
+  assert(parsed === null, 'incomplete new command must not merge prior email/phone');
+}
+
+function testMissingPhoneValidation(): void {
+  const partial = parseAdminTrialRequestFromText(
+    'Activar trial Max Jose Martinez, sales@magnus.mx',
+  );
+  assert(partial.email === 'sales@magnus.mx', 'parses email from current command');
+  assert(partial.fullName === 'Jose Martinez', 'parses name from current command');
+  assert(partial.phone === undefined, 'no phone in two-part command');
+  assert(
+    adminTrialPhoneValidationError(partial) === ADMIN_TRIAL_MISSING_PHONE_MESSAGE,
+    'missing phone returns operator message',
+  );
+}
+
+function testInvalidPhoneValidation(): void {
+  const partial = parseAdminTrialRequestFromText(
+    'Activar trial: Ana López, ana@test.com, 5531234567',
+  );
+  assert(
+    adminTrialPhoneValidationError(partial) === ADMIN_TRIAL_MISSING_PHONE_MESSAGE,
+    'phone without + prefix is rejected',
+  );
+}
+
+function testInterceptorWouldRejectMissingPhoneWithoutPriorContext(): void {
+  const messageBody = 'Activar trial Max Jose Martinez, sales@magnus.mx';
+  assert(shouldInterceptAdminTrialActivation(messageBody, []), 'intercepts trial command');
+  const partial = parseAdminTrialRequestFromText(messageBody);
+  assert(
+    adminTrialPhoneValidationError(partial) === ADMIN_TRIAL_MISSING_PHONE_MESSAGE,
+    'validation blocks activation',
+  );
+  const parsed = parseAdminTrialRequestFromMessages([
+    {
+      role: 'user',
+      content: 'Activar trial: Paola Garcia, zapapinga24@gmail.com, +525532397848',
+    },
+    { role: 'assistant', content: '✅ Trial activado' },
+    { role: 'user', content: messageBody },
+  ]);
+  assert(parsed === null, 'does not merge prior phone/email into incomplete command');
+}
+
+function testCompleteCommandExample(): void {
+  const command =
+    'Activar trial Max: Jose Martinez, sales@magnus.mx, +5215512345678';
+  const parsed = parseAdminTrialRequestFromMessages([{ role: 'user', content: command }]);
+  assert(parsed !== null, 'complete command parses');
+  assert(parsed!.email === 'sales@magnus.mx', 'uses email from current command');
+  assert(parsed!.fullName === 'Jose Martinez', 'uses name from current command');
+  assert(parsed!.phone === '+5215512345678', 'uses phone from current command');
+  assert(parsed!.trialPlan === 'max', 'uses max plan');
+  assert(adminTrialPhoneValidationError(parsed!) === null, 'valid phone passes');
+}
+
 console.log('Admin trial interceptor tests\n');
 testCommaFormat();
 console.log('  ✓ comma format');
 testLabeledFormat();
 console.log('  ✓ labeled format');
-testPaolaFollowUp();
-console.log('  ✓ Paola follow-up');
+testPaolaFollowUpIsAtomic();
+console.log('  ✓ atomic commands (no history merge)');
 testPlaceholderBlocksSingleTurn();
 console.log('  ✓ placeholder blocks single turn');
 testCompleteNameSingleTurn();
@@ -193,6 +261,16 @@ testStaleHistoryDoesNotOverrideCompleteRequest();
 console.log('  ✓ stale history does not override complete request');
 testFollowUpQuestionDoesNotIntercept();
 console.log('  ✓ follow-up question does not intercept');
+testNewCommandDoesNotReusePreviousData();
+console.log('  ✓ new command does not reuse previous data');
+testMissingPhoneValidation();
+console.log('  ✓ missing phone validation');
+testInvalidPhoneValidation();
+console.log('  ✓ invalid phone validation');
+testCompleteCommandExample();
+console.log('  ✓ complete command example');
+testInterceptorWouldRejectMissingPhoneWithoutPriorContext();
+console.log('  ✓ interceptor rejects missing phone without prior context');
 testPlanParser();
 console.log('  ✓ plan parser');
 console.log('\nAll admin trial interceptor tests passed.');

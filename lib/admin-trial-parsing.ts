@@ -1,7 +1,12 @@
 import { detectTrialPlanPreference, type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
-import { normalizePhoneForDB } from '@/lib/phone-validation';
+import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 
-const ADMIN_TRIAL_TRIGGER_RE = /activar\s+trial/i;
+export const ADMIN_TRIAL_TRIGGER_RE = /activar\s+trial/i;
+
+export const ADMIN_TRIAL_MISSING_PHONE_MESSAGE =
+  '❌ Falta el WhatsApp del cliente.\n' +
+  'Sin WhatsApp no puedo enviarle onboarding.\n' +
+  'Formato: +5215512345678';
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
 const PHONE_LABELED_RE =
   /(?:whatsapp|whats\s*app|tel[eé]fono|celular|m[óo]vil|wa)\s*:?\s*(\+?\d[\d\s().-]{8,})/i;
@@ -9,6 +14,8 @@ const NAME_LABELED_RE = /(?:nombre|name)\s*:?\s*(.+)/i;
 const PLAN_LABELED_RE = /(?:plan)\s*:?\s*(max|pro)\b/i;
 const COMMA_FORMAT_RE =
   /activar\s+trial(?:\s+(max|pro))?\s*:?\s*([^,\n]+?)\s*,\s*([^\s,@]+@[^\s,]+)\s*,\s*(\+?\d[\d\s().-]{8,})/i;
+const COMMA_FORMAT_TWO_PART_RE =
+  /activar\s+trial(?:\s+(max|pro))?\s*:?\s*([^,\n]+?)\s*,\s*([^\s,@]+@[^\s,]+)\s*$/i;
 
 /** Strip bidi marks and normalize unicode whitespace (e.g. NBSP from WhatsApp paste). */
 function normalizeAdminTrialText(text: string): string {
@@ -46,17 +53,6 @@ export function parseAdminTrialPlanFromText(text: string): TrialPlanChoice | nul
   }
   if (detectTrialPlanPreference(text) === 'pro') return 'pro';
   return null;
-}
-
-function resolveTrialPlanFromMessages(
-  messages: Array<{ role: string; content: string }>,
-): TrialPlanChoice {
-  const userMessages = messages.filter((m) => m.role === 'user');
-  for (let i = userMessages.length - 1; i >= 0; i--) {
-    const plan = parseAdminTrialPlanFromText(userMessages[i].content);
-    if (plan) return plan;
-  }
-  return 'max';
 }
 
 function extractEmail(text: string): string | null {
@@ -148,7 +144,8 @@ export function parseAdminTrialRequestFromText(text: string): Partial<AdminTrial
   }
 
   const trialPlan = parseAdminTrialPlanFromText(text) ?? undefined;
-  const commaMatch = normalizeAdminTrialText(text).match(COMMA_FORMAT_RE);
+  const normalized = normalizeAdminTrialText(text);
+  const commaMatch = normalized.match(COMMA_FORMAT_RE);
   if (commaMatch) {
     const commaPlan =
       commaMatch[1]?.toLowerCase() === 'pro'
@@ -160,6 +157,21 @@ export function parseAdminTrialRequestFromText(text: string): Partial<AdminTrial
       fullName: commaMatch[2].trim(),
       email: commaMatch[3].trim().toLowerCase(),
       phone: extractPhone(commaMatch[4]) ?? undefined,
+      trialPlan: commaPlan ?? trialPlan,
+    };
+  }
+
+  const twoPartMatch = normalized.match(COMMA_FORMAT_TWO_PART_RE);
+  if (twoPartMatch) {
+    const commaPlan =
+      twoPartMatch[1]?.toLowerCase() === 'pro'
+        ? 'pro'
+        : twoPartMatch[1]?.toLowerCase() === 'max'
+          ? 'max'
+          : undefined;
+    return {
+      fullName: twoPartMatch[2].trim(),
+      email: twoPartMatch[3].trim().toLowerCase(),
       trialPlan: commaPlan ?? trialPlan,
     };
   }
@@ -184,72 +196,34 @@ function isCompleteAdminTrialRequest(parsed: Partial<AdminTrialParsedRequest>): 
 export function parseAdminTrialRequestFromMessages(
   messages: Array<{ role: string; content: string }>,
 ): AdminTrialParsedRequest | null {
-  const userMessages = messages.filter((m) => m.role === 'user').slice(-5);
+  const userMessages = messages.filter((m) => m.role === 'user');
   if (userMessages.length === 0) return null;
 
-  const hasTrialIntent = userMessages.some((m) => ADMIN_TRIAL_TRIGGER_RE.test(m.content));
   const latest = userMessages[userMessages.length - 1]?.content ?? '';
+  if (!ADMIN_TRIAL_TRIGGER_RE.test(latest)) return null;
 
-  const latestParsed = parseAdminTrialRequestFromText(latest);
-  if (
-    ADMIN_TRIAL_TRIGGER_RE.test(latest) &&
-    isCompleteAdminTrialRequest(latestParsed)
-  ) {
-    return {
-      email: latestParsed.email!,
-      phone: latestParsed.phone!,
-      fullName: latestParsed.fullName!.trim(),
-      trialPlan: latestParsed.trialPlan ?? resolveTrialPlanFromMessages(userMessages),
-    };
-  }
-
-  let email: string | undefined;
-  let phone: string | undefined;
-  let fullName: string | undefined;
-
-  for (const msg of userMessages) {
-    const parsed = parseAdminTrialRequestFromText(msg.content);
-    email = email ?? parsed.email;
-    phone = phone ?? parsed.phone;
-    fullName = fullName ?? parsed.fullName;
-  }
-
-  if (looksLikeNameOnlyMessage(latest) && email && phone) {
-    fullName = latest.trim();
-  }
-
-  if (!email || !phone || !fullName) return null;
-
-  if (!hasTrialIntent && !looksLikeNameOnlyMessage(latest)) {
-    return null;
-  }
-
-  if (looksLikePlaceholderName(fullName)) {
-    if (!looksLikeNameOnlyMessage(latest) || latest.trim() === fullName.trim()) {
-      return null;
-    }
-  }
+  const parsed = parseAdminTrialRequestFromText(latest);
+  if (!isCompleteAdminTrialRequest(parsed)) return null;
 
   return {
-    email,
-    phone,
-    fullName: fullName.trim(),
-    trialPlan: resolveTrialPlanFromMessages(userMessages),
+    email: parsed.email!,
+    phone: parsed.phone!,
+    fullName: parsed.fullName!.trim(),
+    trialPlan: parsed.trialPlan ?? parseAdminTrialPlanFromText(latest) ?? 'max',
   };
+}
+
+export function adminTrialPhoneValidationError(
+  parsed: Partial<AdminTrialParsedRequest>,
+): string | null {
+  if (!parsed.phone) return ADMIN_TRIAL_MISSING_PHONE_MESSAGE;
+  if (!isValidPhone(parsed.phone)) return ADMIN_TRIAL_MISSING_PHONE_MESSAGE;
+  return null;
 }
 
 export function shouldInterceptAdminTrialActivation(
   messageBody: string,
-  messages: Array<{ role: string; content: string }>,
+  _messages: Array<{ role: string; content: string }>,
 ): boolean {
-  if (ADMIN_TRIAL_TRIGGER_RE.test(messageBody)) return true;
-  if (looksLikeNameOnlyMessage(messageBody)) {
-    return (
-      parseAdminTrialRequestFromMessages([
-        ...messages,
-        { role: 'user', content: messageBody },
-      ]) !== null
-    );
-  }
-  return false;
+  return ADMIN_TRIAL_TRIGGER_RE.test(messageBody);
 }
