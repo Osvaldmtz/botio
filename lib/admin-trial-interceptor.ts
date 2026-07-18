@@ -38,7 +38,7 @@ export async function handleAdminTrialActivationMessage(params: {
     ? params.conversationMessages
     : [...params.conversationMessages, { role: 'user', content: params.messageBody }];
 
-  if (!shouldInterceptAdminTrialActivation(params.messageBody, params.conversationMessages)) {
+  if (!shouldInterceptAdminTrialActivation(params.messageBody)) {
     return null;
   }
 

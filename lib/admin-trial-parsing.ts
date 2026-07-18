@@ -221,9 +221,6 @@ export function adminTrialPhoneValidationError(
   return null;
 }
 
-export function shouldInterceptAdminTrialActivation(
-  messageBody: string,
-  _messages: Array<{ role: string; content: string }>,
-): boolean {
+export function shouldInterceptAdminTrialActivation(messageBody: string): boolean {
   return ADMIN_TRIAL_TRIGGER_RE.test(messageBody);
 }

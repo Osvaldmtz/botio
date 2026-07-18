@@ -164,7 +164,7 @@ function testFollowUpQuestionDoesNotIntercept(): void {
     { role: 'assistant', content: 'error' },
   ];
   assert(
-    !shouldInterceptAdminTrialActivation('seguro que ya lo tuvo , cuando ?', history),
+    !shouldInterceptAdminTrialActivation('seguro que ya lo tuvo , cuando ?'),
     'follow-up question should not re-trigger activation',
   );
 }
@@ -209,7 +209,7 @@ function testInvalidPhoneValidation(): void {
 
 function testInterceptorWouldRejectMissingPhoneWithoutPriorContext(): void {
   const messageBody = 'Activar trial Max Jose Martinez, sales@magnus.mx';
-  assert(shouldInterceptAdminTrialActivation(messageBody, []), 'intercepts trial command');
+  assert(shouldInterceptAdminTrialActivation(messageBody), 'intercepts trial command');
   const partial = parseAdminTrialRequestFromText(messageBody);
   assert(
     adminTrialPhoneValidationError(partial) === ADMIN_TRIAL_MISSING_PHONE_MESSAGE,
