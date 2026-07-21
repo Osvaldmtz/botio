@@ -410,7 +410,7 @@ function applyOverlapFilter(
 export async function getAvailableSlots(
   params: GetAvailableSlotsParams = {},
 ): Promise<AvailableSlotsResult> {
-  // DEPRECATED: 13 jun 2026 — reemplazado por link Calendly directo (KALYO_DEMO_BOOKING_URL).
+  // DEPRECATED: 13 jun 2026 — reemplazado por link oficial de demo (DEMO_URL / KALYO_DEMO_BOOKING_URL).
   // Mantener temporalmente para demos en curso que ya tienen pending slots.
   const durationMinutes = params.durationMinutes ?? DEFAULT_DURATION_MINUTES;
   const now = new Date();

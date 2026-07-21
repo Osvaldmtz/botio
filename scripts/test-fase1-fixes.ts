@@ -57,10 +57,13 @@ async function main(): Promise<void> {
   );
   assert(!detectDemoIntent('Cuánto cuesta la demo?'), 'demo: pricing question excluded');
   const demoMsg = buildDemoSchedulingMessage({ customerName: 'Edna' });
-  assert(demoMsg.includes(getDemoBookingUrl()), 'demo message includes Calendly URL');
+  assert(getDemoBookingUrl() === 'https://kalyo.io/demo', 'demo URL is official kalyo.io/demo');
+  assert(demoMsg.includes('https://kalyo.io/demo'), 'demo message includes official demo URL');
+  assert(demoMsg.includes(getDemoBookingUrl()), 'demo message includes DEMO_URL');
+  assert(!demoMsg.includes('calendly.com'), 'demo message must not use old Calendly URL');
   assert(demoMsg.includes('fundador de Kalyo'), 'demo message mentions Osvaldo as founder');
   assert(demoMsg.includes('100+'), 'demo message mentions 100+ evaluaciones');
-  console.log('✓ Fix #1 — Demo intent + Calendly message');
+  console.log('✓ Fix #1 — Demo intent + official demo URL message');
 
   // ─── Fix #2: Ambassador false positives ──────────────────────────────────────
   assert(!shouldMarkAmbassadorLead('Quiero ver planes y precios'), 'FP: planes y precios');

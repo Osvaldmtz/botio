@@ -17,8 +17,8 @@ export async function notifyDemoLinkSent(input: {
     phone: input.phone,
     reason: 'demo_scheduled',
     conversation_summary:
-      `📅 LINK DEMO ENVIADO (Calendly)\n` +
+      `📅 LINK DEMO ENVIADO\n` +
       `🔗 ${conversationUrl}\n` +
-      `Esperando que el lead agende en Calendly.`,
+      `Esperando que el lead agende en kalyo.io/demo.`,
   }).catch((err) => console.error('[demo-handler] telegram notify failed', err));
 }

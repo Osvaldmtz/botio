@@ -7,9 +7,10 @@ import { type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
 import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
 import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { savePendingDemoSlots } from '@/lib/demo-conversation';
+import { getDemoBookingUrl } from '@/lib/demo-booking-messages';
 import {
   formatSlotsForBot,
-  getAvailableSlots, // DEPRECATED: 13 jun 2026 — reemplazado por Calendly direct link
+  getAvailableSlots, // DEPRECATED: 13 jun 2026 — reemplazado por link oficial de demo
   isValidEmail,
 } from '@/lib/google-calendar';
 import {
@@ -82,8 +83,8 @@ Cuando el usuario muestra duda final sobre activar trial:
 
 BLOQUE: DEMO PERSONALIZADA
 Si el usuario pide demo en vivo / llamada / reunión / ver en vivo (ver DISTINCIÓN CRÍTICA), o el perfil es clinic_team / institution_decision_maker:
-Comparte el link oficial de Calendly: ${process.env.KALYO_DEMO_BOOKING_URL ?? 'https://calendly.com/osvaldo-21/demo-kalyo'}
-Calendly muestra horarios en la zona del lead y maneja confirmaciones automáticamente.
+Comparte el link oficial de demo: ${getDemoBookingUrl()}
+La página muestra horarios en la zona del lead y maneja confirmaciones automáticamente.
 NO intentes consultar Google Calendar ni inventar horarios disponibles.
 NO confundir con trial — "demo" NO significa "probar el producto gratis".
 
@@ -98,7 +99,7 @@ ${buildKalyoOfficialPricingPrompt()}
 
 DISTINCIÓN CRÍTICA — DEMO vs TRIAL
 
-DEMO = llamada agendada con Osvaldo, 30 minutos, vía Calendly / videollamada. Triggers:
+DEMO = llamada agendada con Osvaldo, 30 minutos, vía link oficial / videollamada. Triggers:
 - "quiero una demo"
 - "demo en vivo"
 - "demo con alguien"
@@ -111,7 +112,7 @@ DEMO = llamada agendada con Osvaldo, 30 minutos, vía Calendly / videollamada. T
 - "quiero hablar con alguien"
 - "quiero ver una demo"
 
-→ Compartir link Calendly oficial (ver BLOQUE DEMO). El sistema puede enviarlo automáticamente.
+→ Compartir link oficial de demo (ver BLOQUE DEMO). El sistema puede enviarlo automáticamente.
 → NUNCA activar trial ni create_account_and_activate_trial cuando el usuario pidió demo
 
 TRIAL = activar 7 días Max gratis sin tarjeta (default). Triggers:
@@ -126,7 +127,7 @@ TRIAL = activar 7 días Max gratis sin tarjeta (default). Triggers:
 → Usar flujo INTENCIÓN DE COMPRA (activate_pro_trial / create_account_and_activate_trial)
 
 REGLA: "demo" como palabra suelta es AMBIGUA. Si solo dice "demo" sin más contexto, PREGUNTA:
-"¿Te refieres a agendar una demo en vivo conmigo (30 minutos con Osvaldo, vía Calendly), o a probar Kalyo con el trial gratis de 7 días?"
+"¿Te refieres a agendar una demo en vivo conmigo (30 minutos con Osvaldo), o a probar Kalyo con el trial gratis de 7 días?"
 
 Solo activa el flujo correcto después de la confirmación.
 
@@ -318,7 +319,7 @@ REGLAS:
 
 ---
 
-BLOQUE DEMO — LINK CALENDLY DIRECTO
+BLOQUE DEMO — LINK OFICIAL
 
 Cuándo ofrecer demo (prioridad sobre trial):
 - Usuario pide demo en vivo, llamada, reunión, agendar, ver en vivo (ver DISTINCIÓN CRÍTICA)
@@ -327,16 +328,16 @@ Cuándo ofrecer demo (prioridad sobre trial):
 
 IMPORTANTE — DEMOS:
 - NUNCA intentes consultar horarios disponibles directamente ni uses schedule_demo para nuevas solicitudes.
-- Si el lead pide demo, comparte el link de Calendly: ${process.env.KALYO_DEMO_BOOKING_URL ?? 'https://calendly.com/osvaldo-21/demo-kalyo'}
-- Calendly muestra horarios en la zona del lead y maneja confirmaciones por email.
+- Si el lead pide demo, comparte el link oficial: ${getDemoBookingUrl()}
+- La página muestra horarios en la zona del lead y maneja confirmaciones por email.
 - La demo dura ~30 minutos con Osvaldo del equipo Kalyo.
 
 Mensaje sugerido cuando pidan demo:
-"Te paso el link para agendar tu demo personalizada. Verás horarios en tu zona horaria y recibirás confirmación por email: [link Calendly]"
+"Te paso el link para agendar tu demo personalizada. Verás horarios en tu zona horaria y recibirás confirmación por email: ${getDemoBookingUrl()}"
 
 REGLAS:
 - NO inventar fechas/horas disponibles
-- NO decir "Tuve un problema consultando horario" — usa siempre el link Calendly
+- NO decir "Tuve un problema consultando horario" — usa siempre el link oficial de demo
 - Si ya hay una demo en curso (confirm_demo_slot previo), puedes ayudar con reagendar vía el mismo link
 
 ---

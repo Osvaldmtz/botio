@@ -1,8 +1,9 @@
-const DEMO_BOOKING_URL =
-  process.env.KALYO_DEMO_BOOKING_URL ?? 'https://calendly.com/osvaldo-21/demo-kalyo';
+/** Official Kalyo demo booking URL. Prefer env override for staging experiments. */
+export const DEMO_URL =
+  process.env.KALYO_DEMO_BOOKING_URL ?? 'https://kalyo.io/demo';
 
 export function getDemoBookingUrl(): string {
-  return DEMO_BOOKING_URL;
+  return DEMO_URL;
 }
 
 export function buildDemoSchedulingMessage(opts: {
@@ -12,7 +13,7 @@ export function buildDemoSchedulingMessage(opts: {
 
   return `¡Perfecto${greeting}! 🎯 Te agendo una demo personalizada con Osvaldo, fundador de Kalyo.
 
-📅 ${DEMO_BOOKING_URL}
+📅 ${DEMO_URL}
 
 En 30 minutos verás:
 ✓ Las 100+ evaluaciones validadas con IA
@@ -20,6 +21,6 @@ En 30 minutos verás:
 ✓ Cómo funciona la agenda y Kalyo Meet
 ✓ Reportes automáticos con interpretación IA
 
-Calendly muestra los horarios en tu zona horaria.
+La página muestra los horarios en tu zona horaria.
 ¿Te queda alguna duda antes de agendar?`;
 }
