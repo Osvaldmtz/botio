@@ -21,6 +21,6 @@ En 30 minutos verás:
 ✓ Cómo funciona la agenda y Kalyo Meet
 ✓ Reportes automáticos con interpretación IA
 
-La página muestra los horarios en tu zona horaria.
+Los horarios están en zona horaria de CDMX.
 ¿Te queda alguna duda antes de agendar?`;
 }

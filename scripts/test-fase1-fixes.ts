@@ -63,6 +63,7 @@ async function main(): Promise<void> {
   assert(!demoMsg.includes('calendly.com'), 'demo message must not use old Calendly URL');
   assert(demoMsg.includes('fundador de Kalyo'), 'demo message mentions Osvaldo as founder');
   assert(demoMsg.includes('100+'), 'demo message mentions 100+ evaluaciones');
+  assert(demoMsg.includes('zona horaria de CDMX'), 'demo message states CDMX timezone');
   console.log('✓ Fix #1 — Demo intent + official demo URL message');
 
   // ─── Fix #2: Ambassador false positives ──────────────────────────────────────
