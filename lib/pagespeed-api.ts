@@ -135,6 +135,9 @@ async function runPageSpeed(url: string, strategy: 'mobile' | 'desktop'): Promis
     strategy,
     key,
   });
+  for (const category of ['performance', 'seo', 'accessibility', 'best-practices'] as const) {
+    query.append('category', category);
+  }
   const res = await fetch(`${PAGESPEED_API}?${query}`, { next: { revalidate: 0 } });
   const json = (await res.json()) as PageSpeedApiResponse;
 

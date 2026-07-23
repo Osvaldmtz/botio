@@ -76,6 +76,7 @@ export function PageSpeedDashboard({ initial, history, error: initialError }: Pr
   const chartData = history.map((row) => ({
     date: row.date.slice(5),
     performance: row.performance_mobile ?? 0,
+    seo: row.seo_mobile ?? 0,
   }));
 
   const vitalsRows = metrics
@@ -146,6 +147,29 @@ export function PageSpeedDashboard({ initial, history, error: initialError }: Pr
               />
             </div>
 
+            <KpiVividPanel title="Lighthouse — kalyo.io" accent="violet">
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-muted">Mobile</p>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <ScoreCard label="Performance" score={metrics.landing_mobile.performance} />
+                    <ScoreCard label="SEO" score={metrics.landing_mobile.seo} />
+                    <ScoreCard label="Accessibility" score={metrics.landing_mobile.accessibility} />
+                    <ScoreCard label="Best Practices" score={metrics.landing_mobile.best_practices} />
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-muted">Desktop</p>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <ScoreCard label="Performance" score={metrics.landing_desktop.performance} />
+                    <ScoreCard label="SEO" score={metrics.landing_desktop.seo} />
+                    <ScoreCard label="Accessibility" score={metrics.landing_desktop.accessibility} />
+                    <ScoreCard label="Best Practices" score={metrics.landing_desktop.best_practices} />
+                  </div>
+                </div>
+              </div>
+            </KpiVividPanel>
+
             <KpiVividPanel title="Core Web Vitals — kalyo.io mobile" accent="sky">
               <KpiVividTable
                 rows={vitalsRows}
@@ -162,12 +186,15 @@ export function PageSpeedDashboard({ initial, history, error: initialError }: Pr
               />
             </KpiVividPanel>
 
-            <KpiVividPanel title="Performance mobile — últimos 30 días" accent="emerald">
+            <KpiVividPanel title="Performance & SEO mobile — últimos 30 días" accent="emerald">
               {chartData.length > 0 ? (
                 <KpiVividLineChart
                   data={chartData}
                   xKey="date"
-                  series={[{ dataKey: 'performance', name: 'Performance', color: '#10B981' }]}
+                  series={[
+                    { dataKey: 'performance', name: 'Performance', color: '#10B981' },
+                    { dataKey: 'seo', name: 'SEO', color: '#8B5CF6' },
+                  ]}
                   height={240}
                 />
               ) : (
