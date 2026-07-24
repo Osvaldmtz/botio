@@ -3,11 +3,9 @@ import { format, startOfMonth, subDays } from 'date-fns';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getKalyoClient } from '@/lib/kalyo-supabase';
 import { fetchMetaAds } from '@/lib/meta-api';
-import {
-  MXN_PER_USD,
-  computeLtvCacRatio,
-  computeLtvDerived,
-} from '@/lib/kpi/ltv-utils';
+import { fetchGoogleAds } from '@/lib/google-ads-api';
+import { copToUsd, getUsdFxRates, mxnToUsd } from '@/lib/fx-rates';
+import { computeLtvCacRatio, computeLtvDerived } from '@/lib/kpi/ltv-utils';
 
 const PRO_PRICE_USD = 29;
 const MAX_PRICE_USD = 39;
@@ -30,8 +28,17 @@ type CacMetrics = {
   cac_usd_alltime: number | null;
   new_subscribers_30d: number;
   total_paying_customers: number;
+  /** Legacy: Meta spend in account currency (MXN). */
   ad_spend_30d_mxn: number;
   ad_spend_alltime_mxn: number;
+  meta_spend_30d_usd: number;
+  google_spend_30d_usd: number;
+  meta_spend_alltime_usd: number;
+  google_spend_alltime_usd: number;
+  ad_spend_30d_usd: number;
+  ad_spend_alltime_usd: number;
+  fx_mxn_per_usd: number;
+  fx_cop_per_usd: number;
 };
 
 function isChurnedInLast30Days(row: ChurnedPsychologistRow, since: Date): boolean {
@@ -52,9 +59,9 @@ function sumMetaSpend(rows: { spend?: string }[]): number {
   return rows.reduce((sum, row) => sum + Number(row.spend || 0), 0);
 }
 
-function cacFromSpend(spendMxn: number, customers: number): number | null {
-  if (spendMxn <= 0 || customers <= 0) return null;
-  return spendMxn / MXN_PER_USD / customers;
+function cacFromSpendUsd(spendUsd: number, customers: number): number | null {
+  if (spendUsd <= 0 || customers <= 0) return null;
+  return spendUsd / customers;
 }
 
 async function getActiveSubscribers30dAgo(
@@ -119,9 +126,10 @@ async function resolveCacMetrics(input: {
   );
   const total_paying_customers = input.active_subscribers + input.churned_alltime;
 
+  const fx = await getUsdFxRates();
+
   let ad_spend_30d_mxn = 0;
   let ad_spend_alltime_mxn = 0;
-
   try {
     const [ads30, adsAll] = await Promise.all([
       fetchMetaAds('last_30d'),
@@ -133,13 +141,38 @@ async function resolveCacMetrics(input: {
     console.warn('[kalyo-metrics] Meta Ads unavailable for CAC', err);
   }
 
+  let google_30d_cop = 0;
+  let google_alltime_cop = 0;
+  try {
+    const google = await fetchGoogleAds();
+    google_30d_cop = google.spend_30d_cop;
+    google_alltime_cop = google.spend_alltime_cop;
+  } catch (err) {
+    console.warn('[kalyo-metrics] Google Ads unavailable for CAC', err);
+  }
+
+  const meta_spend_30d_usd = mxnToUsd(ad_spend_30d_mxn, fx.mxn_per_usd);
+  const meta_spend_alltime_usd = mxnToUsd(ad_spend_alltime_mxn, fx.mxn_per_usd);
+  const google_spend_30d_usd = copToUsd(google_30d_cop, fx.cop_per_usd);
+  const google_spend_alltime_usd = copToUsd(google_alltime_cop, fx.cop_per_usd);
+  const ad_spend_30d_usd = meta_spend_30d_usd + google_spend_30d_usd;
+  const ad_spend_alltime_usd = meta_spend_alltime_usd + google_spend_alltime_usd;
+
   return {
-    cac_usd_30d: cacFromSpend(ad_spend_30d_mxn, new_subscribers_30d),
-    cac_usd_alltime: cacFromSpend(ad_spend_alltime_mxn, total_paying_customers),
+    cac_usd_30d: cacFromSpendUsd(ad_spend_30d_usd, new_subscribers_30d),
+    cac_usd_alltime: cacFromSpendUsd(ad_spend_alltime_usd, total_paying_customers),
     new_subscribers_30d,
     total_paying_customers,
     ad_spend_30d_mxn,
     ad_spend_alltime_mxn,
+    meta_spend_30d_usd,
+    google_spend_30d_usd,
+    meta_spend_alltime_usd,
+    google_spend_alltime_usd,
+    ad_spend_30d_usd,
+    ad_spend_alltime_usd,
+    fx_mxn_per_usd: fx.mxn_per_usd,
+    fx_cop_per_usd: fx.cop_per_usd,
   };
 }
 
@@ -165,6 +198,14 @@ export async function syncKalyoMetrics(): Promise<{
   total_paying_customers: number;
   ad_spend_30d_mxn: number;
   ad_spend_alltime_mxn: number;
+  ad_spend_30d_usd: number;
+  ad_spend_alltime_usd: number;
+  meta_spend_30d_usd: number;
+  google_spend_30d_usd: number;
+  meta_spend_alltime_usd: number;
+  google_spend_alltime_usd: number;
+  fx_mxn_per_usd: number;
+  fx_cop_per_usd: number;
 }> {
   const kalyo = getKalyoClient();
   const since30d = subDays(new Date(), 30);
@@ -277,6 +318,14 @@ export async function syncKalyoMetrics(): Promise<{
     total_paying_customers: cac.total_paying_customers,
     ad_spend_30d_mxn: Number(cac.ad_spend_30d_mxn.toFixed(2)),
     ad_spend_alltime_mxn: Number(cac.ad_spend_alltime_mxn.toFixed(2)),
+    ad_spend_30d_usd: Number(cac.ad_spend_30d_usd.toFixed(2)),
+    ad_spend_alltime_usd: Number(cac.ad_spend_alltime_usd.toFixed(2)),
+    meta_spend_30d_usd: Number(cac.meta_spend_30d_usd.toFixed(2)),
+    google_spend_30d_usd: Number(cac.google_spend_30d_usd.toFixed(2)),
+    meta_spend_alltime_usd: Number(cac.meta_spend_alltime_usd.toFixed(2)),
+    google_spend_alltime_usd: Number(cac.google_spend_alltime_usd.toFixed(2)),
+    fx_mxn_per_usd: Number(cac.fx_mxn_per_usd.toFixed(4)),
+    fx_cop_per_usd: Number(cac.fx_cop_per_usd.toFixed(4)),
     synced_at: new Date().toISOString(),
   };
 

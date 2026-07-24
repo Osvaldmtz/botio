@@ -33,6 +33,14 @@ export type KalyoMetricRow = {
   total_paying_customers: number | null;
   ad_spend_30d_mxn: number | null;
   ad_spend_alltime_mxn: number | null;
+  ad_spend_30d_usd: number | null;
+  ad_spend_alltime_usd: number | null;
+  meta_spend_30d_usd: number | null;
+  google_spend_30d_usd: number | null;
+  meta_spend_alltime_usd: number | null;
+  google_spend_alltime_usd: number | null;
+  fx_mxn_per_usd: number | null;
+  fx_cop_per_usd: number | null;
   synced_at: string;
 };
 

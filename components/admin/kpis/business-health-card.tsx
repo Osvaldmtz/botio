@@ -10,6 +10,9 @@ type Props = {
   cacUsd?: number | null | undefined;
   cacUsdAlltime?: number | null | undefined;
   newSubscribers30d?: number | null | undefined;
+  metaSpend30dUsd?: number | null | undefined;
+  googleSpend30dUsd?: number | null | undefined;
+  adSpend30dUsd?: number | null | undefined;
 };
 
 export function BusinessHealthCard({
@@ -19,6 +22,9 @@ export function BusinessHealthCard({
   cacUsd,
   cacUsdAlltime,
   newSubscribers30d,
+  metaSpend30dUsd,
+  googleSpend30dUsd,
+  adSpend30dUsd,
 }: Props) {
   const health = getLtvCacHealth(ltvCacRatio);
   const ratio30d = formatLtvCacRatio(ltvCacRatio);
@@ -83,6 +89,24 @@ export function BusinessHealthCard({
                   {cacUsdAlltime.toLocaleString('en-US', { maximumFractionDigits: 0 })} USD
                 </span>
               ) : null}
+            </p>
+          ) : null}
+          {adSpend30dUsd != null && adSpend30dUsd > 0 ? (
+            <p>
+              Ads 30d:{' '}
+              <span className="font-semibold text-fg">
+                ${adSpend30dUsd.toLocaleString('en-US', { maximumFractionDigits: 0 })} USD
+              </span>
+              <span>
+                {' '}
+                (Meta $
+                {(metaSpend30dUsd ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })} ·
+                Google $
+                {(googleSpend30dUsd ?? 0).toLocaleString('en-US', {
+                  maximumFractionDigits: 0,
+                })}
+                )
+              </span>
             </p>
           ) : null}
         </div>

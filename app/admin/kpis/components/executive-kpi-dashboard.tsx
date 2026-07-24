@@ -71,13 +71,8 @@ export function ExecutiveKpiDashboard({ data }: Props) {
   const igSlice = data.igReachDaily.slice(-7);
   const igImpressions7d = igSlice.reduce((s, p) => s + p.impressions, 0);
   const igEngagement7d = igSlice.reduce((s, p) => s + p.accounts_engaged, 0);
-  const igProfileViews7d = igSlice.reduce((s, p) => s + p.profile_views, 0);
 
   const landingUsers30d = data.landingDaily.reduce((s, r) => s + r.users, 0);
-  const avgSessionsDay =
-    data.landingDaily.length > 0
-      ? Math.round(data.landingDaily.reduce((s, r) => s + r.sessions, 0) / data.landingDaily.length)
-      : null;
 
   const subs = data.stripeActiveSubscribers ?? 0;
   const mrr = data.stripeMrr;
@@ -218,6 +213,9 @@ export function ExecutiveKpiDashboard({ data }: Props) {
             cacUsd={data.kalyo.cac_usd}
             cacUsdAlltime={data.kalyo.cac_usd_alltime}
             newSubscribers30d={data.kalyo.new_subscribers_30d}
+            metaSpend30dUsd={data.kalyo.meta_spend_30d_usd}
+            googleSpend30dUsd={data.kalyo.google_spend_30d_usd}
+            adSpend30dUsd={data.kalyo.ad_spend_30d_usd}
           />
         ) : null}
 
@@ -265,9 +263,30 @@ export function ExecutiveKpiDashboard({ data }: Props) {
                 <KpiVividMetric label="IG Reach 7d" value={fmtNum(data.igReach7d)} icon={Eye} accent="fuchsia" spark={igChart.map((r) => r.reach)} />
                 <KpiVividMetric label="Impresiones 7d" value={fmtNum(igImpressions7d)} icon={Eye} accent="violet" />
                 <KpiVividMetric label="Engagement 7d" value={fmtNum(igEngagement7d)} icon={Heart} accent="rose" />
-                <KpiVividMetric label="Profile views 7d" value={fmtNum(igProfileViews7d)} icon={Users} accent="indigo" />
-                <KpiVividMetric label="Meta Spend hoy" value={fmtMxn(data.metaSpendToday)} icon={Megaphone} accent="orange" />
-                <KpiVividMetric label="Sesiones/día avg" value={fmtNum(avgSessionsDay)} icon={MousePointerClick} accent="sky" hint="Landing" />
+                <KpiVividMetric
+                  label="Gasto Meta 30d"
+                  value={fmtUsd(data.kalyo?.meta_spend_30d_usd)}
+                  icon={Megaphone}
+                  accent="orange"
+                  hint={data.metaSpendToday != null ? `Hoy ${fmtMxn(data.metaSpendToday)}` : undefined}
+                />
+                <KpiVividMetric
+                  label="Gasto Google 30d"
+                  value={fmtUsd(data.kalyo?.google_spend_30d_usd)}
+                  icon={Megaphone}
+                  accent="sky"
+                />
+                <KpiVividMetric
+                  label="Gasto total 30d"
+                  value={fmtUsd(data.kalyo?.ad_spend_30d_usd)}
+                  icon={DollarSign}
+                  accent="amber"
+                  hint={
+                    data.kalyo?.cac_usd != null
+                      ? `CAC $${Number(data.kalyo.cac_usd).toFixed(0)}`
+                      : undefined
+                  }
+                />
               </div>
             </div>
 

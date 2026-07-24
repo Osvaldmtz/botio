@@ -193,7 +193,7 @@ function RevenueContent({
           value={formatLtvCacRatio(storedRatioAlltime)}
           hint={
             storedRatioAlltime != null && storedRatioAlltime > 0
-              ? 'Gasto total Meta / clientes de por vida'
+              ? 'Gasto Meta+Google / clientes de por vida'
               : 'Sin datos históricos'
           }
           icon={Scale}
