@@ -1,6 +1,12 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { InstagramInsightPoint, InstagramMediaItem, MetaAdsInsight, MetaPixelEventStat } from '@/lib/kpi/types';
+import {
+  buildMetaAdsSummary,
+  type MetaAdsSummary,
+  type MetaCampaignInsightRaw,
+  type MetaCampaignStatus,
+} from '@/lib/meta-ads-summary';
 
 const META_GRAPH = 'https://graph.facebook.com/v19.0';
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
@@ -347,6 +353,70 @@ export async function fetchMetaAds(datePreset: string): Promise<MetaAdsInsight[]
 
   if (error) return [];
   return withAdsCurrency(data?.data ?? []);
+}
+
+/**
+ * Campaign-level Meta Ads summary (last 30d): spend, CTR, messaging conversations, CPA.
+ * Uses META_ACCESS_TOKEN with fallback to META_PAGE_ACCESS_TOKEN.
+ */
+export async function fetchMetaAdsCampaignSummary(
+  datePreset = 'last_30d',
+): Promise<MetaAdsSummary> {
+  const cacheKey = `meta_ads_campaign_summary_${datePreset}`;
+  const cached = await readCache<MetaAdsSummary>(cacheKey);
+  if (cached) return cached;
+
+  const token = getMetaToken();
+  const accountId = getAdAccountId();
+
+  const insightParams = new URLSearchParams({
+    access_token: token,
+    fields:
+      'campaign_name,campaign_id,spend,impressions,clicks,ctr,cpc,cpm,reach,actions,date_start,date_stop',
+    date_preset: datePreset,
+    level: 'campaign',
+    limit: '200',
+  });
+
+  const campaignParams = new URLSearchParams({
+    access_token: token,
+    fields: 'id,name,effective_status',
+    limit: '200',
+  });
+
+  const [insightsRes, campaignsRes] = await Promise.all([
+    fetch(`${META_GRAPH}/${accountId}/insights?${insightParams}`, { next: { revalidate: 0 } }),
+    fetch(`${META_GRAPH}/${accountId}/campaigns?${campaignParams}`, { next: { revalidate: 0 } }),
+  ]);
+
+  const insightsJson = (await insightsRes.json()) as {
+    data?: MetaCampaignInsightRaw[];
+    error?: MetaGraphError;
+  };
+  const campaignsJson = (await campaignsRes.json()) as {
+    data?: MetaCampaignStatus[];
+    error?: MetaGraphError;
+  };
+
+  if (!insightsRes.ok || insightsJson.error) {
+    const message = insightsJson.error?.message ?? `Meta API error (${insightsRes.status})`;
+    if (isAdsPermissionError(message)) {
+      console.warn('[meta-api] Ads campaign summary unavailable:', message);
+      throw new Error(message);
+    }
+    throw new Error(message);
+  }
+
+  if (!campaignsRes.ok || campaignsJson.error) {
+    console.warn(
+      '[meta-api] Campaign status fetch failed:',
+      campaignsJson.error?.message ?? `HTTP ${campaignsRes.status}`,
+    );
+  }
+
+  const summary = buildMetaAdsSummary(insightsJson.data ?? [], campaignsJson.data ?? []);
+  await writeCache(cacheKey, summary);
+  return summary;
 }
 
 export async function fetchMetaAdsDaily(datePreset = 'last_30d'): Promise<MetaAdsInsight[]> {

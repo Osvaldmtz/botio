@@ -34,6 +34,8 @@ import {
 } from '@/components/admin/kpis/vivid/kpi-vivid-charts';
 import { KpiToolbar, type ChartRange } from '@/components/admin/kpis/vivid/kpi-toolbar';
 import { GscCard } from '@/components/admin/kpis/gsc-card';
+import { MetaAdsCard } from '@/components/admin/kpis/meta-ads-card';
+import { ChannelCompareCard } from '@/components/admin/kpis/channel-compare-card';
 
 function fmtUsd(value: number | null | undefined): string {
   if (value == null) return '—';
@@ -472,6 +474,11 @@ export function ExecutiveKpiDashboard({ data }: Props) {
             </div>
           </>
         )}
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <MetaAdsCard />
+          <ChannelCompareCard />
+        </div>
 
         <GscCard />
       </div>
