@@ -1,7 +1,8 @@
 import { detectTrialPlanPreference, type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
 import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 
-export const ADMIN_TRIAL_TRIGGER_RE = /activar\s+trial/i;
+/** Matches "activar trial" and imperative "activa trial" (common operator shorthand). */
+export const ADMIN_TRIAL_TRIGGER_RE = /activ(?:ar|a)\s+trial/i;
 
 export const ADMIN_TRIAL_MISSING_PHONE_MESSAGE =
   '❌ Falta el WhatsApp del cliente.\n' +

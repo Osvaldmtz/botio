@@ -238,6 +238,30 @@ function testCompleteCommandExample(): void {
   assert(adminTrialPhoneValidationError(parsed!) === null, 'valid phone passes');
 }
 
+function testActivaImperativeMultiline(): void {
+  const msg =
+    'Activa Trial Max de 7 dias\nIsaac\nlcdopsicologiaverdugaisaac@gmail.com\n+593980439393';
+  assert(shouldInterceptAdminTrialActivation(msg), 'activa (imperative) triggers intercept');
+  const parsed = parseAdminTrialRequestFromMessages([{ role: 'user', content: msg }]);
+  assert(parsed !== null, 'activa multiline parses');
+  assert(parsed!.email === 'lcdopsicologiaverdugaisaac@gmail.com', 'activa email');
+  assert(parsed!.fullName === 'Isaac', 'activa name');
+  assert(parsed!.phone === '+593980439393', 'activa phone');
+  assert(parsed!.trialPlan === 'max', 'activa max plan');
+}
+
+function testActivaImperativeLabeled(): void {
+  const msg =
+    'email: \nlcdopsicologiaverdugaisaac@gmail.com\nnombre :\nIssac\nwhatsapp:\n+593980439393\n\nActiva trial Max 7 dias';
+  assert(shouldInterceptAdminTrialActivation(msg), 'activa labeled triggers intercept');
+  const parsed = parseAdminTrialRequestFromMessages([{ role: 'user', content: msg }]);
+  assert(parsed !== null, 'activa labeled parses');
+  assert(parsed!.email === 'lcdopsicologiaverdugaisaac@gmail.com', 'activa labeled email');
+  assert(parsed!.fullName === 'Issac', 'activa labeled name');
+  assert(parsed!.phone === '+593980439393', 'activa labeled phone');
+  assert(parsed!.trialPlan === 'max', 'activa labeled max plan');
+}
+
 console.log('Admin trial interceptor tests\n');
 testCommaFormat();
 console.log('  ✓ comma format');
@@ -269,6 +293,10 @@ testInvalidPhoneValidation();
 console.log('  ✓ invalid phone validation');
 testCompleteCommandExample();
 console.log('  ✓ complete command example');
+testActivaImperativeMultiline();
+console.log('  ✓ activa imperative multiline (production failure case)');
+testActivaImperativeLabeled();
+console.log('  ✓ activa imperative labeled (production failure case)');
 testInterceptorWouldRejectMissingPhoneWithoutPriorContext();
 console.log('  ✓ interceptor rejects missing phone without prior context');
 testPlanParser();
