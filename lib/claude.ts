@@ -1,5 +1,10 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
+import {
+  extractMeaningfulText,
+  resolveReplyText,
+} from '@/lib/claude-reply-text';
+import { sendTelegramAlert } from '@/lib/telegram';
 
 const DEFAULT_MODEL = 'claude-haiku-4-5';
 const MAX_TOKENS = 1024;
@@ -28,17 +33,6 @@ function getClient(): Anthropic {
   }
   client = new Anthropic({ apiKey });
   return client;
-}
-
-const FALLBACK_RESPONSE_ES =
-  'Dame un segundo, estoy procesando tu mensaje... 🤔 Si no recibes respuesta en 1 minuto, por favor reformula tu pregunta.';
-
-function extractFinalText(content: Anthropic.Messages.ContentBlock[]): string {
-  const textBlock = content.find((block) => block.type === 'text');
-  if (!textBlock || textBlock.type !== 'text' || !textBlock.text.trim()) {
-    return FALLBACK_RESPONSE_ES;
-  }
-  return textBlock.text;
 }
 
 async function runToolHandlers(
@@ -96,6 +90,24 @@ export type GenerateReplyResult = {
   toolResults: Record<string, unknown>;
 };
 
+async function alertGenericFallback(context: {
+  hadToolUse: boolean;
+  toolsCalled: string[];
+}): Promise<void> {
+  const tools = context.toolsCalled.length
+    ? context.toolsCalled.join(', ')
+    : 'none';
+  try {
+    await sendTelegramAlert(
+      `⚠️ Claude empty reply — generic fallback sent.\n` +
+        `hadToolUse=${context.hadToolUse} tools=[${tools}]\n` +
+        `Possible tool-loop / empty end_turn bug.`,
+    );
+  } catch (error) {
+    console.error('[claude] failed to send fallback telegram alert', error);
+  }
+}
+
 export async function generateReply(
   systemPrompt: string,
   history: ChatMessage[],
@@ -106,6 +118,7 @@ export async function generateReply(
   let hadToolUse = false;
   const toolsCalled: string[] = [];
   const toolResults: Record<string, unknown> = {};
+  let lastMeaningfulText = '';
 
   const messages: Anthropic.Messages.MessageParam[] = history.map((m) => ({
     role: m.role,
@@ -135,8 +148,25 @@ export async function generateReply(
 
     console.log('[anthropic]', 'stop_reason:', response.stop_reason, '| first_block:', JSON.stringify(response.content[0]));
 
+    const turnText = extractMeaningfulText(response.content);
+    if (turnText) {
+      lastMeaningfulText = turnText;
+    }
+
     if (response.stop_reason !== 'tool_use') {
-      return { text: extractFinalText(response.content), hadToolUse, toolsCalled, toolResults };
+      const resolved = resolveReplyText(response.content, lastMeaningfulText);
+
+      if (resolved.source === 'tool_use_turn') {
+        console.warn('[claude] end_turn empty, using text from tool_use turn');
+      } else if (resolved.source === 'fallback') {
+        console.error('[claude] empty reply after all turns — sending generic fallback', {
+          hadToolUse,
+          toolsCalled,
+        });
+        void alertGenericFallback({ hadToolUse, toolsCalled });
+      }
+
+      return { text: resolved.text, hadToolUse, toolsCalled, toolResults };
     }
 
     hadToolUse = true;
