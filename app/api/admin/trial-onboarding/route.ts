@@ -2,6 +2,10 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/admin-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  DAY8_SURVEY_LABELS,
+  type Day8SurveyResponse,
+} from '@/lib/trial-onboarding-day8-survey';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,9 +30,11 @@ function lastMessageSent(row: {
   day_13_sent_at: string | null;
   day_15_sent_at: string | null;
   day_9_sent_at: string | null;
+  day_8_sent_at: string | null;
 }): string | null {
   const stamps = [
     row.day_9_sent_at,
+    row.day_8_sent_at,
     row.day_15_sent_at,
     row.day_13_sent_at,
     row.day_7_sent_at,
@@ -110,6 +116,47 @@ export async function GET(request: Request) {
   const unsubscribeRate =
     metricsBase.length > 0 ? Math.round((unsubscribed / metricsBase.length) * 100) : 0;
 
+  const { data: surveyRows } = await supabase
+    .from('trial_onboarding_messages')
+    .select(
+      'id, trial_user_name, trial_user_email, conversation_id, day_8_sent_at, day_8_response, trial_ends_at',
+    )
+    .gte('trial_started_at', thirtyDaysAgo)
+    .not('day_8_sent_at', 'is', null)
+    .order('day_8_sent_at', { ascending: false })
+    .limit(100);
+
+  const surveySent = surveyRows?.length ?? 0;
+  const surveyResponded = (surveyRows ?? []).filter((r) => r.day_8_response).length;
+  const surveyBreakdown: Record<Day8SurveyResponse, number> = {
+    price: 0,
+    features: 0,
+    not_useful: 0,
+    no_time: 0,
+    not_used: 0,
+  };
+
+  for (const row of surveyRows ?? []) {
+    const key = row.day_8_response as Day8SurveyResponse | null;
+    if (key && key in surveyBreakdown) {
+      surveyBreakdown[key] += 1;
+    }
+  }
+
+  const surveyResponses = (surveyRows ?? [])
+    .filter((r) => r.day_8_response)
+    .map((r) => ({
+      id: r.id as string,
+      trial_user_name: r.trial_user_name as string | null,
+      trial_user_email: r.trial_user_email as string,
+      conversation_id: r.conversation_id as string | null,
+      day_8_sent_at: r.day_8_sent_at as string,
+      day_8_response: r.day_8_response as string,
+      day_8_response_label:
+        DAY8_SURVEY_LABELS[r.day_8_response as Day8SurveyResponse] ??
+        (r.day_8_response as string),
+    }));
+
   return NextResponse.json({
     rows,
     filter,
@@ -119,7 +166,16 @@ export async function GET(request: Request) {
       response_rate_30d: responseRate,
       unsubscribe_rate_30d: unsubscribeRate,
       total_30d: metricsBase.length,
+      survey_30d: {
+        sent: surveySent,
+        responded: surveyResponded,
+        pending: surveySent - surveyResponded,
+        response_rate: surveySent > 0 ? Math.round((surveyResponded / surveySent) * 100) : 0,
+        breakdown: surveyBreakdown,
+      },
     },
+    survey_responses: surveyResponses,
+    survey_labels: DAY8_SURVEY_LABELS,
     fetchedAt: now,
   });
 }

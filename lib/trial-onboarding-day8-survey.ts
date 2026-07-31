@@ -54,3 +54,8 @@ export function parseDay8SurveyResponse(messageBody: string): Day8SurveyResponse
 export function formatDay8SurveyThankYou(response: Day8SurveyResponse): string {
   return `Gracias por tu respuesta (${DAY8_SURVEY_LABELS[response]}). Lo tendremos en cuenta para mejorar Kalyo 🙏`;
 }
+
+export function day8SurveyLabel(response: string | null | undefined): string {
+  if (!response) return '—';
+  return DAY8_SURVEY_LABELS[response as Day8SurveyResponse] ?? response;
+}
