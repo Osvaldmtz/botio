@@ -49,7 +49,9 @@ export async function handleActiveSubscriptionPaid(
   const email = await getStripeCustomerEmail(stripe, customerId);
   if (!email) return 0;
 
-  const result = await processCustomerPaid(supabase, email, 'stripe_webhook');
+  const result = await processCustomerPaid(supabase, email, 'stripe_webhook', {
+    subscriptionId: subscription.id,
+  });
   console.log(
     `[stripe-webhook] ${eventType} | email=${email} | outcome_updated=${result.outcome_updated} | onboarding_updated=${result.onboarding_updated} | conversation_created=${result.conversation_created}`,
   );
@@ -79,7 +81,14 @@ export async function handleInvoicePaymentSucceeded(
   const email = await getStripeCustomerEmail(stripe, customerId);
   if (!email) return 0;
 
-  const result = await processCustomerPaid(supabase, email, 'stripe_webhook');
+  const subscriptionId =
+    typeof invoice.subscription === 'string'
+      ? invoice.subscription
+      : invoice.subscription?.id ?? null;
+
+  const result = await processCustomerPaid(supabase, email, 'stripe_webhook', {
+    subscriptionId,
+  });
   console.log(
     `[stripe-webhook] invoice.payment_succeeded | email=${email} | outcome_updated=${result.outcome_updated} | onboarding_updated=${result.onboarding_updated} | conversation_created=${result.conversation_created}`,
   );

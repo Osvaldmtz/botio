@@ -130,6 +130,8 @@ export type SetConversationOutcomeInput = {
   source: OutcomeSource;
   notes?: string;
   force?: boolean;
+  /** Merged into metadata without overwriting source/ad_channel. */
+  metadataPatch?: Record<string, unknown>;
 };
 
 export async function setConversationOutcome(
@@ -170,6 +172,7 @@ export async function setConversationOutcome(
     const metadata = {
       ...((row.metadata as Record<string, unknown> | null) ?? {}),
       ...(input.notes?.trim() ? { outcome_notes: input.notes.trim() } : {}),
+      ...(input.metadataPatch ?? {}),
     };
 
     const { error: updateErr } = await supabase
@@ -200,11 +203,19 @@ export async function markPaidByEmail(
   supabase: SupabaseClient,
   email: string,
   source: OutcomeSource = 'stripe_webhook',
+  options?: { subscriptionId?: string | null },
 ): Promise<number> {
+  const paidAt = new Date().toISOString();
+  const metadataPatch: Record<string, unknown> = { paid_at: paidAt };
+  if (options?.subscriptionId) {
+    metadataPatch.subscription_id = options.subscriptionId;
+  }
+
   const result = await setConversationOutcome(supabase, {
     email,
     outcome: 'paid',
     source,
+    metadataPatch,
   });
   return result.updated;
 }
@@ -272,7 +283,7 @@ export async function processCustomerPaid(
   supabase: SupabaseClient,
   email: string,
   source: OutcomeSource = 'stripe_webhook',
-  options?: { name?: string | null },
+  options?: { name?: string | null; subscriptionId?: string | null },
 ): Promise<ProcessCustomerPaidResult> {
   const normalized = email.trim().toLowerCase();
   if (!normalized || !normalized.includes('@')) {
@@ -289,7 +300,9 @@ export async function processCustomerPaid(
     await ensureConversationForPaid(supabase, normalized, options?.name);
   }
 
-  const outcomeUpdated = await markPaidByEmail(supabase, normalized, source);
+  const outcomeUpdated = await markPaidByEmail(supabase, normalized, source, {
+    subscriptionId: options?.subscriptionId,
+  });
 
   return {
     outcome_updated: outcomeUpdated,

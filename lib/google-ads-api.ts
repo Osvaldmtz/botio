@@ -1,6 +1,13 @@
 import 'server-only';
 
 import { OAuth2Client } from 'google-auth-library';
+import { formatUnknownError } from '@/lib/format-error';
+import {
+  formatGoogleAdsApiError,
+  parseGoogleAdsHttpBody,
+  readHttpResponseBody,
+  shouldFallbackToComposio,
+} from '@/lib/google-ads-http';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   buildGoogleAdsSummary,
@@ -10,8 +17,9 @@ import {
   type GoogleCampaignStatus,
 } from '@/lib/google-ads-summary';
 
-const GOOGLE_ADS_API = 'https://googleads.googleapis.com/v18';
+const GOOGLE_ADS_API = 'https://googleads.googleapis.com/v25';
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
+const STALE_CACHE_KEY = 'google_ads_campaign_summary_last_30d';
 const COMPOSIO_EXECUTE_URL =
   'https://backend.composio.dev/api/v3/tools/execute/GOOGLEADS_SEARCH_STREAM_GAQL';
 
@@ -38,10 +46,11 @@ type GaqlSearchRow = {
   };
 };
 
-type GaqlSearchResponse = {
-  results?: GaqlSearchRow[];
-  error?: { message?: string; code?: number; status?: string };
-};
+export {
+  formatGoogleAdsApiError,
+  parseGoogleAdsHttpBody,
+  shouldFallbackToComposio,
+} from '@/lib/google-ads-http';
 
 type ComposioExecuteResponse = {
   data?: {
@@ -73,6 +82,7 @@ function normalizeCampaignStatus(raw: string | undefined): GoogleCampaignStatus 
   }
 }
 
+/** Direct Google Ads API — only when developer token is approved and OAuth creds exist. */
 export function isGoogleAdsOAuthConfigured(): boolean {
   return Boolean(
     process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim() &&
@@ -89,6 +99,18 @@ function isGoogleAdsComposioConfigured(): boolean {
 
 export function isGoogleAdsConfigured(): boolean {
   return isGoogleAdsOAuthConfigured() || isGoogleAdsComposioConfigured();
+}
+
+async function readStaleCache<T>(cacheKey: string): Promise<T | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from('meta_cache')
+    .select('payload')
+    .eq('cache_key', cacheKey)
+    .maybeSingle();
+
+  if (!data?.payload) return null;
+  return data.payload as T;
 }
 
 async function readCache<T>(cacheKey: string): Promise<T | null> {
@@ -164,6 +186,7 @@ async function searchGoogleAdsGaqlOAuth(query: string): Promise<GaqlSearchRow[]>
     Authorization: `Bearer ${accessToken}`,
     'developer-token': developerToken,
     'Content-Type': 'application/json',
+    Accept: 'application/json',
   };
 
   const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/\D/g, '');
@@ -181,13 +204,21 @@ async function searchGoogleAdsGaqlOAuth(query: string): Promise<GaqlSearchRow[]>
     },
   );
 
-  const json = (await res.json()) as GaqlSearchResponse & { message?: string };
-  if (!res.ok) {
-    const detail = json.error?.message ?? json.message ?? `Google Ads HTTP ${res.status}`;
-    throw new Error(detail);
-  }
+  const { contentType, bodyText } = await readHttpResponseBody(res);
+  const json = parseGoogleAdsHttpBody(res.status, contentType, bodyText);
+  return (json.results ?? []) as GaqlSearchRow[];
+}
 
-  return json.results ?? [];
+function composioResponseError(json: ComposioExecuteResponse, httpStatus: number): string {
+  const topLevel = formatUnknownError(json.error ?? json.message);
+  const payload = json.data ?? json;
+  const nested =
+    typeof payload === 'object' && payload && 'error' in payload
+      ? formatUnknownError((payload as { error?: unknown }).error)
+      : '';
+  const message = nested || topLevel;
+  if (message && message !== 'undefined') return message;
+  return `Composio Google Ads HTTP ${httpStatus}`;
 }
 
 async function searchGoogleAdsGaqlComposio(query: string): Promise<GaqlSearchRow[]> {
@@ -219,18 +250,35 @@ async function searchGoogleAdsGaqlComposio(query: string): Promise<GaqlSearchRow
     next: { revalidate: 0 },
   });
 
-  const json = (await res.json()) as ComposioExecuteResponse;
+  const { contentType, bodyText } = await readHttpResponseBody(res);
+  let json: ComposioExecuteResponse;
+  try {
+    if (
+      contentType.includes('text/html') ||
+      bodyText.trimStart().startsWith('<!DOCTYPE') ||
+      bodyText.trimStart().startsWith('<html')
+    ) {
+      throw new Error(`Composio returned HTML instead of JSON (HTTP ${res.status})`);
+    }
+    json = JSON.parse(bodyText) as ComposioExecuteResponse;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Composio returned HTML')) {
+      throw error;
+    }
+    throw new Error(`Composio returned invalid JSON (HTTP ${res.status})`);
+  }
+
   if (!res.ok) {
-    throw new Error(json.error || json.message || `Composio Google Ads HTTP ${res.status}`);
+    throw new Error(composioResponseError(json, res.status));
   }
 
   const payload = json.data ?? json;
   const nestedError =
     typeof payload === 'object' && payload && 'error' in payload
-      ? (payload as { error?: string }).error
+      ? (payload as { error?: unknown }).error
       : undefined;
   if (nestedError) {
-    throw new Error(nestedError);
+    throw new Error(formatUnknownError(nestedError));
   }
 
   const data =
@@ -238,17 +286,28 @@ async function searchGoogleAdsGaqlComposio(query: string): Promise<GaqlSearchRow
       ? (payload as { data?: ComposioExecuteResponse['data'] }).data
       : (payload as ComposioExecuteResponse['data']);
 
-  return (data?.results ?? []).map((row) => ({
-    metrics: row.metrics,
-  }));
+  return (data?.results ?? []) as GaqlSearchRow[];
 }
 
 async function searchGoogleAdsGaql(query: string): Promise<GaqlSearchRow[]> {
   if (isGoogleAdsOAuthConfigured()) {
-    return searchGoogleAdsGaqlOAuth(query);
+    try {
+      return await searchGoogleAdsGaqlOAuth(query);
+    } catch (error) {
+      if (isGoogleAdsComposioConfigured() && shouldFallbackToComposio(error)) {
+        console.warn('[google-ads-api] OAuth failed, falling back to Composio:', formatGoogleAdsApiError(error));
+        return searchGoogleAdsGaqlComposio(query);
+      }
+      throw error;
+    }
   }
   if (isGoogleAdsComposioConfigured()) {
     return searchGoogleAdsGaqlComposio(query);
+  }
+  if (process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim()) {
+    throw new Error(
+      'GOOGLE_ADS_DEVELOPER_TOKEN set but OAuth credentials incomplete (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN)',
+    );
   }
   throw new Error('Google Ads not configured');
 }
@@ -286,7 +345,7 @@ export async function fetchGoogleAds(): Promise<{
  * Cached 4h in meta_cache. Uses OAuth when configured, else Composio fallback.
  */
 export async function fetchGoogleAdsCampaignSummary(): Promise<GoogleAdsSummary> {
-  const cacheKey = 'google_ads_campaign_summary_last_30d';
+  const cacheKey = STALE_CACHE_KEY;
   const cached = await readCache<GoogleAdsSummary>(cacheKey);
   if (cached) return cached;
 
@@ -307,11 +366,21 @@ export async function fetchGoogleAdsCampaignSummary(): Promise<GoogleAdsSummary>
     WHERE segments.date DURING LAST_30_DAYS
   `.trim();
 
-  const results = await searchGoogleAdsGaql(query);
-  const insights = parseGaqlRows(results);
-  const summary = buildGoogleAdsSummary(insights, new Date().toISOString(), true);
-  await writeCache(cacheKey, summary);
-  return summary;
+  try {
+    const results = await searchGoogleAdsGaql(query);
+    const insights = parseGaqlRows(results);
+    const summary = buildGoogleAdsSummary(insights, new Date().toISOString(), true);
+    await writeCache(cacheKey, summary);
+    return summary;
+  } catch (error) {
+    const message = formatGoogleAdsApiError(error);
+    const stale = await readStaleCache<GoogleAdsSummary>(cacheKey);
+    if (stale) {
+      console.warn('[google-ads-api] serving stale cache after API failure:', message);
+      return { ...stale, warning: message };
+    }
+    throw new Error(message);
+  }
 }
 
 /** @deprecated Use fetchGoogleAdsCampaignSummary */

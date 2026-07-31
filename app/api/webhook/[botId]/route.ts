@@ -6,6 +6,7 @@ import { sendWhatsApp, emptyTwimlResponse, validateTwilioSignature } from '@/lib
 import { normalizePhone } from '@/lib/phone';
 import { transcribeAudio } from '@/lib/audio-transcription';
 import { processIncomingMessage } from '@/lib/process-message';
+import { parseTwilioMetaReferral } from '@/lib/ad-attribution';
 import { processWithDebounce } from '@/lib/message-debouncer';
 
 /**
@@ -214,6 +215,7 @@ export async function POST(request: Request, { params }: Params) {
         identifier: from,
         messageBody: incoming.body,
         metadata: incoming.meta.metadata,
+        attribution: parseTwilioMetaReferral(twilioParams) ?? undefined,
         userMessageSource: incoming.meta.source,
         audioDurationSeconds: incoming.meta.audioDurationSeconds,
       }),

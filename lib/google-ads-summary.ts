@@ -38,6 +38,8 @@ export type GoogleAdsSummary = {
   currency: 'COP';
   updated_at: string;
   configured: boolean;
+  /** Set when serving stale cache after API failure (e.g. rate limit). */
+  warning?: string | null;
   totals: GoogleAdsSummaryTotals;
   campaigns: GoogleCampaignSummaryRow[];
 };

@@ -99,7 +99,7 @@ export function ChannelCompareCard() {
     setLoading(true);
     setError(null);
 
-    fetch('/api/ads/channel-compare')
+    fetch('/api/ads/channel-compare', { cache: 'no-store' })
       .then(async (res) => {
         const body = (await res.json().catch(() => null)) as
           | ChannelCompareResponse
@@ -160,6 +160,13 @@ export function ChannelCompareCard() {
             <div className="mb-4 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               {data.meta.error ? <p>Meta: {data.meta.error}</p> : null}
               {data.google.error ? <p>Google: {data.google.error}</p> : null}
+            </div>
+          )}
+
+          {(data.meta.warning || data.google.warning) && (
+            <div className="mb-4 space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              {data.meta.warning ? <p>Meta: {data.meta.warning}</p> : null}
+              {data.google.warning ? <p>Google: {data.google.warning}</p> : null}
             </div>
           )}
 

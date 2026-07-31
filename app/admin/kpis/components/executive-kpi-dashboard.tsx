@@ -37,6 +37,7 @@ import { GscCard } from '@/components/admin/kpis/gsc-card';
 import { MetaAdsCard } from '@/components/admin/kpis/meta-ads-card';
 import { GoogleAdsCard } from '@/components/admin/kpis/google-ads-card';
 import { ChannelCompareCard } from '@/components/admin/kpis/channel-compare-card';
+import { AttributionCard } from '@/components/admin/kpis/attribution-card';
 
 function fmtUsd(value: number | null | undefined): string {
   if (value == null) return '—';
@@ -482,6 +483,8 @@ export function ExecutiveKpiDashboard({ data }: Props) {
         </div>
 
         <ChannelCompareCard />
+
+        <AttributionCard />
 
         <GscCard />
       </div>

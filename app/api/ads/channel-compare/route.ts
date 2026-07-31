@@ -1,7 +1,9 @@
 import { isAdmin } from '@/lib/admin-auth';
-import { fetchGoogleAdsCampaignSummary } from '@/lib/google-ads-api';
+import { fetchGoogleAdsCampaignSummary, formatGoogleAdsApiError } from '@/lib/google-ads-api';
+import type { GoogleAdsSummary } from '@/lib/google-ads-summary';
 import { fetchMetaAdsCampaignSummary } from '@/lib/meta-api';
 import { copToUsd, getUsdFxRates, mxnToUsd } from '@/lib/fx-rates';
+import { formatUnknownError } from '@/lib/format-error';
 import type {
   ChannelCompareResponse,
   ChannelMetricWinner,
@@ -11,15 +13,6 @@ export type { ChannelCompareResponse } from '@/lib/ads-channel-compare-types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message);
-  }
-  return String(error);
-}
 
 function pickHigherWinner(
   metaValue: number,
@@ -43,6 +36,28 @@ function pickLowerCpaWinner(
   return metaCpa < googleCpa ? 'meta' : 'google';
 }
 
+function hasGoogleChannelData(summary: GoogleAdsSummary | null): boolean {
+  if (!summary?.configured) return false;
+  return (
+    summary.totals.spend > 0 ||
+    summary.totals.impressions > 0 ||
+    summary.totals.clicks > 0 ||
+    summary.campaigns.length > 0
+  );
+}
+
+function hasMetaChannelData(
+  summary: Awaited<ReturnType<typeof fetchMetaAdsCampaignSummary>> | null,
+): boolean {
+  if (!summary) return false;
+  return (
+    summary.totals.spend > 0 ||
+    summary.totals.clicks > 0 ||
+    summary.totals.conversations > 0 ||
+    summary.campaigns.length > 0
+  );
+}
+
 export async function GET() {
   if (!isAdmin()) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -56,21 +71,27 @@ export async function GET() {
       fetchGoogleAdsCampaignSummary(),
     ]);
 
-    const metaAvailable = metaResult.status === 'fulfilled';
-    const googleAvailable =
-      googleResult.status === 'fulfilled' && googleResult.value.configured;
+    const metaSummary = metaResult.status === 'fulfilled' ? metaResult.value : null;
+    const googleSummary = googleResult.status === 'fulfilled' ? googleResult.value : null;
+
+    const metaAvailable = hasMetaChannelData(metaSummary);
+    const googleAvailable = hasGoogleChannelData(googleSummary);
 
     const metaError =
-      metaResult.status === 'rejected' ? errorMessage(metaResult.reason) : null;
+      metaResult.status === 'rejected' ? formatUnknownError(metaResult.reason) : null;
     const googleError =
       googleResult.status === 'rejected'
-        ? errorMessage(googleResult.reason)
-        : googleResult.status === 'fulfilled' && !googleResult.value.configured
+        ? formatGoogleAdsApiError(googleResult.reason)
+        : googleResult.status === 'fulfilled' && !googleSummary?.configured
           ? 'Google Ads no configurado'
           : null;
 
-    const metaTotals = metaAvailable ? metaResult.value.totals : null;
-    const googleTotals = googleAvailable ? googleResult.value.totals : null;
+    const metaWarning = null;
+    const googleWarning =
+      googleAvailable && googleSummary?.warning ? googleSummary.warning : null;
+
+    const metaTotals = metaAvailable ? metaSummary!.totals : null;
+    const googleTotals = googleAvailable ? googleSummary!.totals : null;
 
     const metaSpendUsd = metaTotals ? mxnToUsd(metaTotals.spend, fx.mxn_per_usd) : 0;
     const googleSpendUsd = googleTotals ? copToUsd(googleTotals.spend, fx.cop_per_usd) : 0;
@@ -90,6 +111,7 @@ export async function GET() {
       meta: {
         available: metaAvailable,
         error: metaError,
+        warning: metaWarning,
         spend: metaTotals?.spend ?? 0,
         spend_usd: metaSpendUsd,
         currency: 'MXN',
@@ -102,6 +124,7 @@ export async function GET() {
       google: {
         available: googleAvailable,
         error: googleError,
+        warning: googleWarning,
         spend: googleTotals?.spend ?? 0,
         spend_usd: googleSpendUsd,
         currency: 'COP',
@@ -123,11 +146,11 @@ export async function GET() {
 
     return Response.json(body, {
       headers: {
-        'Cache-Control': 'private, max-age=14400, stale-while-revalidate=600',
+        'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
       },
     });
   } catch (error) {
-    const message = errorMessage(error);
+    const message = formatUnknownError(error);
     console.error('[api/ads/channel-compare] failed', error);
     return Response.json({ error: message }, { status: 500 });
   }

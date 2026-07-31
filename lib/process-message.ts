@@ -110,6 +110,8 @@ export type ProcessIncomingMessageInput = {
   messageBody: string;
   sessionId?: string;
   metadata?: Record<string, unknown>;
+  /** First-touch ad attribution (Meta referral) — applied once per conversation. */
+  attribution?: Partial<import('@/lib/ad-attribution').AdAttributionMetadata>;
   userMessageSource?: 'text' | 'audio';
   audioDurationSeconds?: number;
 };
@@ -239,6 +241,7 @@ export async function processIncomingMessage(
     messageBody,
     sessionId,
     metadata = {},
+    attribution,
     userMessageSource = 'text',
     audioDurationSeconds,
   } = input;
@@ -276,6 +279,22 @@ export async function processIncomingMessage(
     identifier,
     sessionId ?? (channel === 'webchat' ? identifier : undefined),
   );
+
+  if (attribution && Object.keys(attribution).length > 0) {
+    const { mergeAttributionMetadata } = await import('@/lib/ad-attribution');
+    const merged = mergeAttributionMetadata(conversation.metadata ?? null, attribution);
+    if (JSON.stringify(merged) !== JSON.stringify(conversation.metadata ?? {})) {
+      const { error: attrErr } = await supabase
+        .from('conversations')
+        .update({ metadata: merged })
+        .eq('id', conversation.id);
+      if (attrErr) {
+        console.error('[process-message] attribution update failed', attrErr);
+      } else {
+        conversation.metadata = merged;
+      }
+    }
+  }
 
   if (conversation.is_closed) {
     return {

@@ -6,6 +6,10 @@ import { buildImmediateWelcomeMessage } from '@/lib/kalyo-trial-messages';
 import { KALYO_TRIAL_MS, type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
 import { isTeamMember } from '@/lib/team-members';
 import { markTrialActivatedByContact, findConversationIdsByEmail } from '@/lib/conversation-outcome';
+import {
+  buildConversationMetadataForEnroll,
+  type GoogleAdsAttributionInput,
+} from '@/lib/ad-attribution';
 import { emailToWebOnlyPhone, isWebOnlyPhone } from '@/lib/web-only-phone';
 import { markDay1WelcomeSent } from '@/lib/trial-onboarding-cron';
 import {
@@ -57,6 +61,10 @@ export type TrialOnboardingEnrollInput = {
   source?: string;
   tempPassword?: string;
   trialPlan?: TrialPlanChoice;
+  gclid?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
 };
 
 export type TrialOnboardingEnrollSuccess = {
@@ -307,6 +315,7 @@ async function createKalyoConversation(
     email: string;
     name: string;
     source: string;
+    googleAds?: GoogleAdsAttributionInput;
   },
 ): Promise<string> {
   const botId = process.env.KALYO_BOT_ID ?? DEFAULT_KALYO_BOT_ID;
@@ -338,12 +347,15 @@ async function createKalyoConversation(
           lead_intent: 'Trial activated',
           lead_signals: ['dio email', 'registró trial via Kalyo'],
           lead_captured: true,
-          metadata: {
-            ...((existing.metadata as Record<string, unknown> | null) ?? {}),
-            source: params.source,
-            customer_email: params.email,
-            customer_name: params.name,
-          },
+          metadata: buildConversationMetadataForEnroll(
+            existing.metadata as Record<string, unknown> | null,
+            {
+              email: params.email,
+              name: params.name,
+              source: params.source,
+              googleAds: params.googleAds,
+            },
+          ),
           last_message_at: new Date().toISOString(),
         })
         .eq('id', existing.id);
@@ -387,11 +399,15 @@ async function createKalyoConversation(
         lead_intent: 'Trial activated',
         lead_signals: ['dio email', 'registró trial via Kalyo'],
         lead_captured: true,
-        metadata: {
-          source: params.source,
-          customer_email: params.email,
-          customer_name: params.name,
-        },
+        metadata: buildConversationMetadataForEnroll(
+          existing.metadata as Record<string, unknown> | null,
+          {
+            email: params.email,
+            name: params.name,
+            source: params.source,
+            googleAds: params.googleAds,
+          },
+        ),
         last_message_at: new Date().toISOString(),
       })
       .eq('id', existing.id);
@@ -418,9 +434,12 @@ async function createKalyoConversation(
       lead_signals: ['dio email', 'registró trial via Kalyo'],
       lead_captured: true,
       metadata: {
-        source: params.source,
-        customer_email: params.email,
-        customer_name: params.name,
+        ...buildConversationMetadataForEnroll(null, {
+          email: params.email,
+          name: params.name,
+          source: params.source,
+          googleAds: params.googleAds,
+        }),
         status: 'open',
       },
       last_message_at: new Date().toISOString(),
@@ -488,6 +507,12 @@ export async function enrollTrialFromKalyoWebhook(
   const rawPhone = input.phone?.trim() ?? '';
   const phone = rawPhone ? normalizePhoneForDB(rawPhone) : emailToWebOnlyPhone(email);
   const source = input.source?.trim() || 'kalyo_web';
+  const googleAds: GoogleAdsAttributionInput = {
+    gclid: input.gclid,
+    utm_source: input.utm_source,
+    utm_medium: input.utm_medium,
+    utm_campaign: input.utm_campaign,
+  };
 
   console.log(
     `[trial-onboarding-webhook] received | email=${email} | phone=${phone} | web_only=${isWebOnlyPhone(phone)} | source=${source}`,
@@ -539,6 +564,7 @@ export async function enrollTrialFromKalyoWebhook(
       email,
       name,
       source,
+      googleAds,
     });
   } catch (err) {
     if (err instanceof Error && err.message === 'is_ambassador') {
@@ -669,6 +695,11 @@ export function validateTrialEnrollBody(body: unknown):
   const trialPlanRaw =
     typeof record.trial_plan === 'string' ? record.trial_plan.trim().toLowerCase() : '';
   const trialPlan = trialPlanRaw === 'pro' ? 'pro' : 'max';
+  const gclid = typeof record.gclid === 'string' ? record.gclid.trim() : undefined;
+  const utmSource = typeof record.utm_source === 'string' ? record.utm_source.trim() : undefined;
+  const utmMedium = typeof record.utm_medium === 'string' ? record.utm_medium.trim() : undefined;
+  const utmCampaign =
+    typeof record.utm_campaign === 'string' ? record.utm_campaign.trim() : undefined;
 
   if (!email || !email.includes('@')) {
     return { ok: false, error: 'email is required' };
@@ -690,6 +721,10 @@ export function validateTrialEnrollBody(body: unknown):
       source,
       tempPassword: tempPassword || undefined,
       trialPlan,
+      gclid,
+      utm_source: utmSource,
+      utm_medium: utmMedium,
+      utm_campaign: utmCampaign,
     },
   };
 }

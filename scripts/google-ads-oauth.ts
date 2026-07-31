@@ -12,13 +12,30 @@
  * Open the printed URL, authorize, paste the code when prompted.
  * Copy the refresh_token into Vercel as GOOGLE_ADS_REFRESH_TOKEN.
  */
-import 'dotenv/config';
+import { config } from 'dotenv';
 import { createServer } from 'node:http';
 import { URL } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 
+config({ path: process.env.DOTENV_CONFIG_PATH ?? '.env.local' });
+
 const SCOPES = ['https://www.googleapis.com/auth/adwords'];
 const REDIRECT_URI = 'http://127.0.0.1:53682/oauth2callback';
+
+function readAuthCodeArg(): string | null {
+  const flag = process.argv.find((arg) => arg.startsWith('--code='));
+  return flag ? flag.slice('--code='.length).trim() : null;
+}
+
+async function exchangeCode(oauth2: OAuth2Client, code: string): Promise<void> {
+  const { tokens } = await oauth2.getToken(code);
+  console.log('\n✅ Tokens obtained:\n');
+  console.log('GOOGLE_ADS_REFRESH_TOKEN=' + tokens.refresh_token);
+  if (!tokens.refresh_token) {
+    console.warn('\n⚠️  No refresh_token returned. Revoke app access and re-run with prompt=consent.');
+  }
+  console.log('\nAdd to Vercel Botio env vars along with DEVELOPER_TOKEN and CUSTOMER_ID.\n');
+}
 
 async function main() {
   const clientId = process.env.GOOGLE_ADS_CLIENT_ID?.trim();
@@ -30,6 +47,11 @@ async function main() {
   }
 
   const oauth2 = new OAuth2Client(clientId, clientSecret, REDIRECT_URI);
+  const authCode = readAuthCodeArg();
+  if (authCode) {
+    await exchangeCode(oauth2, authCode);
+    return;
+  }
   const authUrl = oauth2.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
@@ -66,17 +88,10 @@ async function main() {
           return;
         }
 
-        const { tokens } = await oauth2.getToken(code);
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end('<h1>OK — you can close this tab.</h1><p>Check the terminal for your refresh token.</p>');
 
-        console.log('\n✅ Tokens obtained:\n');
-        console.log('GOOGLE_ADS_REFRESH_TOKEN=' + tokens.refresh_token);
-        if (!tokens.refresh_token) {
-          console.warn('\n⚠️  No refresh_token returned. Revoke app access and re-run with prompt=consent.');
-        }
-        console.log('\nAdd to Vercel Botio env vars along with DEVELOPER_TOKEN and CUSTOMER_ID.\n');
-
+        await exchangeCode(oauth2, code);
         server.close();
         resolve();
       } catch (err) {

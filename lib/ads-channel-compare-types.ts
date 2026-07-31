@@ -7,6 +7,7 @@ export type ChannelCompareResponse = {
   meta: {
     available: boolean;
     error: string | null;
+    warning: string | null;
     spend: number;
     spend_usd: number;
     currency: 'MXN';
@@ -19,6 +20,7 @@ export type ChannelCompareResponse = {
   google: {
     available: boolean;
     error: string | null;
+    warning: string | null;
     spend: number;
     spend_usd: number;
     currency: 'COP';

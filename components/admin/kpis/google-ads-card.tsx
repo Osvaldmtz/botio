@@ -130,8 +130,16 @@ export function GoogleAdsCard() {
           <Settings className="h-8 w-8 text-fg-muted" />
           <p className="text-sm font-medium text-fg">Configura Google Ads en Vercel</p>
           <p className="max-w-sm text-xs text-fg-muted">
-            Agrega GOOGLE_ADS_DEVELOPER_TOKEN, CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN y
-            CUSTOMER_ID en las variables de entorno del proyecto Botio.
+            Mientras se aprueba el Developer Token, usa Composio:{' '}
+            <code className="rounded bg-bg-muted px-1">COMPOSIO_API_KEY</code>,{' '}
+            <code className="rounded bg-bg-muted px-1">COMPOSIO_USER_ID</code>,{' '}
+            <code className="rounded bg-bg-muted px-1">
+              COMPOSIO_GOOGLEADS_CONNECTED_ACCOUNT_ID
+            </code>{' '}
+            y <code className="rounded bg-bg-muted px-1">GOOGLE_ADS_CUSTOMER_ID</code>. Cuando
+            tengas el token, agrega{' '}
+            <code className="rounded bg-bg-muted px-1">GOOGLE_ADS_DEVELOPER_TOKEN</code> y las
+            credenciales OAuth para usar la API directa.
           </p>
         </div>
       </KpiVividPanel>
@@ -244,6 +252,9 @@ export function GoogleAdsCard() {
 
       <p className="mt-4 text-xs text-fg-muted">
         Google Ads API · Actualizado {new Date(data.updated_at).toLocaleString('es-CO')} · caché 4h
+        {data.warning ? (
+          <span className="mt-1 block text-amber-700">{data.warning}</span>
+        ) : null}
       </p>
     </KpiVividPanel>
   );
