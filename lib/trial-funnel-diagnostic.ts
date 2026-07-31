@@ -249,7 +249,7 @@ export async function fetchBotioDripCounts(
     if (row.day_9_sent_at) counts.day9 += 1;
   }
 
-  const welcome: WelcomeDeliveryBreakdown[] = [...welcomeMap.entries()].map(([key, count]) => {
+  const welcome: WelcomeDeliveryBreakdown[] = Array.from(welcomeMap.entries()).map(([key, count]) => {
     const [status, method] = key.split('|');
     return {
       welcome_msg_status: status === 'null' ? null : status,
@@ -323,7 +323,7 @@ async function safeCountByPsychologist(
       return counts;
     }
     for (const row of data ?? []) {
-      const record = row as Record<string, unknown>;
+      const record = row as unknown as Record<string, unknown>;
       const id = record.psychologist_id as string;
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
@@ -348,7 +348,7 @@ async function safeRowsByPsychologist(
       return byPsych;
     }
     for (const row of data ?? []) {
-      const record = row as Record<string, unknown>;
+      const record = row as unknown as Record<string, unknown>;
       const id = record.psychologist_id as string;
       const list = byPsych.get(id) ?? [];
       list.push({ created_at: String(record.created_at) });
@@ -362,7 +362,7 @@ export async function fetchKalyoEngagementForTrials(
   kalyo: SupabaseClient,
   trials: TrialOnboardingRow[],
 ): Promise<{ rows: TrialEngagementRow[]; voiceTableAvailable: boolean }> {
-  const emails = [...new Set(trials.map((t) => t.trial_user_email.trim().toLowerCase()))];
+  const emails = Array.from(new Set(trials.map((t) => t.trial_user_email.trim().toLowerCase())));
   const psychByEmail = new Map<string, PsychologistRow>();
 
   for (let i = 0; i < emails.length; i += 100) {
@@ -377,7 +377,7 @@ export async function fetchKalyoEngagementForTrials(
     }
   }
 
-  const psychIds = [...psychByEmail.values()].map((p) => p.id);
+  const psychIds = Array.from(psychByEmail.values()).map((p) => p.id);
 
   const hasPatients = await tableExists(kalyo, 'patients');
   const hasAssessments = await tableExists(kalyo, 'assessments');

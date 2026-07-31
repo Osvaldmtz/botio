@@ -15,7 +15,7 @@ function displayName(name: string | null | undefined, email: string): string {
 }
 
 export function buildTrialOnboardingTelegramText(params: {
-  day: 1 | 2 | 3 | 5 | 6 | 7 | 9;
+  day: 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9;
   name?: string | null;
   email: string;
   daysLeft?: number;
@@ -126,7 +126,7 @@ export async function notifyTrialEnrolled(params: {
 }
 
 export async function notifyTrialOnboardingSent(params: {
-  day: 1 | 2 | 3 | 5 | 6 | 7 | 9;
+  day: 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9;
   demoId: string;
   name?: string | null;
   email: string;
