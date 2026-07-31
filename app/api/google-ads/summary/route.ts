@@ -1,8 +1,17 @@
 import { isAdmin } from '@/lib/admin-auth';
-import { fetchGoogleAdsSummary } from '@/lib/google-ads-api';
+import { fetchGoogleAdsCampaignSummary } from '@/lib/google-ads-api';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return String(error);
+}
 
 export async function GET() {
   if (!isAdmin()) {
@@ -10,14 +19,14 @@ export async function GET() {
   }
 
   try {
-    const summary = await fetchGoogleAdsSummary();
+    const summary = await fetchGoogleAdsCampaignSummary();
     return Response.json(summary, {
       headers: {
-        'Cache-Control': 'private, max-age=3600, stale-while-revalidate=600',
+        'Cache-Control': 'private, max-age=14400, stale-while-revalidate=600',
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     console.error('[api/google-ads/summary] failed', error);
     return Response.json({ error: message }, { status: 500 });
   }

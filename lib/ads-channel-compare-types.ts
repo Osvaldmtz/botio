@@ -1,8 +1,12 @@
+export type ChannelMetricWinner = 'meta' | 'google' | 'tie' | null;
+
 export type ChannelCompareResponse = {
   updated_at: string;
   period: 'last_30d';
   fx: { mxn_per_usd: number; cop_per_usd: number };
   meta: {
+    available: boolean;
+    error: string | null;
     spend: number;
     spend_usd: number;
     currency: 'MXN';
@@ -13,6 +17,8 @@ export type ChannelCompareResponse = {
     cpa_usd: number | null;
   };
   google: {
+    available: boolean;
+    error: string | null;
     spend: number;
     spend_usd: number;
     currency: 'COP';
@@ -22,5 +28,9 @@ export type ChannelCompareResponse = {
     cpa: number | null;
     cpa_usd: number | null;
   };
-  winner: 'meta' | 'google' | 'tie' | null;
+  winners: {
+    spend: ChannelMetricWinner;
+    conversions: ChannelMetricWinner;
+    cpa: ChannelMetricWinner;
+  };
 };

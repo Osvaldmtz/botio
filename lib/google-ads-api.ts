@@ -1,5 +1,17 @@
 import 'server-only';
 
+import { OAuth2Client } from 'google-auth-library';
+import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  buildGoogleAdsSummary,
+  emptyGoogleAdsSummary,
+  type GoogleAdsSummary,
+  type GoogleCampaignInsightRaw,
+  type GoogleCampaignStatus,
+} from '@/lib/google-ads-summary';
+
+const GOOGLE_ADS_API = 'https://googleads.googleapis.com/v18';
+const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
 const COMPOSIO_EXECUTE_URL =
   'https://backend.composio.dev/api/v3/tools/execute/GOOGLEADS_SEARCH_STREAM_GAQL';
 
@@ -8,29 +20,32 @@ export const GOOGLE_ADS_CUSTOMER_ID =
 
 export type GoogleAdsSpendWindow = 'LAST_30_DAYS' | 'ALL_TIME';
 
-export type GoogleAdsSummary = {
-  period: 'last_30d';
-  currency: 'COP';
-  updated_at: string;
-  spend: number;
-  clicks: number;
-  conversions: number;
-  cpa: number | null;
+export type { GoogleAdsSummary } from '@/lib/google-ads-summary';
+
+type GaqlSearchRow = {
+  campaign?: {
+    id?: string;
+    name?: string;
+    status?: string;
+  };
+  metrics?: {
+    costMicros?: string | number;
+    cost_micros?: string | number;
+    impressions?: string | number;
+    clicks?: string | number;
+    conversions?: string | number;
+    ctr?: string | number;
+  };
 };
 
-type MetricRow = {
-  costMicros?: string | number;
-  cost_micros?: string | number;
-  clicks?: string | number;
-  conversions?: string | number;
+type GaqlSearchResponse = {
+  results?: GaqlSearchRow[];
+  error?: { message?: string; code?: number; status?: string };
 };
 
 type ComposioExecuteResponse = {
   data?: {
-    results?: Array<{
-      metrics?: MetricRow;
-      customer?: unknown;
-    }>;
+    results?: Array<{ metrics?: GaqlSearchRow['metrics'] }>;
     successful?: boolean;
     error?: string;
   };
@@ -39,28 +54,146 @@ type ComposioExecuteResponse = {
   message?: string;
 };
 
-function toNumber(raw: string | number | undefined): number {
+function toNumber(raw: string | number | undefined | null): number {
   if (raw == null) return 0;
   const n = typeof raw === 'string' ? Number(raw) : Number(raw);
   return Number.isFinite(n) ? n : 0;
 }
 
-function sumMetric(
-  results: ComposioExecuteResponse['data'],
-  pick: (m: MetricRow) => string | number | undefined,
-): number {
-  const rows = results?.results ?? [];
-  return rows.reduce((sum, row) => sum + toNumber(row.metrics ? pick(row.metrics) : undefined), 0);
+function normalizeCampaignStatus(raw: string | undefined): GoogleCampaignStatus {
+  switch (raw) {
+    case 'ENABLED':
+      return 'ENABLED';
+    case 'PAUSED':
+      return 'PAUSED';
+    case 'REMOVED':
+      return 'REMOVED';
+    default:
+      return 'UNKNOWN';
+  }
 }
 
-function sumCostMicros(results: ComposioExecuteResponse['data']): number {
-  return sumMetric(results, (m) => m.costMicros ?? m.cost_micros);
+export function isGoogleAdsOAuthConfigured(): boolean {
+  return Boolean(
+    process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim() &&
+      process.env.GOOGLE_ADS_CLIENT_ID?.trim() &&
+      process.env.GOOGLE_ADS_CLIENT_SECRET?.trim() &&
+      process.env.GOOGLE_ADS_REFRESH_TOKEN?.trim() &&
+      GOOGLE_ADS_CUSTOMER_ID,
+  );
 }
 
-async function executeGoogleAdsGaql(query: string): Promise<ComposioExecuteResponse['data']> {
+function isGoogleAdsComposioConfigured(): boolean {
+  return Boolean(process.env.COMPOSIO_API_KEY?.trim());
+}
+
+export function isGoogleAdsConfigured(): boolean {
+  return isGoogleAdsOAuthConfigured() || isGoogleAdsComposioConfigured();
+}
+
+async function readCache<T>(cacheKey: string): Promise<T | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from('meta_cache')
+    .select('payload, expires_at')
+    .eq('cache_key', cacheKey)
+    .maybeSingle();
+
+  if (!data?.payload || !data.expires_at) return null;
+  if (new Date(data.expires_at).getTime() <= Date.now()) return null;
+  return data.payload as T;
+}
+
+async function writeCache(cacheKey: string, payload: unknown, ttlMs = CACHE_TTL_MS): Promise<void> {
+  const supabase = createAdminClient();
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  await supabase.from('meta_cache').upsert(
+    {
+      cache_key: cacheKey,
+      payload: payload as Record<string, unknown>,
+      cached_at: new Date().toISOString(),
+      expires_at: expiresAt,
+    },
+    { onConflict: 'cache_key' },
+  );
+}
+
+async function getGoogleAdsAccessToken(): Promise<string> {
+  const clientId = process.env.GOOGLE_ADS_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_ADS_CLIENT_SECRET?.trim();
+  const refreshToken = process.env.GOOGLE_ADS_REFRESH_TOKEN?.trim();
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('Missing Google Ads OAuth credentials');
+  }
+
+  const oauth2 = new OAuth2Client(clientId, clientSecret);
+  oauth2.setCredentials({ refresh_token: refreshToken });
+  const tokenResponse = await oauth2.getAccessToken();
+  const accessToken = tokenResponse.token;
+  if (!accessToken) {
+    throw new Error('Failed to obtain Google Ads access token');
+  }
+  return accessToken;
+}
+
+function parseGaqlRows(results: GaqlSearchRow[] | undefined): GoogleCampaignInsightRaw[] {
+  return (results ?? []).map((row) => {
+    const metrics = row.metrics ?? {};
+    const costMicros = metrics.costMicros ?? metrics.cost_micros;
+    return {
+      campaign_id: String(row.campaign?.id ?? ''),
+      campaign_name: row.campaign?.name ?? '',
+      status: normalizeCampaignStatus(row.campaign?.status),
+      spend: toNumber(costMicros) / 1_000_000,
+      impressions: toNumber(metrics.impressions),
+      clicks: toNumber(metrics.clicks),
+      conversions: toNumber(metrics.conversions),
+    };
+  });
+}
+
+async function searchGoogleAdsGaqlOAuth(query: string): Promise<GaqlSearchRow[]> {
+  const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim();
+  if (!developerToken) {
+    throw new Error('Missing GOOGLE_ADS_DEVELOPER_TOKEN');
+  }
+
+  const accessToken = await getGoogleAdsAccessToken();
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    'developer-token': developerToken,
+    'Content-Type': 'application/json',
+  };
+
+  const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/\D/g, '');
+  if (loginCustomerId) {
+    headers['login-customer-id'] = loginCustomerId;
+  }
+
+  const res = await fetch(
+    `${GOOGLE_ADS_API}/customers/${GOOGLE_ADS_CUSTOMER_ID}/googleAds:search`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query }),
+      next: { revalidate: 0 },
+    },
+  );
+
+  const json = (await res.json()) as GaqlSearchResponse & { message?: string };
+  if (!res.ok) {
+    const detail = json.error?.message ?? json.message ?? `Google Ads HTTP ${res.status}`;
+    throw new Error(detail);
+  }
+
+  return json.results ?? [];
+}
+
+async function searchGoogleAdsGaqlComposio(query: string): Promise<GaqlSearchRow[]> {
   const apiKey = process.env.COMPOSIO_API_KEY?.trim();
   if (!apiKey) {
-    throw new Error('Missing COMPOSIO_API_KEY for Google Ads spend');
+    throw new Error('Missing COMPOSIO_API_KEY for Google Ads');
   }
 
   const body: Record<string, unknown> = {
@@ -105,25 +238,36 @@ async function executeGoogleAdsGaql(query: string): Promise<ComposioExecuteRespo
       ? (payload as { data?: ComposioExecuteResponse['data'] }).data
       : (payload as ComposioExecuteResponse['data']);
 
-  return data;
+  return (data?.results ?? []).map((row) => ({
+    metrics: row.metrics,
+  }));
+}
+
+async function searchGoogleAdsGaql(query: string): Promise<GaqlSearchRow[]> {
+  if (isGoogleAdsOAuthConfigured()) {
+    return searchGoogleAdsGaqlOAuth(query);
+  }
+  if (isGoogleAdsComposioConfigured()) {
+    return searchGoogleAdsGaqlComposio(query);
+  }
+  throw new Error('Google Ads not configured');
+}
+
+function sumCostMicrosFromRows(results: GaqlSearchRow[]): number {
+  return results.reduce((sum, row) => {
+    const metrics = row.metrics ?? {};
+    return sum + toNumber(metrics.costMicros ?? metrics.cost_micros);
+  }, 0);
 }
 
 /**
- * Fetch Google Ads cost via Composio (GOOGLEADS_SEARCH_STREAM_GAQL).
- * Returns spend in COP (account currency) for the given window.
- *
- * Env:
- * - COMPOSIO_API_KEY (required)
- * - COMPOSIO_GOOGLEADS_CONNECTED_ACCOUNT_ID (optional but recommended)
- * - COMPOSIO_USER_ID (optional, default botio-kalyo)
- * - GOOGLE_ADS_CUSTOMER_ID (optional, default 4356627994)
+ * Fetch Google Ads cost for CAC metrics (Composio or OAuth).
+ * Returns spend in COP (account currency).
  */
-export async function fetchGoogleAdsSpendCop(
-  window: GoogleAdsSpendWindow,
-): Promise<number> {
+export async function fetchGoogleAdsSpendCop(window: GoogleAdsSpendWindow): Promise<number> {
   const query = `SELECT metrics.cost_micros FROM customer WHERE segments.date DURING ${window}`;
-  const data = await executeGoogleAdsGaql(query);
-  return sumCostMicros(data) / 1_000_000;
+  const results = await searchGoogleAdsGaql(query);
+  return sumCostMicrosFromRows(results) / 1_000_000;
 }
 
 export async function fetchGoogleAds(): Promise<{
@@ -137,26 +281,57 @@ export async function fetchGoogleAds(): Promise<{
   return { spend_30d_cop, spend_alltime_cop };
 }
 
-/** Last-30-day Google Ads spend + clicks + conversions (registrations) for channel compare. */
-export async function fetchGoogleAdsSummary(): Promise<GoogleAdsSummary> {
+/**
+ * Campaign-level Google Ads summary (last 30d): spend, CTR, conversions, CPA.
+ * Cached 4h in meta_cache. Uses OAuth when configured, else Composio fallback.
+ */
+export async function fetchGoogleAdsCampaignSummary(): Promise<GoogleAdsSummary> {
+  const cacheKey = 'google_ads_campaign_summary_last_30d';
+  const cached = await readCache<GoogleAdsSummary>(cacheKey);
+  if (cached) return cached;
+
+  if (!isGoogleAdsConfigured()) {
+    return emptyGoogleAdsSummary(false);
+  }
+
   const query = `
-    SELECT metrics.cost_micros, metrics.clicks, metrics.conversions
-    FROM customer
+    SELECT
+      campaign.id,
+      campaign.name,
+      campaign.status,
+      metrics.cost_micros,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.conversions
+    FROM campaign
     WHERE segments.date DURING LAST_30_DAYS
   `.trim();
 
-  const data = await executeGoogleAdsGaql(query);
-  const spend = sumCostMicros(data) / 1_000_000;
-  const clicks = sumMetric(data, (m) => m.clicks);
-  const conversions = sumMetric(data, (m) => m.conversions);
+  const results = await searchGoogleAdsGaql(query);
+  const insights = parseGaqlRows(results);
+  const summary = buildGoogleAdsSummary(insights, new Date().toISOString(), true);
+  await writeCache(cacheKey, summary);
+  return summary;
+}
 
+/** @deprecated Use fetchGoogleAdsCampaignSummary */
+export async function fetchGoogleAdsSummary(): Promise<{
+  period: 'last_30d';
+  currency: 'COP';
+  updated_at: string;
+  spend: number;
+  clicks: number;
+  conversions: number;
+  cpa: number | null;
+}> {
+  const summary = await fetchGoogleAdsCampaignSummary();
   return {
-    period: 'last_30d',
-    currency: 'COP',
-    updated_at: new Date().toISOString(),
-    spend,
-    clicks,
-    conversions,
-    cpa: conversions > 0 ? spend / conversions : null,
+    period: summary.period,
+    currency: summary.currency,
+    updated_at: summary.updated_at,
+    spend: summary.totals.spend,
+    clicks: summary.totals.clicks,
+    conversions: summary.totals.conversions,
+    cpa: summary.totals.cpa,
   };
 }
