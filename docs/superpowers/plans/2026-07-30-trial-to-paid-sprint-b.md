@@ -45,7 +45,20 @@
 | Created + paid | Same timestamp — 2026-07-07 |
 | Trial onboarding link | **None** — paid tracked only via conversation |
 
-**Insight:** Rosa converted via Kalyo app upgrade webhook, not WhatsApp drip. No trial_onboarding row. Need Kalyo DB query for patients/tests/Kaly usage.
+**Insight:** Rosa converted via Kalyo app upgrade webhook, not WhatsApp drip. No trial_onboarding row.
+
+**Deep-dive (2026-07-31):** 14 pacientes, 154 assessments, plan `starter`/`active`. Power user web — el patrón a replicar es activación profunda en app.
+
+### Engagement summary (302 trials — `scripts/trial-funnel-diagnostic.ts`)
+
+| Paso | % |
+|------|---|
+| Login durante trial | 30.1% |
+| ≥1 paciente | **72.2%** |
+| ≥1 test | 23.8% |
+| Respondió WA | 31.1% |
+
+**Hipótesis:** cuello de botella = profundidad (login + tests), no crear paciente.
 
 ---
 
