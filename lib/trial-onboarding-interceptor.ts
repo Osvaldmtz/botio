@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { formatPayIntentReply } from '@/lib/kalyo-payment-links';
 import type { NotifySalesCreds } from '@/lib/kalyo-notify';
+import {
+  formatDay8SurveyThankYou,
+  parseDay8SurveyResponse,
+} from '@/lib/trial-onboarding-day8-survey';
 
 const UNSUBSCRIBE_RE =
   /\b(?:stop|unsubscribe|no\s+m[aá]s\s+mensajes|para\s+de\s+escribirme|deja\s+de\s+escribir)\b/i;
@@ -11,7 +15,7 @@ const PAY_INTENT_RE =
 export type TrialOnboardingInterceptResult = {
   replyText: string;
   source: 'trial_onboarding';
-  action: 'unsubscribed' | 'pay_intent' | 'engagement';
+  action: 'unsubscribed' | 'pay_intent' | 'engagement' | 'day8_survey';
 };
 
 export type TrialOnboardingActiveRow = {
@@ -40,6 +44,31 @@ export async function loadActiveTrialOnboarding(
 
   if (error) throw error;
   return (data as TrialOnboardingActiveRow | null) ?? null;
+}
+
+type Day8SurveyRow = {
+  id: string;
+  trial_user_email: string;
+};
+
+export async function loadPendingDay8SurveyRow(
+  supabase: SupabaseClient,
+  customerPhone: string,
+): Promise<Day8SurveyRow | null> {
+  const { data, error } = await supabase
+    .from('trial_onboarding_messages')
+    .select('id, trial_user_email')
+    .eq('customer_phone', customerPhone)
+    .eq('unsubscribed', false)
+    .is('upgraded_to_paid_at', null)
+    .not('day_8_sent_at', 'is', null)
+    .is('day_8_response', null)
+    .order('day_8_sent_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Day8SurveyRow | null) ?? null;
 }
 
 export function isUnsubscribeMessage(messageBody: string): boolean {
@@ -82,6 +111,27 @@ export async function handleTrialOnboardingMessage(params: {
   messageBody: string;
   creds: NotifySalesCreds | null;
 }): Promise<TrialOnboardingInterceptResult | null> {
+  const surveyRow = await loadPendingDay8SurveyRow(params.supabase, params.customerPhone);
+  if (surveyRow) {
+    const parsed = parseDay8SurveyResponse(params.messageBody);
+    if (parsed) {
+      await params.supabase
+        .from('trial_onboarding_messages')
+        .update({ day_8_response: parsed, customer_responded: true })
+        .eq('id', surveyRow.id);
+
+      console.log(
+        `[trial-onboarding] day8 survey response | phone=${params.customerPhone} | response=${parsed}`,
+      );
+
+      return {
+        replyText: formatDay8SurveyThankYou(parsed),
+        source: 'trial_onboarding',
+        action: 'day8_survey',
+      };
+    }
+  }
+
   const row = await loadActiveTrialOnboarding(params.supabase, params.customerPhone);
   if (!row) return null;
 

@@ -9,6 +9,7 @@ import {
   formatDay9WithCoupon,
   formatOnboardingMessage,
 } from '../lib/trial-onboarding-messages';
+import { formatDay8Survey } from '../lib/trial-onboarding-day8-survey';
 import { buildTrialOnboardingTelegramText } from '../lib/trial-onboarding-notifications';
 import { KALYO_PRICING } from '../lib/kalyo-pricing-data';
 
@@ -75,5 +76,7 @@ assert(
   ),
   'telegram day 9',
 );
+
+assert(formatDay8Survey(user).includes('Precio'), 'day8 survey');
 
 console.log('✓ All trial onboarding message unit tests passed');

@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatDay8Survey } from '@/lib/trial-onboarding-day8-survey';
 import { getPaymentLink } from '@/lib/kalyo-payment-links';
 import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
 import { renderName } from '@/lib/render-name';
@@ -16,7 +17,7 @@ export type TrialOnboardingMessageContext = TrialOnboardingUser & {
 };
 
 /** Narrative day numbers (legacy DB columns mapped in cron). */
-export type OnboardingNarrativeDay = 1 | 2 | 3 | 5 | 6 | 7 | 9;
+export type OnboardingNarrativeDay = 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9;
 
 function displayName(user: TrialOnboardingUser): string {
   const name = renderName(user.trial_user_name);
@@ -183,6 +184,8 @@ export function formatOnboardingMessage(
       return formatDay6(user);
     case 7:
       return formatDay7Expired();
+    case 8:
+      return formatDay8Survey(user);
     case 9:
       return formatDay9WithCoupon(user);
     default:

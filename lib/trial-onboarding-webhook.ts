@@ -594,7 +594,22 @@ export async function enrollTrialFromKalyoWebhook(
   const creds = await loadKalyoTwilioCreds(supabase);
   let welcomeResult: WelcomeMessageResult | null = null;
 
-  if (!options?.skipWhatsApp && creds && !isWebOnlyPhone(phone)) {
+  if (isWebOnlyPhone(phone)) {
+    await supabase
+      .from('trial_onboarding_messages')
+      .update({ welcome_msg_status: 'skipped_web_only', welcome_msg_method: 'none' })
+      .eq('id', row.id);
+  } else if (options?.skipWhatsApp) {
+    await supabase
+      .from('trial_onboarding_messages')
+      .update({ welcome_msg_status: 'skipped', welcome_msg_method: 'none' })
+      .eq('id', row.id);
+  } else if (!creds) {
+    await supabase
+      .from('trial_onboarding_messages')
+      .update({ welcome_msg_status: 'pending', welcome_msg_method: 'none' })
+      .eq('id', row.id);
+  } else if (!options?.skipWhatsApp && creds && !isWebOnlyPhone(phone)) {
     welcomeResult = await sendWelcomeMessage({
       to: phone,
       name,

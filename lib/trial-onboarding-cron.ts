@@ -42,15 +42,16 @@ export type TrialOnboardingRow = {
   day_7_sent_at: string | null;
   day_13_sent_at: string | null;
   day_15_sent_at: string | null;
+  day_8_sent_at: string | null;
   day_9_sent_at: string | null;
   day_9_status: string | null;
 };
 
 /** Cron-driven narrative days (day 1 welcome is sent at enroll). */
-export type OnboardingCronDay = 2 | 3 | 5 | 6 | 7 | 9;
+export type OnboardingCronDay = 2 | 3 | 5 | 6 | 7 | 8 | 9;
 
 const ROW_SELECT =
-  'id, customer_phone, trial_user_email, trial_user_name, trial_started_at, trial_ends_at, conversation_id, unsubscribed, upgraded_to_paid_at, day_1_sent_at, day_2_sent_at, day_3_sent_at, day_7_sent_at, day_13_sent_at, day_15_sent_at, day_9_sent_at, day_9_status';
+  'id, customer_phone, trial_user_email, trial_user_name, trial_started_at, trial_ends_at, conversation_id, unsubscribed, upgraded_to_paid_at, day_1_sent_at, day_2_sent_at, day_3_sent_at, day_7_sent_at, day_13_sent_at, day_15_sent_at, day_8_sent_at, day_9_sent_at, day_9_status';
 
 type CronDayConfig = {
   narrativeDay: OnboardingNarrativeDay;
@@ -69,6 +70,7 @@ const CRON_DAY_CONFIG: Record<OnboardingCronDay, CronDayConfig> = {
   5: { narrativeDay: 5, column: 'day_7_sent_at', minHoursAgo: 119, maxHoursAgo: 121 },
   6: { narrativeDay: 6, column: 'day_13_sent_at', minHoursAgo: 143, maxHoursAgo: 145 },
   7: { narrativeDay: 7, column: 'day_15_sent_at', minHoursAgo: 167, maxHoursAgo: 169 },
+  8: { narrativeDay: 8, column: 'day_8_sent_at', minHoursAgo: 191, maxHoursAgo: 193 },
   9: { narrativeDay: 9, column: 'day_9_sent_at', minHoursAgo: 215, maxHoursAgo: 217 },
 };
 
@@ -98,6 +100,14 @@ export async function fetchPendingOnboardingDay(
 
   if (day === 9) {
     query = query.is('day_9_status', null).lt('trial_ends_at', new Date().toISOString());
+  } else if (day !== 8) {
+    query = query.not('day_1_sent_at', 'is', null);
+  }
+
+  if (day === 8) {
+    query = query
+      .not('day_15_sent_at', 'is', null)
+      .lt('trial_ends_at', new Date().toISOString());
   }
 
   const { data, error } = await query;
@@ -274,12 +284,22 @@ export async function runTrialOnboardingCron(params: {
 
   console.log('[trial-onboarding] cron started');
 
+  const { runWelcomeRetries } = await import('@/lib/trial-onboarding-welcome-retry');
+  const welcomeRetry = await runWelcomeRetries({
+    supabase: params.supabase,
+    creds: params.creds,
+  });
+  console.log('[trial-onboarding] welcome retries', welcomeRetry);
+
   const summary: Record<string, number> = {
     failed: 0,
     skipped: 0,
+    welcome_retry_pending: welcomeRetry.pending,
+    welcome_retry_sent: welcomeRetry.sent,
+    welcome_retry_failed: welcomeRetry.failed,
   };
 
-  for (const day of [2, 3, 5, 6, 7, 9] as const) {
+  for (const day of [2, 3, 5, 6, 7, 8, 9] as const) {
     const pending = await fetchPendingOnboardingDay(params.supabase, day);
     console.log(`[trial-onboarding] found ${pending.length} pending day${day}`);
     summary[`pending_day${day}`] = pending.length;
