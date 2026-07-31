@@ -275,8 +275,8 @@ export function ChannelCompareCard() {
       )}
 
       <p className="mt-4 text-xs text-fg-muted">
-        FX {data.fx.mxn_per_usd.toFixed(2)} MXN/USD · {data.fx.cop_per_usd.toFixed(0)} COP/USD ·
-        Actualizado {new Date(data.updated_at).toLocaleString('es-MX')}
+        FX {data.fx.mxn_per_usd.toFixed(2)} MXN/USD · {data.fx.cop_per_usd.toFixed(2)} TRM
+        COP/USD · Actualizado {new Date(data.updated_at).toLocaleString('es-MX')}
       </p>
     </KpiVividPanel>
   );
