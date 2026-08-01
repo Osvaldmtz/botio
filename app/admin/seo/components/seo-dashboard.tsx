@@ -209,6 +209,7 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
   const [data, setData] = useState(initial);
   const [error, setError] = useState(initialError);
   const [refreshing, setRefreshing] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [country, setCountry] = useState<string>('MX');
   const [sortKey, setSortKey] = useState<SortKey>('position');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -238,11 +239,30 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
   async function handleRefresh() {
     setRefreshing(true);
     setError(null);
+    setSuccessMessage(null);
     try {
+      const syncRes = await fetch('/api/admin/seo/refresh', { method: 'POST' });
+      const syncJson = (await syncRes.json()) as {
+        error?: string;
+        updated?: string[];
+        errors?: Array<{ key: string; error: string }>;
+      };
+      if (!syncRes.ok) throw new Error(syncJson.error ?? 'Error al sincronizar SEO');
+
       const res = await fetch('/api/kpis/seo');
       const json = (await res.json()) as SeoKpisResponse & { error?: string };
       if (!res.ok) throw new Error(json.error ?? 'Error al cargar SEO');
       setData(json);
+
+      const updatedCount = syncJson.updated?.length ?? 0;
+      const errorCount = syncJson.errors?.length ?? 0;
+      if (errorCount > 0) {
+        setSuccessMessage(
+          `Sync parcial: ${updatedCount} claves actualizadas, ${errorCount} con error.`,
+        );
+      } else {
+        setSuccessMessage(`SEO actualizado correctamente (${updatedCount} claves).`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -326,6 +346,12 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
             </div>
           </div>
         </div>
+
+        {successMessage ? (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            {successMessage}
+          </div>
+        ) : null}
 
         {error ? <KpiSectionError title="SEO kalyo.io" error={error} /> : null}
 
