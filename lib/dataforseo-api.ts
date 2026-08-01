@@ -54,6 +54,12 @@ type OrganicMetrics = {
 export type DomainOverviewResult = {
   target?: string;
   location_code?: number;
+  items?: Array<{
+    metrics?: {
+      organic?: OrganicMetrics;
+      paid?: OrganicMetrics;
+    };
+  }>;
   metrics?: {
     organic?: OrganicMetrics;
     paid?: OrganicMetrics;
@@ -71,6 +77,14 @@ export type RankedKeywordItem = {
     serp_item?: {
       rank_group?: number;
       rank_absolute?: number;
+      url?: string;
+      etv?: number;
+      rank_changes?: {
+        previous_rank_absolute?: number | null;
+        is_up?: boolean;
+        is_down?: boolean;
+        is_new?: boolean;
+      };
     };
   };
 };
@@ -172,9 +186,50 @@ export type SeoPageSpeedSummary = {
   speed_index: number;
 };
 
+export type SeoPositionTrackingKeyword = {
+  keyword: string;
+  position: number;
+  volume: number;
+  visibility_pct: number;
+  url: string;
+  etv: number;
+  position_change: number | null;
+};
+
+export type SeoPositionTrackingPage = {
+  url: string;
+  keywords_count: number;
+  avg_position: number;
+  estimated_traffic: number;
+};
+
+export type SeoPositionTrackingCompetitor = {
+  domain: string;
+  common_keywords: number;
+  etv: number;
+  visibility_approx: number;
+};
+
+export type SeoPositionTracking = {
+  visibility: number;
+  avg_position: number;
+  estimated_traffic: number;
+  keywords_tracked: number;
+  keywords_top3: number;
+  keywords_top10: number;
+  keywords_top20: number;
+  keywords_top100: number;
+  keywords_improved: number | null;
+  keywords_declined: number | null;
+  top_keywords: SeoPositionTrackingKeyword[];
+  pages: SeoPositionTrackingPage[];
+  competitors_visibility: SeoPositionTrackingCompetitor[];
+};
+
 export type SeoKpisResponse = {
   overview: SeoCountryOverview[];
   top_keywords: SeoTopKeyword[];
+  position_tracking: SeoPositionTracking;
   backlinks: SeoBacklinksSummary | null;
   competitors: SeoCompetitor[];
   site_audit: SeoSiteAudit | null;
@@ -683,13 +738,170 @@ function avgPositionFromKeywords(items: RankedKeywordItem[] | undefined): number
   return Math.round((sum / positions.length) * 10) / 10;
 }
 
+function organicMetricsFromOverview(overview: DomainOverviewResult | null): OrganicMetrics | undefined {
+  return overview?.metrics?.organic ?? overview?.items?.[0]?.metrics?.organic;
+}
+
+function keywordVisibilityPct(volume: number, position: number): number {
+  if (position <= 0) return 0;
+  return Math.min(100, Math.round((volume / Math.max(position, 1)) * 0.05));
+}
+
+type ParsedRankedKeyword = {
+  keyword: string;
+  position: number;
+  volume: number;
+  url: string;
+  etv: number;
+  visibility_pct: number;
+  position_change: number | null;
+};
+
+function parseRankedKeywordItems(items: RankedKeywordItem[] | undefined): ParsedRankedKeyword[] {
+  return (items ?? [])
+    .map((item) => {
+      const serp = item.ranked_serp_element?.serp_item;
+      const position = serp?.rank_group ?? serp?.rank_absolute ?? 0;
+      const volume = toNumber(item.keyword_data?.keyword_info?.search_volume);
+      const keyword = item.keyword_data?.keyword ?? '';
+      const url = serp?.url ?? '';
+      const etv = toNumber(serp?.etv);
+      const previous = serp?.rank_changes?.previous_rank_absolute;
+      const position_change =
+        typeof previous === 'number' && previous > 0 && position > 0 ? previous - position : null;
+
+      return {
+        keyword,
+        position,
+        volume,
+        url,
+        etv,
+        visibility_pct: keywordVisibilityPct(volume, position),
+        position_change,
+      };
+    })
+    .filter((item) => item.keyword && item.position > 0);
+}
+
+function computePositionChanges(
+  current: ParsedRankedKeyword[],
+  previous: ParsedRankedKeyword[] | null,
+): { improved: number | null; declined: number | null } {
+  if (!previous?.length) return { improved: null, declined: null };
+
+  const prevMap = new Map(previous.map((row) => [row.keyword, row.position]));
+  let improved = 0;
+  let declined = 0;
+
+  for (const row of current) {
+    const prevPosition = prevMap.get(row.keyword);
+    if (prevPosition == null) continue;
+    if (row.position < prevPosition) improved += 1;
+    else if (row.position > prevPosition) declined += 1;
+  }
+
+  return { improved, declined };
+}
+
+function groupKeywordsByPage(keywords: ParsedRankedKeyword[]): SeoPositionTrackingPage[] {
+  const byUrl = new Map<string, ParsedRankedKeyword[]>();
+
+  for (const row of keywords) {
+    const url = row.url || '(sin URL)';
+    const bucket = byUrl.get(url) ?? [];
+    bucket.push(row);
+    byUrl.set(url, bucket);
+  }
+
+  return Array.from(byUrl.entries())
+    .map(([url, rows]) => ({
+      url,
+      keywords_count: rows.length,
+      avg_position:
+        Math.round((rows.reduce((sum, row) => sum + row.position, 0) / rows.length) * 10) / 10,
+      estimated_traffic: Math.round(rows.reduce((sum, row) => sum + row.etv, 0) * 100) / 100,
+    }))
+    .sort((a, b) => b.estimated_traffic - a.estimated_traffic || a.avg_position - b.avg_position);
+}
+
+function buildPositionTracking(
+  keywords: RankedKeywordsResult | null,
+  competitors: CompetitorsDomainResult | null,
+  previousKeywords: RankedKeywordsResult | null,
+): SeoPositionTracking {
+  const parsed = parseRankedKeywordItems(keywords?.items);
+  const total = parsed.length;
+
+  const withTrafficInTop100 = parsed.filter((row) => row.position <= 100 && row.etv > 0).length;
+  const visibility = total > 0 ? Math.round((withTrafficInTop100 / total) * 1000) / 10 : 0;
+
+  const avg_position =
+    total > 0
+      ? Math.round((parsed.reduce((sum, row) => sum + row.position, 0) / total) * 10) / 10
+      : 0;
+
+  const estimated_traffic = Math.round(parsed.reduce((sum, row) => sum + row.etv, 0) * 100) / 100;
+
+  const previousParsed = previousKeywords
+    ? parseRankedKeywordItems(previousKeywords.items)
+    : null;
+  const { improved, declined } = computePositionChanges(parsed, previousParsed);
+
+  const top_keywords = [...parsed]
+    .sort((a, b) => b.visibility_pct - a.visibility_pct || a.position - b.position)
+    .slice(0, 10);
+
+  const competitorsParsed = parseCompetitors(competitors);
+  const competitors_visibility = competitorsParsed.map((row) => ({
+    ...row,
+    visibility_approx:
+      estimated_traffic > 0 ? Math.min(100, Math.round((row.etv / estimated_traffic) * 100)) : 0,
+  }));
+
+  return {
+    visibility,
+    avg_position,
+    estimated_traffic,
+    keywords_tracked: total,
+    keywords_top3: parsed.filter((row) => row.position <= 3).length,
+    keywords_top10: parsed.filter((row) => row.position <= 10).length,
+    keywords_top20: parsed.filter((row) => row.position <= 20).length,
+    keywords_top100: parsed.filter((row) => row.position <= 100).length,
+    keywords_improved: improved,
+    keywords_declined: declined,
+    top_keywords,
+    pages: groupKeywordsByPage(parsed),
+    competitors_visibility,
+  };
+}
+
+async function readPreviousRankedKeywordsSnapshot(
+  locationCode: number,
+): Promise<RankedKeywordsResult | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from('seo_history')
+      .select('data')
+      .eq('key', cacheKeyRankedKeywords(locationCode))
+      .order('snapshot_at', { ascending: false })
+      .range(1, 1)
+      .maybeSingle();
+
+    if (error) return null;
+    return (data?.data as RankedKeywordsResult) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function parseOverview(
   locationCode: number,
   overview: DomainOverviewResult | null,
   keywords: RankedKeywordsResult | null,
 ): SeoCountryOverview {
   const meta = locationMeta(locationCode);
-  const organic = overview?.metrics?.organic;
+  const organic = organicMetricsFromOverview(overview);
   return {
     country: meta.country,
     label: meta.label,
@@ -1011,6 +1223,10 @@ export async function getSeoKpis(options?: { allowStale?: boolean }): Promise<Se
   const competitorsRaw = cache.get(SEO_CACHE_KEYS.competitors(2484)) as
     | CompetitorsDomainResult
     | undefined;
+  const mxKeywordsRaw = cache.get(cacheKeyRankedKeywords(2484)) as
+    | RankedKeywordsResult
+    | undefined;
+  const previousMxKeywords = await readPreviousRankedKeywordsSnapshot(2484);
 
   const onPageSummary = cache.get(SEO_CACHE_KEYS.onPageSummary) as OnPageSummaryRaw | undefined;
   const onPagePages = cache.get(SEO_CACHE_KEYS.onPagePages) as OnPagePagesRaw | undefined;
@@ -1020,6 +1236,11 @@ export async function getSeoKpis(options?: { allowStale?: boolean }): Promise<Se
   return {
     overview,
     top_keywords: topKeywords.sort((a, b) => a.position - b.position).slice(0, 100),
+    position_tracking: buildPositionTracking(
+      mxKeywordsRaw ?? null,
+      competitorsRaw ?? null,
+      previousMxKeywords,
+    ),
     backlinks: parseBacklinks(backlinksRaw ?? null),
     competitors: parseCompetitors(competitorsRaw ?? null),
     site_audit: parseSiteAudit(onPageSummary ?? null, onPagePages ?? null, onPageTask ?? null),

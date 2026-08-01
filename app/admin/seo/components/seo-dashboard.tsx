@@ -13,12 +13,16 @@ import {
 import {
   ArrowDownRight,
   ArrowUpRight,
+  BarChart3,
+  FileText,
   Globe2,
   Link2,
   Minus,
   RefreshCw,
   Search,
+  Target,
   TrendingUp,
+  Users,
 } from 'lucide-react';
 import { AdminShell } from '@/components/admin/admin-shell';
 import { KpiEmptyState } from '@/components/admin/kpis/kpi-empty-state';
@@ -27,6 +31,8 @@ import type {
   SeoCountryOverview,
   SeoKpisResponse,
   SeoPageSpeedSummary,
+  SeoPositionTracking,
+  SeoPositionTrackingKeyword,
   SeoSiteAudit,
   SeoTopKeyword,
 } from '@/lib/dataforseo-api';
@@ -50,6 +56,7 @@ type Props = {
 };
 
 type SortKey = 'keyword' | 'position' | 'volume' | 'visibility';
+type PositionSortKey = 'keyword' | 'position' | 'volume' | 'visibility_pct' | 'etv' | 'url';
 type SortDir = 'asc' | 'desc';
 
 function formatUpdatedAt(iso: string | null): string {
@@ -88,6 +95,398 @@ function buildVisibilityChart(countryOverview: SeoCountryOverview | undefined, l
       keywords: isToday ? keywords : null,
     };
   });
+}
+
+function PositionChangeIndicator({ change }: { change: number | null }) {
+  if (change === null) {
+    return (
+      <span className="inline-flex items-center text-[10px] text-fg-muted" title="Sin histórico">
+        <Minus className="h-3 w-3" />
+      </span>
+    );
+  }
+  if (change === 0) {
+    return (
+      <span className="inline-flex items-center text-[10px] text-fg-muted">
+        <Minus className="h-3 w-3" />
+      </span>
+    );
+  }
+  const improved = change > 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${
+        improved ? 'text-emerald-600' : 'text-rose-600'
+      }`}
+      title={improved ? 'Mejoró posición' : 'Perdió posición'}
+    >
+      {improved ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+      {Math.abs(change)}
+    </span>
+  );
+}
+
+function PositionTrackingSection({
+  tracking,
+}: {
+  tracking: SeoPositionTracking;
+}) {
+  const [sortKey, setSortKey] = useState<PositionSortKey>('visibility_pct');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [showAllKeywords, setShowAllKeywords] = useState(false);
+
+  const sortedKeywords = useMemo(() => {
+    const rows = [...tracking.top_keywords];
+    rows.sort((a, b) => {
+      const factor = sortDir === 'asc' ? 1 : -1;
+      if (sortKey === 'keyword' || sortKey === 'url') {
+        return a[sortKey].localeCompare(b[sortKey]) * factor;
+      }
+      return (a[sortKey] - b[sortKey]) * factor;
+    });
+    return rows;
+  }, [sortDir, sortKey, tracking.top_keywords]);
+
+  const visibleKeywords = showAllKeywords ? sortedKeywords : sortedKeywords.slice(0, 10);
+
+  function toggleSort(key: PositionSortKey) {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    setSortDir(key === 'keyword' || key === 'url' || key === 'position' ? 'asc' : 'desc');
+  }
+
+  function sortIndicator(key: PositionSortKey): string {
+    if (sortKey !== key) return '';
+    return sortDir === 'asc' ? ' ↑' : ' ↓';
+  }
+
+  const distribution = [
+    { label: 'Top 3', value: tracking.keywords_top3 },
+    { label: 'Top 10', value: tracking.keywords_top10 },
+    { label: 'Top 20', value: tracking.keywords_top20 },
+    { label: 'Top 100', value: tracking.keywords_top100 },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-fg">Rastreo de Posición</h3>
+          <p className="text-xs text-fg-muted">🇲🇽 México · ranked_keywords_2484</p>
+        </div>
+        <div className="flex flex-wrap gap-3 text-xs">
+          <span className="rounded-full border border-bg-border bg-bg-subtle px-3 py-1 text-fg-muted">
+            Mejoradas:{' '}
+            <span className="font-semibold text-emerald-700">
+              {tracking.keywords_improved ?? 'N/D'}
+            </span>
+          </span>
+          <span className="rounded-full border border-bg-border bg-bg-subtle px-3 py-1 text-fg-muted">
+            En declive:{' '}
+            <span className="font-semibold text-rose-700">
+              {tracking.keywords_declined ?? 'N/D'}
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {/* A) Summary cards */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Visibilidad"
+          value={`${tracking.visibility}%`}
+          icon={Target}
+        />
+        <MetricCard
+          label="Tráfico estimado"
+          value={tracking.estimated_traffic.toLocaleString('es-MX', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
+          icon={TrendingUp}
+        />
+        <MetricCard
+          label="Posición media"
+          value={tracking.avg_position.toFixed(1)}
+          icon={BarChart3}
+        />
+        <MetricCard
+          label="Keywords rastreadas"
+          value={tracking.keywords_tracked.toLocaleString('es-MX')}
+          icon={Search}
+        />
+      </div>
+
+      {/* B) Distribution table */}
+      <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
+        <h4 className="mb-4 text-sm font-semibold text-fg">Distribución de rankings</h4>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[480px] text-center text-sm">
+            <thead>
+              <tr className="border-b border-bg-border text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
+                {distribution.map((bucket) => (
+                  <th key={bucket.label} className="pb-2 px-4">
+                    {bucket.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {distribution.map((bucket) => (
+                  <td key={bucket.label} className="py-3 px-4">
+                    <span
+                      className="text-2xl font-bold tabular-nums"
+                      style={{ color: KALYO_PURPLE }}
+                    >
+                      {bucket.value.toLocaleString('es-MX')}
+                    </span>
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* C) Keywords table */}
+      <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
+        <h4 className="mb-4 text-sm font-semibold text-fg">Keywords principales</h4>
+        {tracking.top_keywords.length > 0 ? (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-bg-border text-fg-tertiary">
+                    {(
+                      [
+                        ['keyword', 'Keyword'],
+                        ['position', 'Posición'],
+                        ['volume', 'Vol.'],
+                        ['visibility_pct', 'Visibilidad'],
+                        ['etv', 'ETV'],
+                        ['url', 'URL'],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <th key={key} className="pb-2 pr-4">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(key)}
+                          className="text-[10px] font-semibold uppercase tracking-wider hover:text-fg"
+                        >
+                          {label}
+                          {sortIndicator(key)}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleKeywords.map((row: SeoPositionTrackingKeyword) => (
+                    <tr
+                      key={`${row.keyword}-${row.url}`}
+                      className="border-b border-bg-border/60 hover:bg-bg-subtle/50"
+                    >
+                      <td className="py-2.5 pr-4 font-medium text-fg">{row.keyword}</td>
+                      <td className="py-2.5 pr-4">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`inline-flex min-w-[2.5rem] items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ring-1 ${positionBadgeClass(row.position)}`}
+                          >
+                            #{row.position}
+                          </span>
+                          <PositionChangeIndicator change={row.position_change} />
+                        </div>
+                      </td>
+                      <td className="py-2.5 pr-4 tabular-nums text-fg">
+                        {row.volume.toLocaleString('es-MX')}
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-bg-subtle">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${row.visibility_pct}%`,
+                                backgroundColor: KALYO_PURPLE,
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs tabular-nums text-fg-muted">
+                            {row.visibility_pct}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 pr-4 tabular-nums text-fg">
+                        {row.etv.toLocaleString('es-MX', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td className="max-w-[220px] truncate py-2.5 pr-4 text-xs text-fg-muted">
+                        {row.url ? (
+                          <a
+                            href={row.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-fg hover:underline"
+                            title={row.url}
+                          >
+                            {row.url.replace(/^https?:\/\/(www\.)?/, '')}
+                          </a>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {sortedKeywords.length > 10 ? (
+              <button
+                type="button"
+                onClick={() => setShowAllKeywords((prev) => !prev)}
+                className="mt-3 text-xs font-semibold hover:underline"
+                style={{ color: KALYO_PURPLE }}
+              >
+                {showAllKeywords ? 'Ver menos' : `Ver todas (${sortedKeywords.length})`}
+              </button>
+            ) : null}
+          </>
+        ) : (
+          <KpiEmptyState description="Sin keywords rankeadas en México" />
+        )}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* D) Pages */}
+        <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <FileText className="h-4 w-4" style={{ color: KALYO_PURPLE }} />
+            <h4 className="text-sm font-semibold text-fg">Páginas</h4>
+          </div>
+          {tracking.pages.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[480px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-bg-border text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
+                    <th className="pb-2 pr-4">URL</th>
+                    <th className="pb-2 pr-4">Keywords</th>
+                    <th className="pb-2 pr-4">Posición media</th>
+                    <th className="pb-2 pr-4">Tráfico est.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tracking.pages.map((page) => (
+                    <tr
+                      key={page.url}
+                      className="border-b border-bg-border/60 hover:bg-bg-subtle/50"
+                    >
+                      <td className="max-w-[200px] truncate py-2.5 pr-4 text-xs">
+                        {page.url.startsWith('http') ? (
+                          <a
+                            href={page.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-fg hover:underline"
+                            title={page.url}
+                          >
+                            {page.url.replace(/^https?:\/\/(www\.)?kalyo\.io/, '') || '/'}
+                          </a>
+                        ) : (
+                          <span className="text-fg-muted">{page.url}</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-4 tabular-nums">{page.keywords_count}</td>
+                      <td className="py-2.5 pr-4 tabular-nums">{page.avg_position.toFixed(1)}</td>
+                      <td className="py-2.5 pr-4 tabular-nums">
+                        {page.estimated_traffic.toLocaleString('es-MX', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <KpiEmptyState description="Sin páginas con keywords rankeadas" />
+          )}
+        </div>
+
+        {/* E) Competitors mini table */}
+        <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <Users className="h-4 w-4" style={{ color: KALYO_PURPLE }} />
+            <h4 className="text-sm font-semibold text-fg">Competidores</h4>
+          </div>
+          {tracking.competitors_visibility.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[420px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-bg-border text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
+                    <th className="pb-2 pr-4">Dominio</th>
+                    <th className="pb-2 pr-4">Keywords comunes</th>
+                    <th className="pb-2 pr-4">ETV est.</th>
+                    <th className="pb-2 pr-4">Visibilidad aprox.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tracking.competitors_visibility.map((row, index) => (
+                    <tr
+                      key={row.domain}
+                      className="border-b border-bg-border/60 hover:bg-bg-subtle/50"
+                    >
+                      <td className="py-2.5 pr-4">
+                        <span className="font-medium text-fg">{row.domain}</span>
+                        {index === 0 ? (
+                          <span
+                            className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+                            style={{ backgroundColor: KALYO_PURPLE }}
+                          >
+                            Top
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="py-2.5 pr-4 tabular-nums">
+                        {row.common_keywords.toLocaleString('es-MX')}
+                      </td>
+                      <td className="py-2.5 pr-4 tabular-nums">
+                        {row.etv.toLocaleString('es-MX')}
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-12 overflow-hidden rounded-full bg-bg-subtle">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${row.visibility_approx}%`,
+                                backgroundColor: KALYO_PURPLE,
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs tabular-nums text-fg-muted">
+                            {row.visibility_approx}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <KpiEmptyState description="Sin datos de competidores en caché" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ChangeIndicator({ value }: { value: number | null }) {
@@ -630,6 +1029,12 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
                 icon={Globe2}
               />
             </div>
+
+            {data?.position_tracking ? (
+              <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
+                <PositionTrackingSection tracking={data.position_tracking} />
+              </div>
+            ) : null}
 
             <SiteAuditSections audit={data?.site_audit} pagespeed={data?.pagespeed} />
 
