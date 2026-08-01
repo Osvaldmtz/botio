@@ -77,6 +77,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/seo-sync",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/cron/traffic-monitor",
       "schedule": "*/15 * * * *"
     },

@@ -44,6 +44,7 @@ import { applyAdminTrialActivationGuard } from '@/lib/trial-activation-guard';
 import { applyEscalationNotifyGuard } from '@/lib/escalation-notify-guard';
 import { handleTrialOnboardingMessage } from '@/lib/trial-onboarding-interceptor';
 import { handleAdminTrialActivationMessage } from '@/lib/admin-trial-interceptor';
+import { handleSeoCommandMessage } from '@/lib/seo-command-interceptor';
 import { isTeamOperatorPhone } from '@/lib/team-members';
 import { handleObjectionMessage } from '@/lib/objection-interceptor';
 import { trackObjectionOutcome } from '@/lib/objection-outcome-tracker';
@@ -96,6 +97,7 @@ export type ProcessMessageSource =
   | 'auto_demo_reminder'
   | 'trial_onboarding'
   | 'admin_trial_interceptor'
+  | 'seo_command_interceptor'
   | 'objection_handler'
   | 'ambassador_handler'
   | 'purchase_intent_handler'
@@ -771,6 +773,29 @@ export async function processIncomingMessage(
         storedReply: adminTrial.replyText,
         conversationId: conversation.id,
         source: adminTrial.source,
+      };
+    }
+
+    const seoCommandInterceptor = await handleSeoCommandMessage({ messageBody });
+    if (seoCommandInterceptor) {
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: seoCommandInterceptor.replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: { source: seoCommandInterceptor.source },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      console.log(
+        `[process-message] channel=${channel} | source=${seoCommandInterceptor.source} | conv=${conversation.id}`,
+      );
+      return {
+        replyText: seoCommandInterceptor.replyText,
+        storedReply: seoCommandInterceptor.replyText,
+        conversationId: conversation.id,
+        source: seoCommandInterceptor.source,
       };
     }
   }
