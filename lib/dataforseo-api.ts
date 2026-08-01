@@ -102,7 +102,10 @@ export type BacklinksSummaryResult = {
   referring_domains?: number;
   referring_main_domains?: number;
   referring_pages?: number;
+  referring_pages_nofollow?: number;
   rank?: number;
+  referring_links_types?: Record<string, number>;
+  referring_links_attributes?: Record<string, number>;
 };
 
 export type CompetitorDomainItem = {
@@ -144,6 +147,96 @@ export type SeoBacklinksSummary = {
   total: number;
   referring_domains: number;
   rank: number;
+};
+
+export type LlmMentionItem = {
+  llm_type?: string;
+  mentions_count?: number;
+  pages_cited_count?: number;
+};
+
+export type LlmMentionsResult = {
+  items?: LlmMentionItem[];
+  aggregated_metrics?: {
+    platform?: Array<{ key?: string; mentions?: number }>;
+    total?: { mentions?: number };
+  };
+};
+
+export type BacklinkDetailItem = {
+  url_from?: string;
+  url_to?: string;
+  anchor?: string | null;
+  rank?: number;
+  dofollow?: boolean;
+};
+
+export type BacklinksDetailResult = {
+  items?: BacklinkDetailItem[];
+  total_count?: number;
+};
+
+export type AnchorTextItem = {
+  anchor?: string | null;
+  backlinks?: number;
+  referring_domains?: number;
+};
+
+export type AnchorTextsResult = {
+  items?: AnchorTextItem[];
+};
+
+export type ReferringDomainItem = {
+  domain?: string;
+  rank?: number;
+  backlinks?: number;
+  referring_pages?: number;
+  referring_pages_nofollow?: number;
+};
+
+export type ReferringDomainsResult = {
+  items?: ReferringDomainItem[];
+};
+
+export type SeoAiVisibilityModel =
+  | 'ChatGPT'
+  | 'Google AI Overview'
+  | 'Modo IA'
+  | 'Gemini';
+
+export type SeoAiVisibility = {
+  total_mentions: number;
+  pages_cited: number;
+  by_model: Array<{
+    model: SeoAiVisibilityModel;
+    mentions: number;
+    pages_cited: number;
+  }>;
+};
+
+export type SeoBacklinksDetail = {
+  follow_count: number;
+  nofollow_count: number;
+  text_pct: number;
+  image_pct: number;
+  top_backlinks: Array<{
+    url_from: string;
+    url_to: string;
+    anchor: string;
+    rank: number;
+    dofollow: boolean;
+  }>;
+  top_anchors: Array<{
+    anchor: string;
+    backlinks: number;
+    referring_domains: number;
+  }>;
+  top_referring_domains: Array<{
+    domain: string;
+    rank: number;
+    backlinks: number;
+    dofollow: number;
+  }>;
 };
 
 export type SeoCompetitor = {
@@ -230,7 +323,9 @@ export type SeoKpisResponse = {
   overview: SeoCountryOverview[];
   top_keywords: SeoTopKeyword[];
   position_tracking: SeoPositionTracking;
+  ai_visibility: SeoAiVisibility | null;
   backlinks: SeoBacklinksSummary | null;
+  backlinks_detail: SeoBacklinksDetail | null;
   competitors: SeoCompetitor[];
   site_audit: SeoSiteAudit | null;
   pagespeed: SeoPageSpeedSummary | null;
@@ -306,6 +401,10 @@ function cacheKeyRankedKeywords(locationCode: number): string {
 
 export const SEO_CACHE_KEYS = {
   backlinksSummary: 'backlinks_summary',
+  backlinksDetail: 'backlinks_detail',
+  anchorTexts: 'anchor_texts',
+  referringDomains: 'referring_domains',
+  llmMentions: 'llm_mentions',
   competitors: (locationCode: number) => `competitors_${locationCode}`,
   onPageTaskId: 'on_page_task_id',
   onPageSummary: 'on_page_summary',
@@ -705,6 +804,164 @@ export async function getBacklinksSummary(domain: string): Promise<BacklinksSumm
   return dataForSeoRequest<BacklinksSummaryResult>('backlinks/summary/live', [{ target: domain }]);
 }
 
+export async function getLlmMentions(domain: string): Promise<LlmMentionsResult> {
+  const searchRaw = await dataForSeoRequest<{
+    total_count?: number;
+    items?: Array<{
+      llm_type?: string;
+      model_name?: string;
+      platform?: string;
+      mentions_count?: number;
+      pages_cited_count?: number;
+      sources?: Array<{ url?: string }>;
+    }>;
+    aggregated_metrics?: {
+      platform?: Array<{ key?: string; mentions?: number }>;
+      total?: { mentions?: number };
+    };
+  }>('ai_optimization/llm_mentions/search/live', [
+    {
+      target: [{ domain, search_filter: 'include' }],
+      limit: 10,
+      location_code: 2484,
+      language_code: SEO_LANGUAGE_CODE,
+    },
+  ]);
+
+  if (searchRaw.items?.some((item) => item.llm_type && item.mentions_count != null)) {
+    return {
+      items: searchRaw.items.map((item) => ({
+        llm_type: item.llm_type ?? item.model_name ?? item.platform,
+        mentions_count: toNumber(item.mentions_count),
+        pages_cited_count: toNumber(item.pages_cited_count),
+      })),
+      aggregated_metrics: searchRaw.aggregated_metrics,
+    };
+  }
+
+  const metricsRaw = await dataForSeoRequest<{
+    aggregated_metrics?: {
+      platform?: Array<{ key?: string; mentions?: number }>;
+      total?: { mentions?: number };
+    };
+  }>('ai_optimization/llm_mentions/target_metrics/live', [
+    {
+      target: [{ domain, search_filter: 'include' }],
+      location_code: 2484,
+      language_code: SEO_LANGUAGE_CODE,
+      internal_list_limit: 10,
+    },
+  ]);
+
+  const platformToLlmType: Record<string, string> = {
+    chat_gpt: 'chatgpt',
+    google: 'google_ai_overview',
+    gemini: 'gemini',
+    perplexity: 'perplexity',
+  };
+
+  const byModel = new Map<string, { mentions: number; pages: Set<string> }>();
+  for (const item of searchRaw.items ?? []) {
+    const llmType = (
+      item.llm_type ??
+      item.model_name ??
+      item.platform ??
+      'unknown'
+    ).toLowerCase();
+    const bucket = byModel.get(llmType) ?? { mentions: 0, pages: new Set<string>() };
+    bucket.mentions += 1;
+    for (const source of item.sources ?? []) {
+      if (source.url) bucket.pages.add(source.url);
+    }
+    byModel.set(llmType, bucket);
+  }
+
+  const itemsFromSearch: LlmMentionItem[] = Array.from(byModel.entries()).map(
+    ([llm_type, data]) => ({
+      llm_type,
+      mentions_count: data.mentions,
+      pages_cited_count: data.pages.size,
+    }),
+  );
+
+  const itemsFromMetrics: LlmMentionItem[] = (metricsRaw.aggregated_metrics?.platform ?? []).map(
+    (row) => ({
+      llm_type: platformToLlmType[row.key ?? ''] ?? row.key,
+      mentions_count: toNumber(row.mentions),
+      pages_cited_count: 0,
+    }),
+  );
+
+  const items = itemsFromMetrics.length > 0 ? itemsFromMetrics : itemsFromSearch;
+
+  if (items.length > 0) {
+    try {
+      const pages = await dataForSeoRequest<{ items?: Array<{ page?: string }> }>(
+        'ai_optimization/llm_mentions/top_mentioned_pages/live',
+        [
+          {
+            target: [{ domain, search_filter: 'include' }],
+            location_code: 2484,
+            language_code: SEO_LANGUAGE_CODE,
+            limit: 10,
+            links_scope: 'sources',
+          },
+        ],
+      );
+      const pagesCited = (pages.items ?? []).length;
+      if (pagesCited > 0) {
+        const perModel = Math.max(1, Math.ceil(pagesCited / items.length));
+        for (const item of items) {
+          item.pages_cited_count = perModel;
+        }
+      }
+    } catch {
+      // optional enrichment
+    }
+  }
+
+  return {
+    items,
+    aggregated_metrics: metricsRaw.aggregated_metrics ?? {
+      total: {
+        mentions:
+          toNumber(searchRaw.total_count) ||
+          items.reduce((sum, row) => sum + toNumber(row.mentions_count), 0),
+      },
+    },
+  };
+}
+
+export async function getBacklinksDetail(domain: string): Promise<BacklinksDetailResult> {
+  return dataForSeoRequest<BacklinksDetailResult>('backlinks/backlinks/live', [
+    {
+      target: domain,
+      limit: 10,
+      order_by: ['rank,desc'],
+    },
+  ]);
+}
+
+export async function getAnchorTexts(domain: string): Promise<AnchorTextsResult> {
+  return dataForSeoRequest<AnchorTextsResult>('backlinks/anchors/live', [
+    {
+      target: domain,
+      limit: 10,
+      order_by: ['backlinks,desc'],
+    },
+  ]);
+}
+
+export async function getReferringDomains(domain: string): Promise<ReferringDomainsResult> {
+  return dataForSeoRequest<ReferringDomainsResult>('backlinks/referring_domains/live', [
+    {
+      target: domain,
+      limit: 10,
+      order_by: ['rank,desc'],
+    },
+  ]);
+}
+
 export async function getCompetitors(
   domain: string,
   locationCode: number,
@@ -938,6 +1195,117 @@ function parseBacklinks(data: BacklinksSummaryResult | null): SeoBacklinksSummar
     total: toNumber(data.backlinks),
     referring_domains: toNumber(data.referring_domains),
     rank: toNumber(data.rank),
+  };
+}
+
+const AI_MODEL_ORDER: SeoAiVisibilityModel[] = [
+  'ChatGPT',
+  'Google AI Overview',
+  'Modo IA',
+  'Gemini',
+];
+
+const LLM_TYPE_TO_MODEL: Record<string, SeoAiVisibilityModel> = {
+  chatgpt: 'ChatGPT',
+  chat_gpt: 'ChatGPT',
+  google_ai_overview: 'Google AI Overview',
+  google: 'Google AI Overview',
+  perplexity: 'Modo IA',
+  ai_mode: 'Modo IA',
+  gemini: 'Gemini',
+};
+
+function parseAiVisibility(data: LlmMentionsResult | null): SeoAiVisibility | null {
+  if (!data) return null;
+
+  const byModelMap = new Map<SeoAiVisibilityModel, { mentions: number; pages_cited: number }>();
+
+  for (const item of data.items ?? []) {
+    const llmType = (item.llm_type ?? '').toLowerCase();
+    const model = LLM_TYPE_TO_MODEL[llmType];
+    if (!model) continue;
+    const existing = byModelMap.get(model) ?? { mentions: 0, pages_cited: 0 };
+    byModelMap.set(model, {
+      mentions: existing.mentions + toNumber(item.mentions_count),
+      pages_cited: existing.pages_cited + toNumber(item.pages_cited_count),
+    });
+  }
+
+  if (byModelMap.size === 0 && data.aggregated_metrics?.platform) {
+    for (const row of data.aggregated_metrics.platform) {
+      const llmType = (row.key ?? '').toLowerCase();
+      const model = LLM_TYPE_TO_MODEL[llmType];
+      if (!model) continue;
+      byModelMap.set(model, {
+        mentions: toNumber(row.mentions),
+        pages_cited: 0,
+      });
+    }
+  }
+
+  const by_model = AI_MODEL_ORDER.map((model) => ({
+    model,
+    mentions: byModelMap.get(model)?.mentions ?? 0,
+    pages_cited: byModelMap.get(model)?.pages_cited ?? 0,
+  }));
+
+  const total_mentions =
+    toNumber(data.aggregated_metrics?.total?.mentions) ||
+    by_model.reduce((sum, row) => sum + row.mentions, 0);
+  const pages_cited = by_model.reduce((sum, row) => sum + row.pages_cited, 0);
+
+  if (total_mentions === 0 && pages_cited === 0) return null;
+
+  return { total_mentions, pages_cited, by_model };
+}
+
+function parseBacklinksDetail(
+  summary: BacklinksSummaryResult | null,
+  backlinks: BacklinksDetailResult | null,
+  anchors: AnchorTextsResult | null,
+  referringDomains: ReferringDomainsResult | null,
+): SeoBacklinksDetail | null {
+  if (!backlinks && !anchors && !referringDomains && !summary) return null;
+
+  const linkTypes = summary?.referring_links_types as Record<string, number> | undefined;
+  const linkAttrs = summary?.referring_links_attributes as Record<string, number> | undefined;
+  const totalLinks = toNumber(summary?.backlinks);
+  const anchorLinks = toNumber(linkTypes?.anchor);
+  const imageLinks = toNumber(linkTypes?.image);
+  const typeTotal = anchorLinks + imageLinks || totalLinks;
+
+  const nofollowCount =
+    toNumber(linkAttrs?.nofollow) ||
+    toNumber(summary?.referring_pages_nofollow) ||
+    (backlinks?.items ?? []).filter((item) => item.dofollow === false).length;
+  const followCount = Math.max(0, totalLinks - nofollowCount);
+
+  return {
+    follow_count: followCount,
+    nofollow_count: nofollowCount,
+    text_pct: typeTotal > 0 ? Math.round((anchorLinks / typeTotal) * 100) : 0,
+    image_pct: typeTotal > 0 ? Math.round((imageLinks / typeTotal) * 100) : 0,
+    top_backlinks: (backlinks?.items ?? []).slice(0, 10).map((item) => ({
+      url_from: item.url_from ?? '',
+      url_to: item.url_to ?? '',
+      anchor: item.anchor ?? '—',
+      rank: toNumber(item.rank),
+      dofollow: item.dofollow !== false,
+    })),
+    top_anchors: (anchors?.items ?? []).slice(0, 10).map((item) => ({
+      anchor: item.anchor ?? '—',
+      backlinks: toNumber(item.backlinks),
+      referring_domains: toNumber(item.referring_domains),
+    })),
+    top_referring_domains: (referringDomains?.items ?? []).slice(0, 10).map((item) => ({
+      domain: item.domain ?? '',
+      rank: toNumber(item.rank),
+      backlinks: toNumber(item.backlinks),
+      dofollow: Math.max(
+        0,
+        toNumber(item.referring_pages) - toNumber(item.referring_pages_nofollow),
+      ),
+    })),
   };
 }
 
@@ -1220,6 +1588,14 @@ export async function getSeoKpis(options?: { allowStale?: boolean }): Promise<Se
   }
 
   const backlinksRaw = cache.get(SEO_CACHE_KEYS.backlinksSummary) as BacklinksSummaryResult | undefined;
+  const llmMentionsRaw = cache.get(SEO_CACHE_KEYS.llmMentions) as LlmMentionsResult | undefined;
+  const backlinksDetailRaw = cache.get(SEO_CACHE_KEYS.backlinksDetail) as
+    | BacklinksDetailResult
+    | undefined;
+  const anchorTextsRaw = cache.get(SEO_CACHE_KEYS.anchorTexts) as AnchorTextsResult | undefined;
+  const referringDomainsRaw = cache.get(SEO_CACHE_KEYS.referringDomains) as
+    | ReferringDomainsResult
+    | undefined;
   const competitorsRaw = cache.get(SEO_CACHE_KEYS.competitors(2484)) as
     | CompetitorsDomainResult
     | undefined;
@@ -1241,7 +1617,14 @@ export async function getSeoKpis(options?: { allowStale?: boolean }): Promise<Se
       competitorsRaw ?? null,
       previousMxKeywords,
     ),
+    ai_visibility: parseAiVisibility(llmMentionsRaw ?? null),
     backlinks: parseBacklinks(backlinksRaw ?? null),
+    backlinks_detail: parseBacklinksDetail(
+      backlinksRaw ?? null,
+      backlinksDetailRaw ?? null,
+      anchorTextsRaw ?? null,
+      referringDomainsRaw ?? null,
+    ),
     competitors: parseCompetitors(competitorsRaw ?? null),
     site_audit: parseSiteAudit(onPageSummary ?? null, onPagePages ?? null, onPageTask ?? null),
     pagespeed: parsePageSpeedSummary(pageSpeedRaw ?? null),
@@ -1286,6 +1669,42 @@ export async function syncSeoMetrics(): Promise<SeoSyncSummary> {
     updated.push(backlinksKey);
   } catch (error) {
     recordSyncError(errors, backlinksKey, error);
+  }
+
+  const llmMentionsKey = SEO_CACHE_KEYS.llmMentions;
+  try {
+    const llmMentions = await getLlmMentions(domain);
+    await writeSeoCache(llmMentionsKey, llmMentions);
+    updated.push(llmMentionsKey);
+  } catch (error) {
+    recordSyncError(errors, llmMentionsKey, error);
+  }
+
+  const backlinksDetailKey = SEO_CACHE_KEYS.backlinksDetail;
+  try {
+    const backlinksDetail = await getBacklinksDetail(domain);
+    await writeSeoCache(backlinksDetailKey, backlinksDetail);
+    updated.push(backlinksDetailKey);
+  } catch (error) {
+    recordSyncError(errors, backlinksDetailKey, error);
+  }
+
+  const anchorTextsKey = SEO_CACHE_KEYS.anchorTexts;
+  try {
+    const anchorTexts = await getAnchorTexts(domain);
+    await writeSeoCache(anchorTextsKey, anchorTexts);
+    updated.push(anchorTextsKey);
+  } catch (error) {
+    recordSyncError(errors, anchorTextsKey, error);
+  }
+
+  const referringDomainsKey = SEO_CACHE_KEYS.referringDomains;
+  try {
+    const referringDomains = await getReferringDomains(domain);
+    await writeSeoCache(referringDomainsKey, referringDomains);
+    updated.push(referringDomainsKey);
+  } catch (error) {
+    recordSyncError(errors, referringDomainsKey, error);
   }
 
   const competitorsKey = SEO_CACHE_KEYS.competitors(2484);

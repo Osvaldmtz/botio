@@ -14,12 +14,15 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
+  Bot,
+  ExternalLink,
   FileText,
   Globe2,
   Link2,
   Minus,
   RefreshCw,
   Search,
+  Sparkles,
   Target,
   TrendingUp,
   Users,
@@ -28,6 +31,8 @@ import { AdminShell } from '@/components/admin/admin-shell';
 import { KpiEmptyState } from '@/components/admin/kpis/kpi-empty-state';
 import { KpiSectionError } from '@/components/admin/kpis/kpi-section-error';
 import type {
+  SeoAiVisibility,
+  SeoBacklinksDetail,
   SeoCountryOverview,
   SeoKpisResponse,
   SeoPageSpeedSummary,
@@ -67,6 +72,355 @@ function formatUpdatedAt(iso: string | null): string {
 function authorityScore(rank: number): number {
   if (rank <= 0) return 0;
   return Math.min(100, Math.round(rank / 10));
+}
+
+function aiVisibilityScore(totalMentions: number): number {
+  if (totalMentions <= 0) return 0;
+  return Math.min(100, Math.round(Math.log10(totalMentions + 1) * 25));
+}
+
+function aiVisibilityBadgeClass(score: number): string {
+  if (score >= 60) return 'bg-emerald-100 text-emerald-800 ring-emerald-200';
+  if (score >= 30) return 'bg-amber-100 text-amber-800 ring-amber-200';
+  return 'bg-rose-100 text-rose-800 ring-rose-200';
+}
+
+function aiModelDisplayName(model: SeoAiVisibility['by_model'][number]['model']): string {
+  if (model === 'Google AI Overview') return 'Vista IA';
+  return model;
+}
+
+function AiModelIcon({ model }: { model: SeoAiVisibility['by_model'][number]['model'] }) {
+  const base = 'flex h-9 w-9 items-center justify-center rounded-xl text-white shadow-sm';
+  if (model === 'ChatGPT') {
+    return (
+      <div className={`${base} bg-[#10A37F]`}>
+        <Bot className="h-4 w-4" />
+      </div>
+    );
+  }
+  if (model === 'Google AI Overview') {
+    return (
+      <div className={`${base} bg-[#4285F4]`}>
+        <Sparkles className="h-4 w-4" />
+      </div>
+    );
+  }
+  if (model === 'Modo IA') {
+    return (
+      <div className={`${base} bg-[#7C3DE3]`}>
+        <Search className="h-4 w-4" />
+      </div>
+    );
+  }
+  return (
+    <div className={`${base} bg-[#1A73E8]`}>
+      <Globe2 className="h-4 w-4" />
+    </div>
+  );
+}
+
+function AiVisibilitySection({ visibility }: { visibility: SeoAiVisibility | null | undefined }) {
+  if (!visibility) {
+    return (
+      <div className="rounded-2xl border border-dashed border-sky-200 bg-sky-50/60 p-6 text-center">
+        <p className="text-sm font-medium text-fg">Búsqueda de IA no disponible</p>
+        <p className="mt-1 text-xs text-fg-muted">
+          Pulsa Refrescar para sincronizar menciones LLM desde DataForSEO.
+        </p>
+      </div>
+    );
+  }
+
+  const score = aiVisibilityScore(visibility.total_mentions);
+
+  return (
+    <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-[#EFF6FF] to-bg p-5 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-fg">Búsqueda de IA</h3>
+          <p className="text-xs text-fg-muted">Visibilidad en ChatGPT, Google AI, Gemini y más</p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+        <div className="rounded-2xl border border-sky-100 bg-white/80 p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            Visibilidad en IA
+          </p>
+          <div className="mt-3 flex items-end gap-3">
+            <p className="text-4xl font-bold tabular-nums text-[#1D4ED8]">{score}</p>
+            <span
+              className={`mb-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ring-1 ${aiVisibilityBadgeClass(score)}`}
+            >
+              {score >= 60 ? 'Alta' : score >= 30 ? 'Media' : 'Baja'}
+            </span>
+          </div>
+          <div className="mt-4 space-y-2 border-t border-sky-100 pt-4 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-fg-muted">Menciones</span>
+              <span className="font-bold tabular-nums text-fg">
+                {visibility.total_mentions.toLocaleString('es-MX')}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-fg-muted">Páginas citadas</span>
+              <span className="font-bold tabular-nums text-fg">
+                {visibility.pages_cited.toLocaleString('es-MX')}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {visibility.by_model.map((row) => (
+            <div
+              key={row.model}
+              className="rounded-2xl border border-sky-100 bg-white/80 p-4 shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                <AiModelIcon model={row.model} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-fg">
+                    {aiModelDisplayName(row.model)}
+                  </p>
+                  <p className="text-[11px] text-fg-muted">{row.model}</p>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-center text-xs">
+                <div className="rounded-lg bg-sky-50 px-2 py-2">
+                  <p className="font-bold tabular-nums text-[#1D4ED8]">
+                    {row.mentions.toLocaleString('es-MX')}
+                  </p>
+                  <p className="text-fg-muted">Menciones</p>
+                </div>
+                <div className="rounded-lg bg-sky-50 px-2 py-2">
+                  <p className="font-bold tabular-nums text-[#1D4ED8]">
+                    {row.pages_cited.toLocaleString('es-MX')}
+                  </p>
+                  <p className="text-fg-muted">Páginas</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BacklinksDetailSection({
+  detail,
+  summaryReferringDomains,
+  summaryTotal,
+}: {
+  detail: SeoBacklinksDetail | null | undefined;
+  summaryReferringDomains: number;
+  summaryTotal: number;
+}) {
+  const [showAllBacklinks, setShowAllBacklinks] = useState(false);
+
+  if (!detail) {
+    return (
+      <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
+        <h3 className="mb-4 text-base font-semibold text-fg">Perfil de backlinks</h3>
+        <div className="space-y-4">
+          <div className="rounded-xl bg-bg-subtle p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              Dominios referentes
+            </p>
+            <p className="mt-1 text-3xl font-bold tabular-nums" style={{ color: KALYO_PURPLE }}>
+              {summaryReferringDomains.toLocaleString('es-MX')}
+            </p>
+          </div>
+          <p className="text-xs text-fg-muted">
+            Pulsa Refrescar para cargar backlinks detallados desde DataForSEO.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const visibleBacklinks = showAllBacklinks
+    ? detail.top_backlinks
+    : detail.top_backlinks.slice(0, 5);
+
+  return (
+    <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm lg:col-span-3">
+      <h3 className="mb-4 text-base font-semibold text-fg">Perfil de backlinks</h3>
+
+      <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          { label: 'Follow', value: detail.follow_count.toLocaleString('es-MX') },
+          { label: 'Nofollow', value: detail.nofollow_count.toLocaleString('es-MX') },
+          { label: 'Texto', value: `${detail.text_pct}%` },
+          { label: 'Imagen', value: `${detail.image_pct}%` },
+        ].map((item) => (
+          <div key={item.label} className="rounded-xl border border-bg-border bg-bg-subtle px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
+              {item.label}
+            </p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-fg">{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mb-5 grid gap-2 border-b border-bg-border pb-4 text-sm sm:grid-cols-2">
+        <div className="flex items-center justify-between rounded-lg bg-bg-subtle px-3 py-2">
+          <span className="text-fg-muted">Backlinks totales</span>
+          <span className="font-semibold tabular-nums">{summaryTotal.toLocaleString('es-MX')}</span>
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-bg-subtle px-3 py-2">
+          <span className="text-fg-muted">Dominios referentes</span>
+          <span className="font-semibold tabular-nums">
+            {summaryReferringDomains.toLocaleString('es-MX')}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        <div>
+          <h4 className="mb-3 text-sm font-semibold text-fg">Backlinks</h4>
+          {detail.top_backlinks.length > 0 ? (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-bg-border text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
+                      <th className="pb-2 pr-4">Página referente</th>
+                      <th className="pb-2 pr-4">Anchor</th>
+                      <th className="pb-2 pr-4">Tipo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleBacklinks.map((row) => (
+                      <tr
+                        key={`${row.url_from}-${row.url_to}-${row.anchor}`}
+                        className="border-b border-bg-border/60 hover:bg-bg-subtle/50"
+                      >
+                        <td className="max-w-[260px] truncate py-2.5 pr-4">
+                          <a
+                            href={row.url_from}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex max-w-full items-center gap-1 text-xs font-medium text-fg hover:underline"
+                            title={row.url_from}
+                          >
+                            <span className="truncate">
+                              {row.url_from.replace(/^https?:\/\/(www\.)?/, '')}
+                            </span>
+                            <ExternalLink className="h-3 w-3 shrink-0 text-fg-muted" />
+                          </a>
+                        </td>
+                        <td className="max-w-[180px] truncate py-2.5 pr-4 text-xs text-fg-muted">
+                          {row.anchor || '—'}
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              row.dofollow
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {row.dofollow ? 'follow' : 'nofollow'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {detail.top_backlinks.length > 5 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAllBacklinks((prev) => !prev)}
+                  className="mt-3 text-xs font-semibold hover:underline"
+                  style={{ color: KALYO_PURPLE }}
+                >
+                  {showAllBacklinks ? 'Ver menos' : 'Ver todos'}
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <KpiEmptyState description="Sin backlinks detallados en caché" />
+          )}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div>
+            <h4 className="mb-3 text-sm font-semibold text-fg">Mejores anclajes</h4>
+            {detail.top_anchors.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[420px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-bg-border text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
+                      <th className="pb-2 pr-4">Anchor</th>
+                      <th className="pb-2 pr-4">Dominios</th>
+                      <th className="pb-2 pr-4">Backlinks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.top_anchors.map((row) => (
+                      <tr
+                        key={`${row.anchor}-${row.backlinks}`}
+                        className="border-b border-bg-border/60 hover:bg-bg-subtle/50"
+                      >
+                        <td className="max-w-[180px] truncate py-2.5 pr-4 font-medium text-fg">
+                          {row.anchor || '—'}
+                        </td>
+                        <td className="py-2.5 pr-4 tabular-nums">
+                          {row.referring_domains.toLocaleString('es-MX')}
+                        </td>
+                        <td className="py-2.5 pr-4 tabular-nums">
+                          {row.backlinks.toLocaleString('es-MX')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <KpiEmptyState description="Sin datos de anclajes" />
+            )}
+          </div>
+
+          <div>
+            <h4 className="mb-3 text-sm font-semibold text-fg">Dominios de referencia</h4>
+            {detail.top_referring_domains.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[420px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-bg-border text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
+                      <th className="pb-2 pr-4">Dominio</th>
+                      <th className="pb-2 pr-4">Rank</th>
+                      <th className="pb-2 pr-4">Backlinks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.top_referring_domains.map((row) => (
+                      <tr
+                        key={row.domain}
+                        className="border-b border-bg-border/60 hover:bg-bg-subtle/50"
+                      >
+                        <td className="py-2.5 pr-4 font-medium text-fg">{row.domain}</td>
+                        <td className="py-2.5 pr-4 tabular-nums">{row.rank}</td>
+                        <td className="py-2.5 pr-4 tabular-nums">
+                          {row.backlinks.toLocaleString('es-MX')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <KpiEmptyState description="Sin dominios de referencia" />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function keywordVisibility(keyword: SeoTopKeyword): number {
@@ -993,6 +1347,8 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
 
         {hasData && countryOverview ? (
           <>
+            <AiVisibilitySection visibility={data?.ai_visibility} />
+
             {/* Metric cards row */}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-2xl border border-bg-border bg-bg p-4 shadow-sm xl:col-span-1">
@@ -1181,8 +1537,8 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
             </div>
 
             {/* Bottom row */}
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm lg:col-span-2">
+            <div className="grid gap-4">
+              <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
                 <h3 className="mb-4 text-base font-semibold text-fg">Competidores · México</h3>
                 {data?.competitors.length ? (
                   <div className="overflow-x-auto">
@@ -1225,43 +1581,11 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
                 )}
               </div>
 
-              <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
-                <h3 className="mb-4 text-base font-semibold text-fg">Perfil de backlinks</h3>
-                <div className="space-y-4">
-                  <div className="rounded-xl bg-bg-subtle p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                      Dominios referentes
-                    </p>
-                    <p className="mt-1 text-3xl font-bold tabular-nums" style={{ color: KALYO_PURPLE }}>
-                      {(data?.backlinks?.referring_domains ?? 0).toLocaleString('es-MX')}
-                    </p>
-                  </div>
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex items-center justify-between border-b border-bg-border/60 pb-2">
-                      <span className="text-fg-muted">Backlinks totales</span>
-                      <span className="font-semibold tabular-nums">
-                        {(data?.backlinks?.total ?? 0).toLocaleString('es-MX')}
-                      </span>
-                    </li>
-                    <li className="flex items-center justify-between border-b border-bg-border/60 pb-2">
-                      <span className="text-fg-muted">Domain rank</span>
-                      <span className="font-semibold tabular-nums">{data?.backlinks?.rank ?? '—'}</span>
-                    </li>
-                    <li className="flex items-center justify-between pb-2">
-                      <span className="text-fg-muted">Posición promedio ({country})</span>
-                      <span className="font-semibold tabular-nums">
-                        {countryOverview.avg_position ?? '—'}
-                      </span>
-                    </li>
-                  </ul>
-                  <div className="rounded-xl border border-dashed border-bg-border p-3">
-                    <p className="text-xs font-semibold text-fg-muted">Top referentes y anchor texts</p>
-                    <p className="mt-1 text-xs text-fg-tertiary">
-                      Disponible en una próxima iteración con endpoints de backlinks detallados de DataForSEO.
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <BacklinksDetailSection
+                detail={data?.backlinks_detail}
+                summaryReferringDomains={data?.backlinks?.referring_domains ?? 0}
+                summaryTotal={data?.backlinks?.total ?? 0}
+              />
             </div>
           </>
         ) : null}
