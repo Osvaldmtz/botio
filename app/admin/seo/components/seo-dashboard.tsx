@@ -23,7 +23,14 @@ import {
 import { AdminShell } from '@/components/admin/admin-shell';
 import { KpiEmptyState } from '@/components/admin/kpis/kpi-empty-state';
 import { KpiSectionError } from '@/components/admin/kpis/kpi-section-error';
-import type { SeoCountryOverview, SeoKpisResponse, SeoTopKeyword } from '@/lib/dataforseo-api';
+import type {
+  SeoCountryOverview,
+  SeoKpisResponse,
+  SeoPageSpeedSummary,
+  SeoSiteAudit,
+  SeoTopKeyword,
+} from '@/lib/dataforseo-api';
+import { clsStatus, lcpStatus, tbtStatus, type VitalsStatus } from '@/lib/pagespeed-utils';
 
 const KALYO_PURPLE = '#7C3DE3';
 
@@ -111,6 +118,225 @@ function ChangeIndicator({ value }: { value: number | null }) {
       {positive ? '+' : ''}
       {value}%
     </span>
+  );
+}
+
+function healthColor(score: number): string {
+  if (score >= 90) return '#10B981';
+  if (score >= 70) return '#F59E0B';
+  return '#EF4444';
+}
+
+function SiteHealthGauge({ score }: { score: number }) {
+  const radius = 70;
+  const circumference = Math.PI * radius;
+  const offset = circumference - (score / 100) * circumference;
+  const color = healthColor(score);
+
+  return (
+    <div className="relative mx-auto flex h-36 w-44 items-end justify-center">
+      <svg viewBox="0 0 160 90" className="h-full w-full overflow-visible">
+        <path
+          d="M 12 78 A 68 68 0 0 1 148 78"
+          fill="none"
+          stroke="#E9E5F5"
+          strokeWidth="14"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 12 78 A 68 68 0 0 1 148 78"
+          fill="none"
+          stroke={color}
+          strokeWidth="14"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <div className="absolute bottom-0 text-center">
+        <p className="text-4xl font-bold tabular-nums" style={{ color }}>
+          {score}
+        </p>
+        <p className="text-xs font-medium text-fg-muted">Site Health</p>
+      </div>
+    </div>
+  );
+}
+
+function ThematicScoreCard({ label, score }: { label: string; score: number }) {
+  const color = healthColor(score);
+  return (
+    <div className="rounded-xl border border-bg-border bg-bg p-3 shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">{label}</p>
+      <p className="mt-1 text-xl font-bold tabular-nums" style={{ color }}>
+        {score}%
+      </p>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg-subtle">
+        <div className="h-full rounded-full" style={{ width: `${score}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  );
+}
+
+function vitalsCardClass(status: VitalsStatus): string {
+  if (status === 'good') return 'border-emerald-200 bg-emerald-50';
+  if (status === 'needs-improvement') return 'border-amber-200 bg-amber-50';
+  return 'border-rose-200 bg-rose-50';
+}
+
+function vitalsTextClass(status: VitalsStatus): string {
+  if (status === 'good') return 'text-emerald-700';
+  if (status === 'needs-improvement') return 'text-amber-700';
+  return 'text-rose-700';
+}
+
+function SiteAuditSections({
+  audit,
+  pagespeed,
+}: {
+  audit: SeoSiteAudit | null | undefined;
+  pagespeed: SeoPageSpeedSummary | null | undefined;
+}) {
+  if (!audit) {
+    return (
+      <div className="rounded-2xl border border-dashed border-bg-border bg-bg-subtle p-6 text-center">
+        <p className="text-sm font-medium text-fg">Site Audit no disponible</p>
+        <p className="mt-1 text-xs text-fg-muted">
+          Pulsa Refrescar para iniciar el crawl On-Page de DataForSEO.
+        </p>
+      </div>
+    );
+  }
+
+  if (audit.status === 'pending') {
+    return (
+      <div className="rounded-2xl border border-bg-border bg-bg p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="mx-auto h-28 w-44 rounded-full bg-bg-subtle" />
+          <p className="text-center text-sm font-medium text-fg">
+            Análisis en proceso, disponible mañana
+          </p>
+          <p className="text-center text-xs text-fg-muted">
+            El crawl On-Page de kalyo.io fue encolado. Los resultados aparecerán en la próxima
+            sincronización.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const warnings = [
+    { label: 'JS/CSS sin minificar', count: audit.js_css_not_minified },
+    { label: 'Enlaces externos rotos', count: audit.broken_links },
+    { label: 'Bajo número de palabras', count: audit.low_word_count },
+    { label: 'Páginas con 1 solo enlace interno', count: audit.single_internal_link_pages },
+    { label: 'Contenido sin optimizar', count: audit.unoptimized_content },
+  ].filter((item) => item.count > 0);
+
+  const lcpStatusValue = pagespeed ? lcpStatus(pagespeed.lcp) : 'needs-improvement';
+  const clsStatusValue = pagespeed ? clsStatus(pagespeed.cls) : 'needs-improvement';
+  const tbtStatusValue = pagespeed ? tbtStatus(pagespeed.tbt) : 'needs-improvement';
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+        <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
+          <h3 className="mb-3 text-base font-semibold text-fg">Site Health</h3>
+          <SiteHealthGauge score={audit.site_health} />
+          {audit.status === 'in_progress' ? (
+            <p className="mt-2 text-center text-xs text-amber-700">
+              Crawl en progreso ({audit.pages_crawled} páginas)
+            </p>
+          ) : null}
+          <div className="mt-4 grid grid-cols-2 gap-2 text-center text-xs">
+            <div className="rounded-lg bg-emerald-50 px-2 py-2 text-emerald-800">
+              <p className="font-bold tabular-nums">{audit.pages_ok}</p>
+              <p>Correctas</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 px-2 py-2 text-amber-800">
+              <p className="font-bold tabular-nums">{audit.pages_with_issues}</p>
+              <p>Con problemas</p>
+            </div>
+            <div className="rounded-lg bg-sky-50 px-2 py-2 text-sky-800">
+              <p className="font-bold tabular-nums">{audit.pages_redirected}</p>
+              <p>Redirigidas</p>
+            </div>
+            <div className="rounded-lg bg-rose-50 px-2 py-2 text-rose-800">
+              <p className="font-bold tabular-nums">{audit.pages_blocked}</p>
+              <p>Bloqueadas</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
+          <h3 className="mb-4 text-base font-semibold text-fg">Puntuación temática</h3>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <ThematicScoreCard label="Rastreabilidad" score={audit.crawlability_score} />
+            <ThematicScoreCard label="HTTPS" score={audit.https_score} />
+            <ThematicScoreCard label="SEO Internacional" score={audit.international_seo_score} />
+            <ThematicScoreCard
+              label="Rendimiento"
+              score={pagespeed?.performance_mobile ?? audit.performance_score}
+            />
+            <ThematicScoreCard label="Enlaces internos" score={audit.internal_links_score} />
+            <ThematicScoreCard label="Marcado" score={audit.markup_score} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
+          <h3 className="mb-4 text-base font-semibold text-fg">Advertencias principales</h3>
+          {warnings.length > 0 ? (
+            <ul className="space-y-2 text-sm">
+              {warnings.map((item) => (
+                <li
+                  key={item.label}
+                  className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50 px-3 py-2"
+                >
+                  <span>
+                    ⚠️ {item.label}
+                  </span>
+                  <span className="font-bold tabular-nums text-amber-800">{item.count}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-fg-muted">Sin advertencias críticas detectadas.</p>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">
+          <h3 className="mb-4 text-base font-semibold text-fg">Core Web Vitals · kalyo.io mobile</h3>
+          {pagespeed ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className={`rounded-xl border p-4 ${vitalsCardClass(lcpStatusValue)}`}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">LCP</p>
+                <p className={`mt-1 text-2xl font-bold tabular-nums ${vitalsTextClass(lcpStatusValue)}`}>
+                  {pagespeed.lcp.toFixed(1)}s
+                </p>
+              </div>
+              <div className={`rounded-xl border p-4 ${vitalsCardClass(clsStatusValue)}`}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">CLS</p>
+                <p className={`mt-1 text-2xl font-bold tabular-nums ${vitalsTextClass(clsStatusValue)}`}>
+                  {pagespeed.cls.toFixed(3)}
+                </p>
+              </div>
+              <div className={`rounded-xl border p-4 ${vitalsCardClass(tbtStatusValue)}`}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">TBT</p>
+                <p className={`mt-1 text-2xl font-bold tabular-nums ${vitalsTextClass(tbtStatusValue)}`}>
+                  {pagespeed.tbt}ms
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-fg-muted">
+              PageSpeed pendiente. Requiere PAGESPEED_API_KEY en el próximo sync.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -404,6 +630,8 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
                 icon={Globe2}
               />
             </div>
+
+            <SiteAuditSections audit={data?.site_audit} pagespeed={data?.pagespeed} />
 
             {/* Visibility chart */}
             <div className="rounded-2xl border border-bg-border bg-bg p-5 shadow-sm">

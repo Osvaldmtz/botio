@@ -1,9 +1,11 @@
 import 'server-only';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getPageSpeedMetrics } from '@/lib/pagespeed-api';
 
 const DATAFORSEO_API = 'https://api.dataforseo.com/v3';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const ON_PAGE_TASK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 60_000;
 
 export const SEO_DOMAIN = 'kalyo.io';
@@ -136,11 +138,47 @@ export type SeoCompetitor = {
   etv: number;
 };
 
+export type SeoSiteAudit = {
+  status: 'pending' | 'in_progress' | 'ready';
+  site_health: number;
+  pages_crawled: number;
+  pages_ok: number;
+  pages_with_issues: number;
+  pages_redirected: number;
+  pages_blocked: number;
+  broken_links: number;
+  missing_titles: number;
+  missing_descriptions: number;
+  missing_h1: number;
+  duplicate_content: number;
+  low_word_count: number;
+  js_css_not_minified: number;
+  single_internal_link_pages: number;
+  unoptimized_content: number;
+  crawlability_score: number;
+  https_score: number;
+  international_seo_score: number;
+  internal_links_score: number;
+  markup_score: number;
+  performance_score: number;
+};
+
+export type SeoPageSpeedSummary = {
+  performance_mobile: number;
+  performance_desktop: number;
+  lcp: number;
+  cls: number;
+  tbt: number;
+  speed_index: number;
+};
+
 export type SeoKpisResponse = {
   overview: SeoCountryOverview[];
   top_keywords: SeoTopKeyword[];
   backlinks: SeoBacklinksSummary | null;
   competitors: SeoCompetitor[];
+  site_audit: SeoSiteAudit | null;
+  pagespeed: SeoPageSpeedSummary | null;
   last_updated: string | null;
   configured: boolean;
 };
@@ -214,7 +252,58 @@ function cacheKeyRankedKeywords(locationCode: number): string {
 export const SEO_CACHE_KEYS = {
   backlinksSummary: 'backlinks_summary',
   competitors: (locationCode: number) => `competitors_${locationCode}`,
+  onPageTaskId: 'on_page_task_id',
+  onPageSummary: 'on_page_summary',
+  onPagePages: 'on_page_pages',
+  pageSpeedSummary: 'pagespeed_summary',
 } as const;
+
+type OnPageChecks = Record<string, number | boolean | undefined>;
+
+export type OnPageSummaryRaw = {
+  crawl_progress?: string;
+  crawl_status?: {
+    pages_crawled?: number;
+    pages_in_queue?: number;
+    max_crawl_pages?: number;
+  };
+  domain_info?: {
+    total_pages?: number;
+    checks?: Record<string, boolean | undefined>;
+    ssl_info?: { valid_certificate?: boolean };
+  };
+  page_metrics?: {
+    onpage_score?: number;
+    broken_links?: number;
+    duplicate_content?: number;
+    non_indexable?: number;
+    links_internal?: number;
+    checks?: OnPageChecks;
+  };
+};
+
+export type OnPagePageItem = {
+  url?: string;
+  status_code?: number;
+  onpage_score?: number;
+  meta?: {
+    title?: string;
+    description?: string;
+    htags?: { h1?: string[] };
+    hreflang?: unknown[];
+  };
+  checks?: OnPageChecks;
+};
+
+export type OnPagePagesRaw = {
+  items?: OnPagePageItem[];
+  total_count?: number;
+};
+
+type OnPageTaskCache = {
+  task_id: string;
+  created_at: string;
+};
 
 async function readSeoCache<T>(key: string): Promise<T | null> {
   const supabase = createAdminClient();
@@ -376,6 +465,141 @@ export async function dataForSeoRequest<T>(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function readSeoCacheMeta<T>(key: string): Promise<{ data: T; fetched_at: string } | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from('seo_cache')
+    .select('data, fetched_at')
+    .eq('key', key)
+    .maybeSingle();
+  if (!data?.data || !data.fetched_at) return null;
+  return { data: data.data as T, fetched_at: data.fetched_at };
+}
+
+async function dataForSeoGet<T>(endpoint: string): Promise<T> {
+  if (!isDataForSeoConfigured()) {
+    throw new Error('DataForSEO not configured');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${DATAFORSEO_API}/${endpoint}`, {
+      method: 'GET',
+      headers: {
+        Authorization: getAuthHeader(),
+        Accept: 'application/json',
+      },
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+
+    const responseBody = await res.text().catch(() => '');
+
+    if (res.status === 429) {
+      throw new DataForSeoHttpError('DataForSEO rate limit (429)', res.status, responseBody, endpoint);
+    }
+
+    let json: DataForSeoResponse<T>;
+    try {
+      json = JSON.parse(responseBody) as DataForSeoResponse<T>;
+    } catch {
+      throw new DataForSeoHttpError(
+        `DataForSEO invalid JSON (HTTP ${res.status})`,
+        res.status,
+        responseBody,
+        endpoint,
+      );
+    }
+
+    if (!res.ok) {
+      throw new DataForSeoHttpError(
+        json.status_message ?? `DataForSEO HTTP ${res.status}`,
+        res.status,
+        responseBody,
+        endpoint,
+      );
+    }
+
+    if ((json.status_code ?? 0) >= 40000) {
+      throw new DataForSeoHttpError(
+        json.status_message ?? `DataForSEO error ${json.status_code}`,
+        res.status,
+        responseBody,
+        endpoint,
+      );
+    }
+
+    return extractTaskResult(json);
+  } catch (error) {
+    if (error instanceof DataForSeoHttpError) throw error;
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('DataForSEO request timed out');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function dataForSeoPostEnvelope(endpoint: string, body: object[]): Promise<DataForSeoResponse<unknown>> {
+  if (!isDataForSeoConfigured()) {
+    throw new Error('DataForSEO not configured');
+  }
+
+  const res = await fetch(`${DATAFORSEO_API}/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      Authorization: getAuthHeader(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+
+  const responseBody = await res.text().catch(() => '');
+  const json = JSON.parse(responseBody) as DataForSeoResponse<unknown>;
+
+  if (!res.ok || (json.status_code ?? 0) >= 40000) {
+    throw new DataForSeoHttpError(
+      json.status_message ?? `DataForSEO HTTP ${res.status}`,
+      res.status,
+      responseBody,
+      endpoint,
+    );
+  }
+
+  return json;
+}
+
+export async function createOnPageTask(domain: string): Promise<string> {
+  const envelope = await dataForSeoPostEnvelope('on_page/task_post', [
+    {
+      target: domain,
+      max_crawl_pages: 100,
+      load_resources: true,
+      enable_javascript: false,
+      custom_robots_txt_body: null,
+    },
+  ]);
+
+  const taskId = envelope.tasks?.[0]?.id;
+  if (!taskId) {
+    throw new Error('DataForSEO On-Page task_post returned no task id');
+  }
+
+  return taskId;
+}
+
+export async function getOnPageSummary(taskId: string): Promise<OnPageSummaryRaw> {
+  return dataForSeoGet<OnPageSummaryRaw>(`on_page/summary/${taskId}`);
+}
+
+export async function getOnPagePages(taskId: string): Promise<OnPagePagesRaw> {
+  return dataForSeoGet<OnPagePagesRaw>(`on_page/pages/${taskId}`);
 }
 
 export async function getDomainOverview(
@@ -543,6 +767,203 @@ function parseCompetitors(data: CompetitorsDomainResult | null): SeoCompetitor[]
     .sort((a, b) => b.common_keywords - a.common_keywords);
 }
 
+function checkCount(checks: OnPageChecks | undefined, keys: string[]): number {
+  return keys.reduce((sum, key) => sum + toNumber(checks?.[key]), 0);
+}
+
+function domainCheckScore(checks: Record<string, boolean | undefined> | undefined): number {
+  if (!checks) return 0;
+  const values = Object.values(checks).filter((value) => typeof value === 'boolean');
+  if (values.length === 0) return 0;
+  const passed = values.filter(Boolean).length;
+  return Math.round((passed / values.length) * 100);
+}
+
+function countHreflangPages(pages: OnPagePagesRaw | null): number {
+  return (pages?.items ?? []).filter((page) => (page.meta?.hreflang?.length ?? 0) > 0).length;
+}
+
+function parseSiteAudit(
+  summary: OnPageSummaryRaw | null,
+  pages: OnPagePagesRaw | null,
+  taskMeta: OnPageTaskCache | null,
+): SeoSiteAudit | null {
+  if (!summary && !taskMeta) return null;
+
+  if (!summary && taskMeta) {
+    return {
+      status: 'pending',
+      site_health: 0,
+      pages_crawled: 0,
+      pages_ok: 0,
+      pages_with_issues: 0,
+      pages_redirected: 0,
+      pages_blocked: 0,
+      broken_links: 0,
+      missing_titles: 0,
+      missing_descriptions: 0,
+      missing_h1: 0,
+      duplicate_content: 0,
+      low_word_count: 0,
+      js_css_not_minified: 0,
+      single_internal_link_pages: 0,
+      unoptimized_content: 0,
+      crawlability_score: 0,
+      https_score: 100,
+      international_seo_score: 0,
+      internal_links_score: 0,
+      markup_score: 0,
+      performance_score: 0,
+    };
+  }
+
+  const checks = summary?.page_metrics?.checks ?? {};
+  const pagesCrawled =
+    toNumber(summary?.crawl_status?.pages_crawled) ||
+    toNumber(summary?.domain_info?.total_pages);
+  const brokenPages = checkCount(checks, ['is_broken', 'is_4xx_code', 'is_5xx_code']);
+  const redirected = checkCount(checks, ['is_redirect']);
+  const blocked = toNumber(summary?.page_metrics?.non_indexable);
+  const pagesWithIssues =
+    checkCount(checks, [
+      'no_title',
+      'no_description',
+      'no_h1_tag',
+      'duplicate_content',
+      'low_character_count',
+      'has_render_blocking_resources',
+      'is_orphan_page',
+      'low_readability_rate',
+      'lorem_ipsum',
+    ]) + toNumber(summary?.page_metrics?.duplicate_content);
+  const pagesOk = Math.max(0, pagesCrawled - brokenPages - redirected - blocked);
+
+  const domainChecks = summary?.domain_info?.checks;
+  const httpsScore =
+    domainChecks?.ssl && domainChecks?.test_https_redirect
+      ? 100
+      : domainChecks?.ssl
+        ? 75
+        : 0;
+
+  const hreflangPages = countHreflangPages(pages);
+  const internationalScore =
+    pagesCrawled > 0 ? Math.min(100, Math.round((hreflangPages / pagesCrawled) * 100) + 40) : 0;
+
+  const orphanPages = checkCount(checks, ['is_orphan_page']);
+  const internalLinksScore =
+    pagesCrawled > 0 ? Math.max(0, Math.round(100 - (orphanPages / pagesCrawled) * 100)) : 0;
+
+  const markupScore = Math.round(
+    (checkCount(checks, ['has_html_doctype', 'canonical']) / Math.max(pagesCrawled, 1)) * 100,
+  );
+
+  const crawlability = domainCheckScore(domainChecks);
+
+  return {
+    status: summary?.crawl_progress === 'finished' ? 'ready' : 'in_progress',
+    site_health: Math.round(toNumber(summary?.page_metrics?.onpage_score)),
+    pages_crawled: pagesCrawled,
+    pages_ok: pagesOk,
+    pages_with_issues: pagesWithIssues,
+    pages_redirected: redirected,
+    pages_blocked: blocked,
+    broken_links: toNumber(summary?.page_metrics?.broken_links),
+    missing_titles: checkCount(checks, ['no_title']),
+    missing_descriptions: checkCount(checks, ['no_description']),
+    missing_h1: checkCount(checks, ['no_h1_tag']),
+    duplicate_content: toNumber(summary?.page_metrics?.duplicate_content),
+    low_word_count: checkCount(checks, ['low_character_count']),
+    js_css_not_minified: checkCount(checks, ['has_render_blocking_resources', 'no_content_encoding']),
+    single_internal_link_pages: orphanPages,
+    unoptimized_content: checkCount(checks, ['low_readability_rate', 'lorem_ipsum']),
+    crawlability_score: crawlability,
+    https_score: httpsScore,
+    international_seo_score: Math.min(100, internationalScore),
+    internal_links_score: internalLinksScore,
+    markup_score: Math.min(100, markupScore),
+    performance_score: Math.max(
+      0,
+      100 - checkCount(checks, ['high_loading_time', 'high_waiting_time', 'has_render_blocking_resources']) * 5,
+    ),
+  };
+}
+
+function parsePageSpeedSummary(raw: SeoPageSpeedSummary | null | undefined): SeoPageSpeedSummary | null {
+  if (!raw) return null;
+  return {
+    performance_mobile: toNumber(raw.performance_mobile),
+    performance_desktop: toNumber(raw.performance_desktop),
+    lcp: toNumber(raw.lcp),
+    cls: toNumber(raw.cls),
+    tbt: toNumber(raw.tbt),
+    speed_index: toNumber(raw.speed_index),
+  };
+}
+
+async function syncOnPageAudit(
+  domain: string,
+  updated: string[],
+  errors: SeoSyncSummary['errors'],
+): Promise<void> {
+  const taskMeta = await readSeoCacheMeta<OnPageTaskCache>(SEO_CACHE_KEYS.onPageTaskId);
+  const taskAgeMs = taskMeta?.fetched_at
+    ? Date.now() - new Date(taskMeta.fetched_at).getTime()
+    : Number.POSITIVE_INFINITY;
+  const taskExpired = !taskMeta || taskAgeMs > ON_PAGE_TASK_TTL_MS;
+
+  if (!taskMeta?.data.task_id || taskExpired) {
+    try {
+      const taskId = await createOnPageTask(domain);
+      await writeSeoCache(SEO_CACHE_KEYS.onPageTaskId, {
+        task_id: taskId,
+        created_at: new Date().toISOString(),
+      });
+      updated.push(SEO_CACHE_KEYS.onPageTaskId);
+    } catch (error) {
+      recordSyncError(errors, SEO_CACHE_KEYS.onPageTaskId, error);
+    }
+    return;
+  }
+
+  const taskId = taskMeta.data.task_id;
+
+  try {
+    const summary = await getOnPageSummary(taskId);
+    await writeSeoCache(SEO_CACHE_KEYS.onPageSummary, summary);
+    updated.push(SEO_CACHE_KEYS.onPageSummary);
+
+    if (summary.crawl_progress === 'finished') {
+      const pages = await getOnPagePages(taskId);
+      await writeSeoCache(SEO_CACHE_KEYS.onPagePages, pages);
+      updated.push(SEO_CACHE_KEYS.onPagePages);
+    }
+  } catch (error) {
+    recordSyncError(errors, SEO_CACHE_KEYS.onPageSummary, error);
+  }
+}
+
+async function syncPageSpeedSummary(
+  updated: string[],
+  errors: SeoSyncSummary['errors'],
+): Promise<void> {
+  try {
+    const metrics = await getPageSpeedMetrics({ skipCache: true });
+    const summary: SeoPageSpeedSummary = {
+      performance_mobile: metrics.landing_mobile.performance,
+      performance_desktop: metrics.landing_desktop.performance,
+      lcp: metrics.landing_mobile.lcp,
+      cls: metrics.landing_mobile.cls,
+      tbt: metrics.landing_mobile.tbt,
+      speed_index: metrics.landing_mobile.speed_index,
+    };
+    await writeSeoCache(SEO_CACHE_KEYS.pageSpeedSummary, summary);
+    updated.push(SEO_CACHE_KEYS.pageSpeedSummary);
+  } catch (error) {
+    recordSyncError(errors, SEO_CACHE_KEYS.pageSpeedSummary, error);
+  }
+}
+
 async function readAllSeoCacheKeys(): Promise<Map<string, unknown>> {
   const supabase = createAdminClient();
   const { data } = await supabase.from('seo_cache').select('key, data, fetched_at');
@@ -591,11 +1012,18 @@ export async function getSeoKpis(options?: { allowStale?: boolean }): Promise<Se
     | CompetitorsDomainResult
     | undefined;
 
+  const onPageSummary = cache.get(SEO_CACHE_KEYS.onPageSummary) as OnPageSummaryRaw | undefined;
+  const onPagePages = cache.get(SEO_CACHE_KEYS.onPagePages) as OnPagePagesRaw | undefined;
+  const onPageTask = cache.get(SEO_CACHE_KEYS.onPageTaskId) as OnPageTaskCache | undefined;
+  const pageSpeedRaw = cache.get(SEO_CACHE_KEYS.pageSpeedSummary) as SeoPageSpeedSummary | undefined;
+
   return {
     overview,
     top_keywords: topKeywords.sort((a, b) => a.position - b.position).slice(0, 100),
     backlinks: parseBacklinks(backlinksRaw ?? null),
     competitors: parseCompetitors(competitorsRaw ?? null),
+    site_audit: parseSiteAudit(onPageSummary ?? null, onPagePages ?? null, onPageTask ?? null),
+    pagespeed: parsePageSpeedSummary(pageSpeedRaw ?? null),
     last_updated: lastUpdated,
     configured: isDataForSeoConfigured(),
   };
@@ -647,6 +1075,9 @@ export async function syncSeoMetrics(): Promise<SeoSyncSummary> {
   } catch (error) {
     recordSyncError(errors, competitorsKey, error);
   }
+
+  await syncOnPageAudit(domain, updated, errors);
+  await syncPageSpeedSummary(updated, errors);
 
   return {
     updated,

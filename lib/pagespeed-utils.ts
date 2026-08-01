@@ -17,6 +17,7 @@ export type PageSpeedScores = {
   fcp: number;
   cls: number;
   tbt: number;
+  speed_index: number;
 };
 
 export type PageSpeedCompactScores = {

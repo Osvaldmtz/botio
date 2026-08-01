@@ -75,6 +75,7 @@ function parseFullResult(json: PageSpeedApiResponse): PageSpeedScores {
     fcp: Math.round((auditMs(audits, 'first-contentful-paint') / 1000) * 100) / 100,
     cls: Math.round(auditMs(audits, 'cumulative-layout-shift') * 1000) / 1000,
     tbt: Math.round(auditMs(audits, 'total-blocking-time')),
+    speed_index: Math.round(auditMs(audits, 'speed-index')),
   };
 }
 
