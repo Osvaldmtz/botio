@@ -10,6 +10,9 @@ const REQUEST_TIMEOUT_MS = 60_000;
 
 export const SEO_DOMAIN = 'kalyo.io';
 export const SEO_LANGUAGE_CODE = 'es';
+/** LLM Mentions API: ChatGPT data is US + English only per DataForSEO docs */
+export const SEO_LLM_LOCATION_CODE = 2840;
+export const SEO_LLM_LANGUAGE_CODE = 'en';
 
 export const SEO_PRIORITY_LOCATIONS = [
   { code: 2484, country: 'MX', label: 'México', flag: '🇲🇽' },
@@ -805,40 +808,6 @@ export async function getBacklinksSummary(domain: string): Promise<BacklinksSumm
 }
 
 export async function getLlmMentions(domain: string): Promise<LlmMentionsResult> {
-  const searchRaw = await dataForSeoRequest<{
-    total_count?: number;
-    items?: Array<{
-      llm_type?: string;
-      model_name?: string;
-      platform?: string;
-      mentions_count?: number;
-      pages_cited_count?: number;
-      sources?: Array<{ url?: string }>;
-    }>;
-    aggregated_metrics?: {
-      platform?: Array<{ key?: string; mentions?: number }>;
-      total?: { mentions?: number };
-    };
-  }>('ai_optimization/llm_mentions/search/live', [
-    {
-      target: [{ domain, search_filter: 'include' }],
-      limit: 10,
-      location_code: 2484,
-      language_code: SEO_LANGUAGE_CODE,
-    },
-  ]);
-
-  if (searchRaw.items?.some((item) => item.llm_type && item.mentions_count != null)) {
-    return {
-      items: searchRaw.items.map((item) => ({
-        llm_type: item.llm_type ?? item.model_name ?? item.platform,
-        mentions_count: toNumber(item.mentions_count),
-        pages_cited_count: toNumber(item.pages_cited_count),
-      })),
-      aggregated_metrics: searchRaw.aggregated_metrics,
-    };
-  }
-
   const metricsRaw = await dataForSeoRequest<{
     aggregated_metrics?: {
       platform?: Array<{ key?: string; mentions?: number }>;
@@ -847,8 +816,8 @@ export async function getLlmMentions(domain: string): Promise<LlmMentionsResult>
   }>('ai_optimization/llm_mentions/target_metrics/live', [
     {
       target: [{ domain, search_filter: 'include' }],
-      location_code: 2484,
-      language_code: SEO_LANGUAGE_CODE,
+      location_code: SEO_LLM_LOCATION_CODE,
+      language_code: SEO_LLM_LANGUAGE_CODE,
       internal_list_limit: 10,
     },
   ]);
@@ -860,39 +829,11 @@ export async function getLlmMentions(domain: string): Promise<LlmMentionsResult>
     perplexity: 'perplexity',
   };
 
-  const byModel = new Map<string, { mentions: number; pages: Set<string> }>();
-  for (const item of searchRaw.items ?? []) {
-    const llmType = (
-      item.llm_type ??
-      item.model_name ??
-      item.platform ??
-      'unknown'
-    ).toLowerCase();
-    const bucket = byModel.get(llmType) ?? { mentions: 0, pages: new Set<string>() };
-    bucket.mentions += 1;
-    for (const source of item.sources ?? []) {
-      if (source.url) bucket.pages.add(source.url);
-    }
-    byModel.set(llmType, bucket);
-  }
-
-  const itemsFromSearch: LlmMentionItem[] = Array.from(byModel.entries()).map(
-    ([llm_type, data]) => ({
-      llm_type,
-      mentions_count: data.mentions,
-      pages_cited_count: data.pages.size,
-    }),
-  );
-
-  const itemsFromMetrics: LlmMentionItem[] = (metricsRaw.aggregated_metrics?.platform ?? []).map(
-    (row) => ({
-      llm_type: platformToLlmType[row.key ?? ''] ?? row.key,
-      mentions_count: toNumber(row.mentions),
-      pages_cited_count: 0,
-    }),
-  );
-
-  const items = itemsFromMetrics.length > 0 ? itemsFromMetrics : itemsFromSearch;
+  const items: LlmMentionItem[] = (metricsRaw.aggregated_metrics?.platform ?? []).map((row) => ({
+    llm_type: platformToLlmType[row.key ?? ''] ?? row.key,
+    mentions_count: toNumber(row.mentions),
+    pages_cited_count: 0,
+  }));
 
   if (items.length > 0) {
     try {
@@ -901,8 +842,8 @@ export async function getLlmMentions(domain: string): Promise<LlmMentionsResult>
         [
           {
             target: [{ domain, search_filter: 'include' }],
-            location_code: 2484,
-            language_code: SEO_LANGUAGE_CODE,
+            location_code: SEO_LLM_LOCATION_CODE,
+            language_code: SEO_LLM_LANGUAGE_CODE,
             limit: 10,
             links_scope: 'sources',
           },
@@ -916,20 +857,11 @@ export async function getLlmMentions(domain: string): Promise<LlmMentionsResult>
         }
       }
     } catch {
-      // optional enrichment
+      // pages cited enrichment is optional
     }
   }
 
-  return {
-    items,
-    aggregated_metrics: metricsRaw.aggregated_metrics ?? {
-      total: {
-        mentions:
-          toNumber(searchRaw.total_count) ||
-          items.reduce((sum, row) => sum + toNumber(row.mentions_count), 0),
-      },
-    },
-  };
+  return { items, aggregated_metrics: metricsRaw.aggregated_metrics };
 }
 
 export async function getBacklinksDetail(domain: string): Promise<BacklinksDetailResult> {
@@ -1253,8 +1185,6 @@ function parseAiVisibility(data: LlmMentionsResult | null): SeoAiVisibility | nu
     toNumber(data.aggregated_metrics?.total?.mentions) ||
     by_model.reduce((sum, row) => sum + row.mentions, 0);
   const pages_cited = by_model.reduce((sum, row) => sum + row.pages_cited, 0);
-
-  if (total_mentions === 0 && pages_cited === 0) return null;
 
   return { total_mentions, pages_cited, by_model };
 }

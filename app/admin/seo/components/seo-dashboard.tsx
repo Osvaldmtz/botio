@@ -120,8 +120,14 @@ function AiModelIcon({ model }: { model: SeoAiVisibility['by_model'][number]['mo
   );
 }
 
-function AiVisibilitySection({ visibility }: { visibility: SeoAiVisibility | null | undefined }) {
-  if (!visibility) {
+function AiVisibilitySection({
+  visibility,
+  synced,
+}: {
+  visibility: SeoAiVisibility | null | undefined;
+  synced: boolean;
+}) {
+  if (!synced) {
     return (
       <div className="rounded-2xl border border-dashed border-sky-200 bg-sky-50/60 p-6 text-center">
         <p className="text-sm font-medium text-fg">Búsqueda de IA no disponible</p>
@@ -132,15 +138,34 @@ function AiVisibilitySection({ visibility }: { visibility: SeoAiVisibility | nul
     );
   }
 
-  const score = aiVisibilityScore(visibility.total_mentions);
+  const data = visibility ?? {
+    total_mentions: 0,
+    pages_cited: 0,
+    by_model: [
+      { model: 'ChatGPT' as const, mentions: 0, pages_cited: 0 },
+      { model: 'Google AI Overview' as const, mentions: 0, pages_cited: 0 },
+      { model: 'Modo IA' as const, mentions: 0, pages_cited: 0 },
+      { model: 'Gemini' as const, mentions: 0, pages_cited: 0 },
+    ],
+  };
+
+  const score = aiVisibilityScore(data.total_mentions);
+  const isEmpty = data.total_mentions === 0 && data.pages_cited === 0;
 
   return (
     <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-[#EFF6FF] to-bg p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-fg">Búsqueda de IA</h3>
-          <p className="text-xs text-fg-muted">Visibilidad en ChatGPT, Google AI, Gemini y más</p>
+          <p className="text-xs text-fg-muted">
+            Visibilidad en ChatGPT, Google AI, Gemini y más · 🇺🇸 EN (DataForSEO)
+          </p>
         </div>
+        {isEmpty ? (
+          <span className="rounded-full border border-sky-200 bg-white/80 px-3 py-1 text-xs text-fg-muted">
+            Sin menciones detectadas aún
+          </span>
+        ) : null}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
@@ -160,20 +185,20 @@ function AiVisibilitySection({ visibility }: { visibility: SeoAiVisibility | nul
             <div className="flex items-center justify-between">
               <span className="text-fg-muted">Menciones</span>
               <span className="font-bold tabular-nums text-fg">
-                {visibility.total_mentions.toLocaleString('es-MX')}
+                {data.total_mentions.toLocaleString('es-MX')}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-fg-muted">Páginas citadas</span>
               <span className="font-bold tabular-nums text-fg">
-                {visibility.pages_cited.toLocaleString('es-MX')}
+                {data.pages_cited.toLocaleString('es-MX')}
               </span>
             </div>
           </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {visibility.by_model.map((row) => (
+          {data.by_model.map((row) => (
             <div
               key={row.model}
               className="rounded-2xl border border-sky-100 bg-white/80 p-4 shadow-sm"
@@ -1347,7 +1372,7 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
 
         {hasData && countryOverview ? (
           <>
-            <AiVisibilitySection visibility={data?.ai_visibility} />
+            <AiVisibilitySection visibility={data?.ai_visibility} synced={data?.ai_visibility != null} />
 
             {/* Metric cards row */}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
