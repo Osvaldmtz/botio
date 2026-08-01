@@ -18,6 +18,16 @@ export async function GET(request: Request) {
 
   try {
     const summary = await syncSeoMetrics();
+
+    for (const item of summary.errors) {
+      console.error('[cron/seo-sync] DataForSEO call failed', {
+        key: item.key,
+        error: item.error,
+        httpStatus: item.httpStatus,
+        responseBody: item.responseBody,
+      });
+    }
+
     return Response.json(summary);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

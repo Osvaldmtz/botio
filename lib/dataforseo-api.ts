@@ -147,9 +147,28 @@ export type SeoKpisResponse = {
 
 export type SeoSyncSummary = {
   updated: string[];
-  errors: Array<{ key: string; error: string }>;
+  errors: Array<{
+    key: string;
+    error: string;
+    httpStatus?: number;
+    responseBody?: string;
+  }>;
   last_updated: string;
 };
+
+export class DataForSeoHttpError extends Error {
+  readonly httpStatus: number;
+  readonly responseBody: string;
+  readonly endpoint: string;
+
+  constructor(message: string, httpStatus: number, responseBody: string, endpoint: string) {
+    super(message);
+    this.name = 'DataForSeoHttpError';
+    this.httpStatus = httpStatus;
+    this.responseBody = responseBody;
+    this.endpoint = endpoint;
+  }
+}
 
 function toNumber(raw: unknown): number {
   if (raw == null) return 0;
@@ -282,21 +301,74 @@ export async function dataForSeoRequest<T>(
       next: { revalidate: 0 },
     });
 
+    const responseBody = await res.text().catch(() => '');
+
     if (res.status === 429) {
-      const detail = await res.text().catch(() => '');
-      throw new Error(`DataForSEO rate limit (429)${detail ? `: ${detail}` : ''}`);
+      console.error('[dataforseo-api] rate limit', {
+        endpoint,
+        httpStatus: res.status,
+        responseBody,
+      });
+      throw new DataForSeoHttpError(
+        `DataForSEO rate limit (429)`,
+        res.status,
+        responseBody,
+        endpoint,
+      );
     }
 
-    const json = (await res.json()) as DataForSeoResponse<T>;
-    if (!res.ok) {
-      throw new Error(json.status_message ?? `DataForSEO HTTP ${res.status}`);
+    let json: DataForSeoResponse<T>;
+    try {
+      json = JSON.parse(responseBody) as DataForSeoResponse<T>;
+    } catch {
+      console.error('[dataforseo-api] invalid JSON response', {
+        endpoint,
+        httpStatus: res.status,
+        responseBody,
+      });
+      throw new DataForSeoHttpError(
+        `DataForSEO invalid JSON (HTTP ${res.status})`,
+        res.status,
+        responseBody,
+        endpoint,
+      );
     }
+
+    if (!res.ok) {
+      console.error('[dataforseo-api] HTTP error', {
+        endpoint,
+        httpStatus: res.status,
+        responseBody,
+      });
+      throw new DataForSeoHttpError(
+        json.status_message ?? `DataForSEO HTTP ${res.status}`,
+        res.status,
+        responseBody,
+        endpoint,
+      );
+    }
+
     if ((json.status_code ?? 0) >= 40000) {
-      throw new Error(json.status_message ?? `DataForSEO error ${json.status_code}`);
+      console.error('[dataforseo-api] API error', {
+        endpoint,
+        httpStatus: res.status,
+        statusCode: json.status_code,
+        statusMessage: json.status_message,
+        responseBody,
+      });
+      throw new DataForSeoHttpError(
+        json.status_message ?? `DataForSEO error ${json.status_code}`,
+        res.status,
+        responseBody,
+        endpoint,
+      );
     }
 
     return extractTaskResult(json);
   } catch (error) {
+    if (error instanceof DataForSeoHttpError) {
+      throw error;
+    }
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error('DataForSEO request timed out');
     }
@@ -433,6 +505,33 @@ function parseBacklinks(data: BacklinksSummaryResult | null): SeoBacklinksSummar
   };
 }
 
+function recordSyncError(
+  errors: SeoSyncSummary['errors'],
+  key: string,
+  error: unknown,
+): void {
+  if (error instanceof DataForSeoHttpError) {
+    console.error(`[dataforseo-api] ${key} failed`, {
+      key,
+      endpoint: error.endpoint,
+      httpStatus: error.httpStatus,
+      responseBody: error.responseBody,
+      message: error.message,
+    });
+    errors.push({
+      key,
+      error: error.message,
+      httpStatus: error.httpStatus,
+      responseBody: error.responseBody,
+    });
+    return;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[dataforseo-api] ${key} failed`, { key, message, error });
+  errors.push({ key, error: message });
+}
+
 function parseCompetitors(data: CompetitorsDomainResult | null): SeoCompetitor[] {
   return (data?.items ?? [])
     .filter((item) => item.domain && item.domain !== SEO_DOMAIN)
@@ -518,9 +617,7 @@ export async function syncSeoMetrics(): Promise<SeoSyncSummary> {
       await writeSeoCache(overviewKey, overview);
       updated.push(overviewKey);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[dataforseo-api] ${overviewKey} failed`, error);
-      errors.push({ key: overviewKey, error: message });
+      recordSyncError(errors, overviewKey, error);
     }
 
     const keywordsKey = cacheKeyRankedKeywords(loc.code);
@@ -529,9 +626,7 @@ export async function syncSeoMetrics(): Promise<SeoSyncSummary> {
       await writeSeoCache(keywordsKey, keywords);
       updated.push(keywordsKey);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[dataforseo-api] ${keywordsKey} failed`, error);
-      errors.push({ key: keywordsKey, error: message });
+      recordSyncError(errors, keywordsKey, error);
     }
   }
 
@@ -541,9 +636,7 @@ export async function syncSeoMetrics(): Promise<SeoSyncSummary> {
     await writeSeoCache(backlinksKey, backlinks);
     updated.push(backlinksKey);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[dataforseo-api] ${backlinksKey} failed`, error);
-    errors.push({ key: backlinksKey, error: message });
+    recordSyncError(errors, backlinksKey, error);
   }
 
   const competitorsKey = SEO_CACHE_KEYS.competitors(2484);
@@ -552,9 +645,7 @@ export async function syncSeoMetrics(): Promise<SeoSyncSummary> {
     await writeSeoCache(competitorsKey, competitors);
     updated.push(competitorsKey);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[dataforseo-api] ${competitorsKey} failed`, error);
-    errors.push({ key: competitorsKey, error: message });
+    recordSyncError(errors, competitorsKey, error);
   }
 
   return {
