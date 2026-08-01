@@ -12,6 +12,7 @@ const ITEMS = [
   { href: '/admin/kpis/web', label: 'Web', color: '#0EA5E9' },
   { href: '/admin/kpis/landing-ctas', label: 'CTAs', color: '#22C55E' },
   { href: '/admin/kpis/pagespeed', label: 'PageSpeed', color: '#14B8A6' },
+  { href: '/admin/seo', label: 'SEO', color: '#8B5CF6' },
   { href: '/admin/kpis/revenue', label: 'Revenue', color: '#6366F1' },
   { href: '/admin/kpis/insights', label: 'Análisis IA', color: '#8B5CF6' },
 ];
