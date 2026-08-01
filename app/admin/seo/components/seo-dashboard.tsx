@@ -470,20 +470,29 @@ function AiVisibilitySection({ visibility, synced }: { visibility: SeoAiVisibili
 
   return (
     <div className="rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50/80 via-white to-violet-50/30 p-6 shadow-sm">
-      <SectionHeader icon={Sparkles} title="Búsqueda de IA" subtitle="ChatGPT · Google AI · Gemini · Modo IA · 🇺🇸 EN" />
+      <SectionHeader icon={Sparkles} title="Búsqueda de IA" subtitle="ChatGPT · Google AI · Gemini · Modo IA · Mundial · Español" />
 
       <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
         <div className="rounded-2xl border border-white bg-white/90 p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Visibilidad en IA</p>
           <div className="mt-3 flex items-end gap-3">
             <p className="text-4xl font-bold tabular-nums text-[#1D4ED8]">{score}</p>
-            <span
-              className={`mb-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                score >= 60 ? 'bg-emerald-100 text-emerald-700' : score >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
-              }`}
-            >
-              {score >= 60 ? 'Alta' : score >= 30 ? 'Media' : 'Baja'}
-            </span>
+            {data.total_mentions === 0 ? (
+              <span
+                title="kalyo.io es un dominio nuevo. Las menciones en IA aparecerán conforme crezca la autoridad del sitio."
+                className="mb-1 cursor-help rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500"
+              >
+                Sin datos aún
+              </span>
+            ) : (
+              <span
+                className={`mb-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                  score >= 60 ? 'bg-emerald-100 text-emerald-700' : score >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                }`}
+              >
+                {score >= 60 ? 'Alta' : score >= 30 ? 'Media' : 'Baja'}
+              </span>
+            )}
           </div>
           <div className="mt-4 flex justify-center">
             <DonutChart

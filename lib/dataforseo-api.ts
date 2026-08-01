@@ -17,9 +17,9 @@ const REQUEST_TIMEOUT_MS = 60_000;
 
 export const SEO_DOMAIN = 'kalyo.io';
 export const SEO_LANGUAGE_CODE = 'es';
-/** LLM Mentions API: ChatGPT data is US + English only per DataForSEO docs */
+/** LLM Mentions API: Spanish-language queries (location_code 2840 = global default bucket). */
 export const SEO_LLM_LOCATION_CODE = 2840;
-export const SEO_LLM_LANGUAGE_CODE = 'en';
+export const SEO_LLM_LANGUAGE_CODE = 'es';
 
 export const SEO_PRIORITY_LOCATIONS = [
   { code: 2484, country: 'MX', label: 'México', flag: '🇲🇽' },
