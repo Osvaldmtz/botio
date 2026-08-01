@@ -99,7 +99,7 @@ function formatUpdatedAt(iso: string | null): string {
   return new Date(iso).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function authorityScore(rank: number): number {
+function authorityScoreFromRank(rank: number): number {
   if (rank <= 0) return 0;
   return Math.min(100, Math.round(rank / 10));
 }
@@ -1205,7 +1205,9 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
     return sortDir === 'asc' ? ' ↑' : ' ↓';
   }
 
-  const authority = authorityScore(data?.backlinks?.rank ?? 0);
+  const authority = data?.authority_score?.value ?? authorityScoreFromRank(data?.backlinks?.rank ?? 0);
+  const authoritySource = data?.authority_score?.source ?? 'dataforseo';
+  const authoritySourceLabel = authoritySource === 'semrush' ? 'SEMrush' : 'DataForSEO';
   const hasData = Boolean(data && data.overview.length > 0);
 
   return (
@@ -1303,9 +1305,12 @@ export function SeoDashboard({ initial, error: initialError }: Props) {
             {/* Top metric cards */}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
               <GradientMetricCard label="Authority Score" value={String(authority)} gradient={GRADIENT_CARDS.authority} icon={Award} sparkValue={authority}>
-                <p className="text-xs text-white/70">
-                  Domain rank: <span className="font-bold text-white">{data?.backlinks?.rank ?? '—'}</span>
-                </p>
+                <p className="text-[11px] text-white/60">Fuente: {authoritySourceLabel}</p>
+                {authoritySource === 'dataforseo' ? (
+                  <p className="mt-1 text-xs text-white/70">
+                    Domain rank: <span className="font-bold text-white">{data?.backlinks?.rank ?? '—'}</span>
+                  </p>
+                ) : null}
               </GradientMetricCard>
               <GradientMetricCard label="Tráfico orgánico (ETV)" value={countryOverview.etv.toLocaleString('es-MX')} gradient={GRADIENT_CARDS.etv} icon={TrendingUp} sparkValue={countryOverview.etv} />
               <GradientMetricCard label="Keywords orgánicas" value={countryOverview.keywords_count.toLocaleString('es-MX')} gradient={GRADIENT_CARDS.keywords} icon={Search} sparkValue={countryOverview.keywords_count} />

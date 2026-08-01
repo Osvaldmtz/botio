@@ -10,6 +10,7 @@ export async function GET() {
   }
 
   try {
+    // authority_score: SEMrush domain_overview (primary) → DataForSEO rank fallback
     const metrics = await getSeoKpis();
     return Response.json(metrics);
   } catch (error) {

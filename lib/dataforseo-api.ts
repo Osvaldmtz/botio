@@ -2,6 +2,13 @@ import 'server-only';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPageSpeedMetrics } from '@/lib/pagespeed-api';
+import {
+  getSemrushDomainOverviewCached,
+  isSemrushConfigured,
+  resolveAuthorityScore,
+  syncSemrushDomainOverview,
+  type SeoAuthorityScore,
+} from '@/lib/semrush-api';
 
 const DATAFORSEO_API = 'https://api.dataforseo.com/v3';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -322,6 +329,8 @@ export type SeoPositionTracking = {
   competitors_visibility: SeoPositionTrackingCompetitor[];
 };
 
+export type { SeoAuthorityScore } from '@/lib/semrush-api';
+
 export type SeoKpisResponse = {
   overview: SeoCountryOverview[];
   top_keywords: SeoTopKeyword[];
@@ -329,6 +338,7 @@ export type SeoKpisResponse = {
   ai_visibility: SeoAiVisibility | null;
   backlinks: SeoBacklinksSummary | null;
   backlinks_detail: SeoBacklinksDetail | null;
+  authority_score: SeoAuthorityScore;
   competitors: SeoCompetitor[];
   site_audit: SeoSiteAudit | null;
   pagespeed: SeoPageSpeedSummary | null;
@@ -1539,6 +1549,9 @@ export async function getSeoKpis(options?: { allowStale?: boolean }): Promise<Se
   const onPageTask = cache.get(SEO_CACHE_KEYS.onPageTaskId) as OnPageTaskCache | undefined;
   const pageSpeedRaw = cache.get(SEO_CACHE_KEYS.pageSpeedSummary) as SeoPageSpeedSummary | undefined;
 
+  const backlinks = parseBacklinks(backlinksRaw ?? null);
+  const semrushOverview = await getSemrushDomainOverviewCached(SEO_DOMAIN);
+
   return {
     overview,
     top_keywords: topKeywords.sort((a, b) => a.position - b.position).slice(0, 100),
@@ -1548,13 +1561,14 @@ export async function getSeoKpis(options?: { allowStale?: boolean }): Promise<Se
       previousMxKeywords,
     ),
     ai_visibility: parseAiVisibility(llmMentionsRaw ?? null),
-    backlinks: parseBacklinks(backlinksRaw ?? null),
+    backlinks,
     backlinks_detail: parseBacklinksDetail(
       backlinksRaw ?? null,
       backlinksDetailRaw ?? null,
       anchorTextsRaw ?? null,
       referringDomainsRaw ?? null,
     ),
+    authority_score: resolveAuthorityScore(semrushOverview, backlinks?.rank ?? 0),
     competitors: parseCompetitors(competitorsRaw ?? null),
     site_audit: parseSiteAudit(onPageSummary ?? null, onPagePages ?? null, onPageTask ?? null),
     pagespeed: parsePageSpeedSummary(pageSpeedRaw ?? null),
@@ -1648,6 +1662,15 @@ export async function syncSeoMetrics(): Promise<SeoSyncSummary> {
 
   await syncOnPageAudit(domain, updated, errors);
   await syncPageSpeedSummary(updated, errors);
+
+  if (isSemrushConfigured()) {
+    try {
+      const semrush = await syncSemrushDomainOverview(domain);
+      if (semrush) updated.push('semrush_domain_overview');
+    } catch (error) {
+      recordSyncError(errors, 'semrush_domain_overview', error);
+    }
+  }
 
   return {
     updated,
