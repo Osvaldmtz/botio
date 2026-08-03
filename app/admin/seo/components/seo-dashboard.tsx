@@ -340,19 +340,20 @@ function DonutChart({
 function RadialGauge({ score, size = 160, label }: { score: number; size?: number; label?: string }) {
   const color = healthColor(score);
   const data = [{ name: 'score', value: score, fill: color }];
+  const arcHeight = Math.round(size * 0.55);
   return (
-    <div className="relative mx-auto" style={{ width: size, height: size * 0.65 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <RadialBarChart cx="50%" cy="100%" innerRadius="55%" outerRadius="100%" barSize={14} data={data} startAngle={180} endAngle={0}>
-          <RadialBar background={{ fill: '#f3f4f6' }} dataKey="value" cornerRadius={8} />
-        </RadialBarChart>
-      </ResponsiveContainer>
-      <div className="absolute inset-x-0 bottom-0 text-center">
-        <p className="text-4xl font-bold tabular-nums" style={{ color }}>
-          {score}
-        </p>
-        {label ? <p className="text-xs font-medium text-gray-400">{label}</p> : null}
+    <div className="mx-auto text-center" style={{ width: size }}>
+      <div style={{ height: arcHeight }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <RadialBarChart cx="50%" cy="100%" innerRadius="55%" outerRadius="100%" barSize={14} data={data} startAngle={180} endAngle={0}>
+            <RadialBar background={{ fill: '#f3f4f6' }} dataKey="value" cornerRadius={8} />
+          </RadialBarChart>
+        </ResponsiveContainer>
       </div>
+      <p className="text-4xl font-bold tabular-nums leading-none" style={{ color }}>
+        {score}
+      </p>
+      {label ? <p className="mt-0.5 text-xs font-medium text-gray-400">{label}</p> : null}
     </div>
   );
 }
@@ -363,13 +364,15 @@ function MiniRadialGauge({ score, label }: { score: number; label: string }) {
   return (
     <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-      <div className="relative mx-auto mt-1 h-16 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadialBarChart cx="50%" cy="100%" innerRadius="60%" outerRadius="100%" barSize={8} data={data} startAngle={180} endAngle={0}>
-            <RadialBar background={{ fill: '#f3f4f6' }} dataKey="value" cornerRadius={4} />
-          </RadialBarChart>
-        </ResponsiveContainer>
-        <p className="absolute inset-x-0 bottom-0 text-center text-lg font-bold tabular-nums" style={{ color }}>
+      <div className="mx-auto mt-1 w-full text-center">
+        <div className="h-14 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadialBarChart cx="50%" cy="100%" innerRadius="60%" outerRadius="100%" barSize={8} data={data} startAngle={180} endAngle={0}>
+              <RadialBar background={{ fill: '#f3f4f6' }} dataKey="value" cornerRadius={4} />
+            </RadialBarChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="text-lg font-bold tabular-nums leading-none" style={{ color }}>
           {score}
         </p>
       </div>
@@ -384,13 +387,15 @@ function VitalsGauge({ label, display, status }: { label: string; display: strin
   return (
     <div className={`rounded-2xl border p-5 shadow-sm ${status === 'good' ? 'border-emerald-100 bg-emerald-50/50' : status === 'needs-improvement' ? 'border-amber-100 bg-amber-50/50' : 'border-rose-100 bg-rose-50/50'}`}>
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-      <div className="relative mx-auto mt-2 h-20 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadialBarChart cx="50%" cy="100%" innerRadius="55%" outerRadius="100%" barSize={10} data={data} startAngle={180} endAngle={0}>
-            <RadialBar background={{ fill: '#e5e7eb' }} dataKey="value" cornerRadius={6} />
-          </RadialBarChart>
-        </ResponsiveContainer>
-        <p className="absolute inset-x-0 bottom-0 text-center text-2xl font-bold tabular-nums" style={{ color }}>
+      <div className="mx-auto mt-2 w-full text-center">
+        <div className="h-16 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadialBarChart cx="50%" cy="100%" innerRadius="55%" outerRadius="100%" barSize={10} data={data} startAngle={180} endAngle={0}>
+              <RadialBar background={{ fill: '#e5e7eb' }} dataKey="value" cornerRadius={6} />
+            </RadialBarChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="text-2xl font-bold tabular-nums leading-none" style={{ color }}>
           {display}
         </p>
       </div>
