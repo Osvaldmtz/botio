@@ -37,6 +37,10 @@ import {
   fetchKpiChannelCompare,
   fetchKpiSeoDetail,
 } from '@/lib/kpi/insights-enrichment';
+import {
+  emptyKpiSeoIntelligence,
+  fetchSeoIntelligenceData,
+} from '@/lib/kpi/insights-seo-intelligence';
 import { fetchSofiaSalesMetrics } from '@/lib/sofia-sales-metrics';
 
 export type { ExecutiveSummaryData, InstagramPageData, AdsPageData, WebPageData, LandingCtasPageData } from '@/lib/kpi/utils';
@@ -217,6 +221,13 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
     console.error('[kpi] fetchKpiChannelCompare failed', error);
   }
 
+  let seoIntelligence = emptyKpiSeoIntelligence();
+  try {
+    seoIntelligence = await fetchSeoIntelligenceData();
+  } catch (error) {
+    console.error('[kpi] fetchSeoIntelligenceData failed — using empty SEO intelligence', error);
+  }
+
   return {
     kalyo: {
       mrr: kalyo?.mrr ?? null,
@@ -294,6 +305,7 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
         : null,
     searchConsoleEmpty: searchConsole.data?.empty === true,
     seoDetail,
+    seoIntelligence,
     channelCompare,
     operational,
     fetchedAt: new Date().toISOString(),

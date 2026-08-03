@@ -2,6 +2,7 @@ import { isAdmin } from '@/lib/admin-auth';
 import { buildKpiAnalysisPrompt, KPI_ANALYSIS_SYSTEM_PROMPT } from '@/lib/kpi/insights-prompt';
 import { emptyOperationalMetrics } from '@/lib/kpi/operational-metrics';
 import { emptyKpiSeoDetail } from '@/lib/kpi/insights-enrichment';
+import { emptyKpiSeoIntelligence } from '@/lib/kpi/insights-seo-intelligence';
 import type { KpiInsightsData } from '@/lib/kpi/insights-types';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
     metaAds: { ...kpiData.metaAds, currency: 'MXN' },
     operational: kpiData.operational ?? emptyOperationalMetrics(),
     seoDetail: kpiData.seoDetail ?? emptyKpiSeoDetail(),
+    seoIntelligence: kpiData.seoIntelligence ?? emptyKpiSeoIntelligence(),
     channelCompare: kpiData.channelCompare ?? null,
   };
 

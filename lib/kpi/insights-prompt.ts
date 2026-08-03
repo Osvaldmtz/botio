@@ -1,4 +1,5 @@
 import type { KpiInsightsData } from '@/lib/kpi/insights-types';
+import { formatSeoIntelligenceBlock } from '@/lib/kpi/insights-seo-intelligence';
 import type { OperationalMetrics } from '@/lib/kpi/operational-metrics';
 import type { ChannelCompareResponse } from '@/lib/ads-channel-compare-types';
 import type { KpiSeoDetail } from '@/lib/kpi/insights-enrichment';
@@ -224,6 +225,7 @@ export function buildKpiAnalysisPrompt(data: KpiInsightsData): string {
     searchConsole,
     searchConsoleEmpty,
     seoDetail,
+    seoIntelligence,
     channelCompare,
     operational,
   } = data;
@@ -329,6 +331,8 @@ ${formatOperationalBlock(operational)}
 
 ${formatSeoDetailBlock(seoDetail, clarity, ga4Landing)}
 
+${formatSeoIntelligenceBlock(seoIntelligence)}
+
 ${formatChannelCompareBlock(channelCompare, ltvAvg)}
 
 Responde en este formato exacto con estas 6 secciones:
@@ -340,7 +344,7 @@ Responde en este formato exacto con estas 6 secciones:
 [3-4 bullets con los problemas más urgentes basados en los datos]
 
 ## 🔍 Análisis SEO detallado
-[4-6 bullets: keywords top 5 vs a mejorar, páginas con CTR bajo, caídas de posición, conexión scroll depth Clarity + bounce GA4 por página de entrada. Acciones concretas de title/meta/contenido.]
+[4-6 bullets usando === SEO INTELLIGENCE === (DataForSEO/SEMrush: keywords MX, CWV, AI visibility, backlinks, competidores) Y Search Console (CTR, caídas). Conecta scroll depth Clarity + bounce GA4 + LCP/TBT móvil. Acciones concretas de title/meta/contenido/performance.]
 
 ## ⚖️ Comparación Meta Ads vs Google Ads
 [Tabla o bullets comparando CAC/CPL, conversiones y presupuesto por canal. Si falta un canal, dilo explícitamente. Indica mejor ratio LTV:CAC y recomendación de presupuesto.]
