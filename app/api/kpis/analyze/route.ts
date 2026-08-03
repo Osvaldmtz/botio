@@ -1,6 +1,7 @@
 import { isAdmin } from '@/lib/admin-auth';
 import { buildKpiAnalysisPrompt, KPI_ANALYSIS_SYSTEM_PROMPT } from '@/lib/kpi/insights-prompt';
 import { emptyOperationalMetrics } from '@/lib/kpi/operational-metrics';
+import { emptyKpiSeoDetail } from '@/lib/kpi/insights-enrichment';
 import type { KpiInsightsData } from '@/lib/kpi/insights-types';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +49,8 @@ export async function POST(request: Request) {
     ...kpiData,
     metaAds: { ...kpiData.metaAds, currency: 'MXN' },
     operational: kpiData.operational ?? emptyOperationalMetrics(),
+    seoDetail: kpiData.seoDetail ?? emptyKpiSeoDetail(),
+    channelCompare: kpiData.channelCompare ?? null,
   };
 
   let userPrompt: string;

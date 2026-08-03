@@ -71,6 +71,79 @@ function getDateRange(days: number): { startDate: string; endDate: string } {
   };
 }
 
+function getPreviousDateRange(days: number): { startDate: string; endDate: string } {
+  const currentEnd = new Date();
+  currentEnd.setUTCDate(currentEnd.getUTCDate() - 1);
+  const end = new Date(currentEnd);
+  end.setUTCDate(end.getUTCDate() - days);
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+  };
+}
+
+export type SearchConsolePagePositionDrop = {
+  page: string;
+  position_current: number;
+  position_previous: number;
+  position_delta: number;
+};
+
+async function fetchPagesForRange(
+  searchconsole: ReturnType<typeof google.searchconsole>,
+  siteUrl: string,
+  range: { startDate: string; endDate: string },
+  rowLimit = 25,
+): Promise<SearchConsolePage[]> {
+  const pagesRes = await searchconsole.searchanalytics.query({
+    siteUrl,
+    requestBody: {
+      ...range,
+      dataState: 'all',
+      dimensions: ['page'],
+      rowLimit,
+    },
+  });
+  const pageRows = (pagesRes.data.rows ?? []) as SearchAnalyticsRow[];
+  return pageRows.map(mapPageRow);
+}
+
+/** Pages whose average position worsened vs the prior period (same length). */
+export async function fetchSearchConsolePagePositionDrops(
+  periodDays = 28,
+): Promise<SearchConsolePagePositionDrop[]> {
+  const searchconsole = getSearchConsoleClient();
+  const siteUrl = await resolveSiteUrl(searchconsole);
+  const currentRange = getDateRange(periodDays);
+  const previousRange = getPreviousDateRange(periodDays);
+
+  const [currentPages, previousPages] = await Promise.all([
+    fetchPagesForRange(searchconsole, siteUrl, currentRange),
+    fetchPagesForRange(searchconsole, siteUrl, previousRange),
+  ]);
+
+  const previousByPage = new Map(previousPages.map((p) => [p.page, p.position]));
+  const drops: SearchConsolePagePositionDrop[] = [];
+
+  for (const page of currentPages) {
+    const prev = previousByPage.get(page.page);
+    if (prev == null) continue;
+    const delta = page.position - prev;
+    if (delta >= 1) {
+      drops.push({
+        page: page.page,
+        position_current: page.position,
+        position_previous: prev,
+        position_delta: Math.round(delta * 10) / 10,
+      });
+    }
+  }
+
+  return drops.sort((a, b) => b.position_delta - a.position_delta).slice(0, 8);
+}
+
 function pct(ctr: number | null | undefined): number {
   return Math.round(Number(ctr ?? 0) * 10000) / 100;
 }

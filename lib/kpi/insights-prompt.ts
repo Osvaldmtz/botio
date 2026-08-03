@@ -1,5 +1,7 @@
 import type { KpiInsightsData } from '@/lib/kpi/insights-types';
 import type { OperationalMetrics } from '@/lib/kpi/operational-metrics';
+import type { ChannelCompareResponse } from '@/lib/ads-channel-compare-types';
+import type { KpiSeoDetail } from '@/lib/kpi/insights-enrichment';
 import {
   MXN_PER_USD,
   computeLtvDerived,
@@ -7,7 +9,7 @@ import {
 } from '@/lib/kpi/ltv-utils';
 
 export const KPI_ANALYSIS_SYSTEM_PROMPT =
-  'Eres un estratega de marketing digital y growth specialist especializado en SaaS B2B para salud mental en Latinoamérica. Analizas los KPIs de Kalyo, una plataforma para psicólogos clínicos. También interpretas métricas operativas de WhatsApp: mensajes de pacientes redirigidos al psicólogo (patient_inbound), onboarding de trial por día, encuesta día 8 y cupones PRIMER50. Sé directo, específico y usa los números reales en cada insight. No des recomendaciones genéricas.';
+  'Eres un estratega de marketing digital y growth specialist especializado en SaaS B2B para salud mental en Latinoamérica. Analizas los KPIs de Kalyo, una plataforma para psicólogos clínicos. Interpretas métricas operativas de WhatsApp, SEO detallado (keywords, CTR, caídas de posición, Clarity/GA4) y comparación Meta Ads vs Google Ads (CAC/CPL, LTV:CAC por canal). Sé directo, específico y usa los números reales en cada insight. No des recomendaciones genéricas.';
 
 function fmtNum(value: number | null | undefined, decimals = 0): string {
   if (value == null || Number.isNaN(value)) return 'N/D';
@@ -96,9 +98,135 @@ ${dripLines}
 - PRIMER50 vía Sofía (objeciones/ventas): ${fmtNum(sofiaSales.primer50_links_sent_30d)} links | share cupón vs trials ofrecidos: ${sofiaSales.coupon_share_pct != null ? `${fmtNum(sofiaSales.coupon_share_pct, 1)}%` : 'N/D'}`;
 }
 
+function formatSeoDetailBlock(
+  seo: KpiSeoDetail,
+  clarity: KpiInsightsData['clarity'],
+  ga4Landing: KpiInsightsData['ga4Landing'],
+): string {
+  if (!seo.available) {
+    return `DATOS SEO DETALLADOS: N/D${seo.error ? ` (${seo.error})` : ''}`;
+  }
+
+  const kwTop5 = seo.keywords_in_top5
+    .slice(0, 6)
+    .map(
+      (k) =>
+        `  - "${k.query}": pos #${fmtNum(k.position, 1)}, ${fmtNum(k.clicks)} clicks, ${fmtNum(k.impressions)} imp, CTR ${fmtNum(k.ctr, 2)}%`,
+    )
+    .join('\n');
+
+  const kwImprove = seo.keywords_to_improve
+    .slice(0, 6)
+    .map(
+      (k) =>
+        `  - "${k.query}": pos #${fmtNum(k.position, 1)}, ${fmtNum(k.impressions)} imp (oportunidad subir a top 5)`,
+    )
+    .join('\n');
+
+  const lowCtr = seo.pages_low_ctr
+    .slice(0, 6)
+    .map(
+      (p) =>
+        `  - ${shortenSearchConsolePage(p.page)}: ${fmtNum(p.impressions)} imp, ${fmtNum(p.clicks)} clicks, CTR ${fmtNum(p.ctr, 2)}% (pos #${fmtNum(p.position, 1)})`,
+    )
+    .join('\n');
+
+  const drops = seo.pages_position_drop
+    .slice(0, 6)
+    .map(
+      (p) =>
+        `  - ${shortenSearchConsolePage(p.page)}: #${fmtNum(p.position_previous, 1)} → #${fmtNum(p.position_current, 1)} (+${fmtNum(p.position_delta, 1)} peor)`,
+    )
+    .join('\n');
+
+  const landingPages = seo.landing_entry_pages
+    .slice(0, 6)
+    .map(
+      (p) =>
+        `  - ${p.pagePath}: ${fmtNum(p.screenPageViews)} vistas, bounce ${fmtNum(p.bounce_rate_pct, 1)}%, duración ${fmtNum(p.avg_duration_sec)}s`,
+    )
+    .join('\n');
+
+  const clarityNote = clarity
+    ? `Clarity scroll depth sitio: ${fmtNum(clarity.scrollDepth, 1)}% | Quick backs: ${fmtNum(clarity.quickBacks, 1)}%`
+    : 'Clarity: N/D';
+
+  return `DATOS SEO DETALLADOS (Search Console 28d + GA4 landing):
+- Keywords ya en top 5 (proteger/optimizar snippet):
+${kwTop5 || '  - N/D'}
+- Keywords a mejorar (pos >5 con alto volumen):
+${kwImprove || '  - N/D'}
+- Páginas con brecha impresiones/clicks (CTR bajo → title/meta débil):
+${lowCtr || '  - N/D'}
+- Páginas con mayor caída de posición vs período anterior:
+${drops || '  - Sin caídas significativas'}
+- Páginas de entrada kalyo.io (GA4, 30d) — bounce rate por landing:
+${landingPages || '  - N/D'}
+- Bounce rate global landing: ${fmtNum(ga4Landing.bounce_rate, 1)}% | ${clarityNote}
+- INSTRUCCIÓN: Conecta scroll depth bajo con páginas de entrada de alto bounce; prioriza mejoras de title/meta en URLs de alto tráfico orgánico con CTR bajo.`;
+}
+
+function formatChannelCompareBlock(
+  compare: ChannelCompareResponse | null,
+  ltvAvgUsd: number,
+): string {
+  if (!compare) {
+    return 'COMPARACIÓN META vs GOOGLE ADS: N/D (error al cargar datos de canales)';
+  }
+
+  const { meta, google } = compare;
+  const metaLtvCac =
+    meta.cpa_usd != null && meta.cpa_usd > 0 ? ltvAvgUsd / meta.cpa_usd : null;
+  const googleLtvCac =
+    google.cpa_usd != null && google.cpa_usd > 0 ? ltvAvgUsd / google.cpa_usd : null;
+
+  const tableAvailable = meta.available && google.available;
+
+  if (tableAvailable) {
+    return `COMPARACIÓN META ADS vs GOOGLE ADS (30d, normalizado USD):
+| Canal | Presupuesto | Clicks | Conversiones | CPL/CAC (USD) | LTV:CAC est. |
+| Meta | $${fmtNum(meta.spend_usd, 2)} (${fmtNum(meta.spend)} MXN) | ${fmtNum(meta.clicks)} | ${fmtNum(meta.conversions)} ${meta.conversion_label} | ${meta.cpa_usd != null ? fmtMoney(meta.cpa_usd) : 'N/D'} | ${metaLtvCac != null ? `${fmtNum(metaLtvCac, 1)}x` : 'N/D'} |
+| Google | $${fmtNum(google.spend_usd, 2)} (${fmtNum(google.spend)} COP) | ${fmtNum(google.clicks)} | ${fmtNum(google.conversions)} ${google.conversion_label} | ${google.cpa_usd != null ? fmtMoney(google.cpa_usd) : 'N/D'} | ${googleLtvCac != null ? `${fmtNum(googleLtvCac, 1)}x` : 'N/D'} |
+- Mejor CPL/CAC: ${compare.winners.cpa ?? 'empate/indeterminado'}
+- Más conversiones: ${compare.winners.conversions ?? 'empate/indeterminado'}
+- INSTRUCCIÓN: Indica qué canal tiene mejor ratio LTV:CAC y si conviene reasignar presupuesto.`;
+  }
+
+  if (meta.available && !google.available) {
+    return `COMPARACIÓN META ADS vs GOOGLE ADS:
+- Meta Ads: DISPONIBLE — gasto $${fmtNum(meta.spend_usd, 2)} USD, ${fmtNum(meta.conversions)} ${meta.conversion_label}, CPL ~${meta.cpa_usd != null ? fmtMoney(meta.cpa_usd) : 'N/D'}, LTV:CAC est. ${metaLtvCac != null ? `${fmtNum(metaLtvCac, 1)}x` : 'N/D'}
+- Google Ads: SIN DATOS${google.error ? ` (${google.error})` : ''}
+- INSTRUCCIÓN: Menciona explícitamente que no hay datos de Google Ads. Con LTV ~${fmtMoney(ltvAvgUsd)}, recomienda si vale la pena activar/probar Google dado el rendimiento actual de Meta.`;
+  }
+
+  if (!meta.available && google.available) {
+    return `COMPARACIÓN META ADS vs GOOGLE ADS:
+- Meta Ads: SIN DATOS${meta.error ? ` (${meta.error})` : ''}
+- Google Ads: DISPONIBLE — gasto $${fmtNum(google.spend_usd, 2)} USD, ${fmtNum(google.conversions)} ${google.conversion_label}, CPL ~${google.cpa_usd != null ? fmtMoney(google.cpa_usd) : 'N/D'}, LTV:CAC est. ${googleLtvCac != null ? `${fmtNum(googleLtvCac, 1)}x` : 'N/D'}
+- INSTRUCCIÓN: Menciona explícitamente que no hay datos de Meta Ads. Evalúa si reactivar Meta dado LTV ~${fmtMoney(ltvAvgUsd)}.`;
+  }
+
+  return `COMPARACIÓN META ADS vs GOOGLE ADS:
+- Meta: sin datos${meta.error ? ` (${meta.error})` : ''}
+- Google: sin datos${google.error ? ` (${google.error})` : ''}
+- INSTRUCCIÓN: Ningún canal paid reportó datos; no inventes CAC por canal.`;
+}
+
 export function buildKpiAnalysisPrompt(data: KpiInsightsData): string {
-  const { kalyo, twilio, instagram, metaAds, ga4Landing, ga4App, clarity, searchConsole, searchConsoleEmpty, operational } =
-    data;
+  const {
+    kalyo,
+    twilio,
+    instagram,
+    metaAds,
+    ga4Landing,
+    ga4App,
+    clarity,
+    searchConsole,
+    searchConsoleEmpty,
+    seoDetail,
+    channelCompare,
+    operational,
+  } = data;
 
   const spendMxn = metaAds.spend;
   const spendUsdEquiv = spendMxn / MXN_PER_USD;
@@ -199,13 +327,23 @@ ${
 
 ${formatOperationalBlock(operational)}
 
-Responde en este formato exacto con estas 4 secciones:
+${formatSeoDetailBlock(seoDetail, clarity, ga4Landing)}
+
+${formatChannelCompareBlock(channelCompare, ltvAvg)}
+
+Responde en este formato exacto con estas 6 secciones:
 
 ## ✅ Lo que está funcionando
 [3-4 bullets con números reales, qué métricas son positivas y por qué importan]
 
 ## ⚠️ Alertas y problemas detectados
 [3-4 bullets con los problemas más urgentes basados en los datos]
+
+## 🔍 Análisis SEO detallado
+[4-6 bullets: keywords top 5 vs a mejorar, páginas con CTR bajo, caídas de posición, conexión scroll depth Clarity + bounce GA4 por página de entrada. Acciones concretas de title/meta/contenido.]
+
+## ⚖️ Comparación Meta Ads vs Google Ads
+[Tabla o bullets comparando CAC/CPL, conversiones y presupuesto por canal. Si falta un canal, dilo explícitamente. Indica mejor ratio LTV:CAC y recomendación de presupuesto.]
 
 ## 🎯 Top 3 acciones esta semana
 [Exactamente 3 acciones concretas, ordenadas por impacto, con el número/métrica que justifica cada una]

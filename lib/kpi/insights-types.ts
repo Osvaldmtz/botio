@@ -1,4 +1,6 @@
 import type { OperationalMetrics } from '@/lib/kpi/operational-metrics';
+import type { ChannelCompareResponse } from '@/lib/ads-channel-compare-types';
+import type { KpiSeoDetail } from '@/lib/kpi/insights-enrichment';
 
 export type KpiInsightsData = {
   kalyo: {
@@ -71,6 +73,8 @@ export type KpiInsightsData = {
     topPageClicks: number;
   } | null;
   searchConsoleEmpty: boolean;
+  seoDetail: KpiSeoDetail;
+  channelCompare: ChannelCompareResponse | null;
   operational: OperationalMetrics;
   fetchedAt: string;
 };

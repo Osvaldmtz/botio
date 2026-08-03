@@ -32,6 +32,11 @@ import type {
 import { aggregateTwilio } from '@/lib/kpi/utils';
 import { fetchStripeActiveSubscriberCount, getMRRCached } from '@/lib/stripe-mrr';
 import { fetchOperationalMetrics, emptyOperationalMetrics } from '@/lib/kpi/operational-metrics';
+import {
+  emptyKpiSeoDetail,
+  fetchKpiChannelCompare,
+  fetchKpiSeoDetail,
+} from '@/lib/kpi/insights-enrichment';
 import { fetchSofiaSalesMetrics } from '@/lib/sofia-sales-metrics';
 
 export type { ExecutiveSummaryData, InstagramPageData, AdsPageData, WebPageData, LandingCtasPageData } from '@/lib/kpi/utils';
@@ -198,6 +203,20 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
     console.error('[kpi] fetchOperationalMetrics failed — using empty operational metrics', error);
   }
 
+  let seoDetail = emptyKpiSeoDetail();
+  try {
+    seoDetail = await fetchKpiSeoDetail();
+  } catch (error) {
+    console.error('[kpi] fetchKpiSeoDetail failed — using empty SEO detail', error);
+  }
+
+  let channelCompare = null;
+  try {
+    channelCompare = await fetchKpiChannelCompare();
+  } catch (error) {
+    console.error('[kpi] fetchKpiChannelCompare failed', error);
+  }
+
   return {
     kalyo: {
       mrr: kalyo?.mrr ?? null,
@@ -274,6 +293,8 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
           }
         : null,
     searchConsoleEmpty: searchConsole.data?.empty === true,
+    seoDetail,
+    channelCompare,
     operational,
     fetchedAt: new Date().toISOString(),
   };
