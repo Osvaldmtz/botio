@@ -1,5 +1,6 @@
 import { isAdmin } from '@/lib/admin-auth';
 import { buildKpiAnalysisPrompt, KPI_ANALYSIS_SYSTEM_PROMPT } from '@/lib/kpi/insights-prompt';
+import { emptyOperationalMetrics } from '@/lib/kpi/operational-metrics';
 import type { KpiInsightsData } from '@/lib/kpi/insights-types';
 
 export const dynamic = 'force-dynamic';
@@ -46,9 +47,18 @@ export async function POST(request: Request) {
   kpiData = {
     ...kpiData,
     metaAds: { ...kpiData.metaAds, currency: 'MXN' },
+    operational: kpiData.operational ?? emptyOperationalMetrics(),
   };
 
-  const userPrompt = buildKpiAnalysisPrompt(kpiData);
+  let userPrompt: string;
+  try {
+    userPrompt = buildKpiAnalysisPrompt(kpiData);
+  } catch (error) {
+    console.error('[kpis/analyze] buildKpiAnalysisPrompt failed', error);
+    return new Response(JSON.stringify({ error: 'Error al preparar el análisis' }), {
+      status: 500,
+    });
+  }
 
   const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',

@@ -31,7 +31,7 @@ import type {
 } from '@/lib/kpi/utils';
 import { aggregateTwilio } from '@/lib/kpi/utils';
 import { fetchStripeActiveSubscriberCount, getMRRCached } from '@/lib/stripe-mrr';
-import { fetchOperationalMetrics } from '@/lib/kpi/operational-metrics';
+import { fetchOperationalMetrics, emptyOperationalMetrics } from '@/lib/kpi/operational-metrics';
 import { fetchSofiaSalesMetrics } from '@/lib/sofia-sales-metrics';
 
 export type { ExecutiveSummaryData, InstagramPageData, AdsPageData, WebPageData, LandingCtasPageData } from '@/lib/kpi/utils';
@@ -190,7 +190,13 @@ export async function fetchKpiInsightsData(): Promise<KpiInsightsData> {
 
   const landingSummary = summarizeGA4Metrics(landing.data ?? []);
   const appSummary = summarizeGA4Metrics(app.data ?? []);
-  const operational = await fetchOperationalMetrics(kalyo, await getKalyoMetricsHistory(30));
+
+  let operational = emptyOperationalMetrics();
+  try {
+    operational = await fetchOperationalMetrics(kalyo, await getKalyoMetricsHistory(30));
+  } catch (error) {
+    console.error('[kpi] fetchOperationalMetrics failed — using empty operational metrics', error);
+  }
 
   return {
     kalyo: {

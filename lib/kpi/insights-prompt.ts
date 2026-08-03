@@ -37,7 +37,11 @@ function shortenSearchConsolePage(url: string): string {
   }
 }
 
-function formatOperationalBlock(op: OperationalMetrics): string {
+function formatOperationalBlock(op: OperationalMetrics | null | undefined): string {
+  if (!op) {
+    return 'MÉTRICAS OPERATIVAS: N/D (no disponibles en esta ejecución)';
+  }
+
   const { patientInbound, whatsappRouting, trialOnboarding, sofiaSales } = op;
 
   const psychLines =
