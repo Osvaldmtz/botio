@@ -1,4 +1,5 @@
 import type { KpiInsightsData } from '@/lib/kpi/insights-types';
+import type { OperationalMetrics } from '@/lib/kpi/operational-metrics';
 import {
   MXN_PER_USD,
   computeLtvDerived,
@@ -6,7 +7,7 @@ import {
 } from '@/lib/kpi/ltv-utils';
 
 export const KPI_ANALYSIS_SYSTEM_PROMPT =
-  'Eres un estratega de marketing digital y growth specialist especializado en SaaS B2B para salud mental en Latinoamérica. Analizas los KPIs de Kalyo, una plataforma para psicólogos clínicos. Sé directo, específico y usa los números reales en cada insight. No des recomendaciones genéricas.';
+  'Eres un estratega de marketing digital y growth specialist especializado en SaaS B2B para salud mental en Latinoamérica. Analizas los KPIs de Kalyo, una plataforma para psicólogos clínicos. También interpretas métricas operativas de WhatsApp: mensajes de pacientes redirigidos al psicólogo (patient_inbound), onboarding de trial por día, encuesta día 8 y cupones PRIMER50. Sé directo, específico y usa los números reales en cada insight. No des recomendaciones genéricas.';
 
 function fmtNum(value: number | null | undefined, decimals = 0): string {
   if (value == null || Number.isNaN(value)) return 'N/D';
@@ -36,8 +37,63 @@ function shortenSearchConsolePage(url: string): string {
   }
 }
 
+function formatOperationalBlock(op: OperationalMetrics): string {
+  const { patientInbound, whatsappRouting, trialOnboarding, sofiaSales } = op;
+
+  const psychLines =
+    patientInbound.by_psychologist.length > 0
+      ? patientInbound.by_psychologist
+          .slice(0, 5)
+          .map(
+            (p) =>
+              `  - ${p.psychologist_name ?? p.psychologist_id.slice(0, 8)}: ${p.message_count} msgs, ${p.unique_patients} paciente(s)`,
+          )
+          .join('\n')
+      : '  - Sin mensajes registrados aún';
+
+  const dripLines = trialOnboarding.drip_funnel
+    .filter((s) => s.count > 0 || s.step === 'total')
+    .map(
+      (s) =>
+        `  - ${s.label}: ${s.count} (${fmtNum(s.pct_of_total, 1)}% del total${s.drop_from_prev != null ? `, drop −${s.drop_from_prev}` : ''})`,
+    )
+    .join('\n');
+
+  const day8Breakdown = Object.entries(trialOnboarding.day8_survey.breakdown)
+    .filter(([, n]) => n > 0)
+    .map(([label, n]) => `${label}: ${n}`)
+    .join(' | ');
+
+  const routingNote = whatsappRouting.kalyo_bot_configured
+    ? `- Redirigidos a psicólogo (patient_inbound): ${fmtNum(whatsappRouting.patient_redirected_30d)} (${fmtNum(whatsappRouting.redirect_rate_pct, 1)}% del tráfico WA Kalyo)
+- Procesados por Sofía (msgs usuario): ${fmtNum(whatsappRouting.sofia_user_messages_30d)}`
+    : '- Routing WA: KALYO_BOT_ID no configurado';
+
+  const patientNote = patientInbound.available
+    ? `- Total mensajes patient_inbound (30d): ${fmtNum(patientInbound.total_30d)}
+- Pacientes únicos que escribieron: ${fmtNum(patientInbound.unique_patients_30d)} (${fmtNum(patientInbound.repeat_patients_30d)} reincidentes)
+- Psicólogos notificados: ${fmtNum(patientInbound.psychologists_notified_30d)}
+- Top psicólogos:
+${psychLines}`
+    : `- Patient inbound: tabla aún no disponible (eventos se registran desde el deploy)`;
+
+  return `WHATSAPP — ROUTING PACIENTES VS SOFÍA (30d):
+${routingNote}
+${patientNote}
+
+ONBOARDING TRIAL (30d):
+- Trials enrollados: ${fmtNum(trialOnboarding.enrolled_30d)} | Upgraded a paid: ${fmtNum(trialOnboarding.upgraded_30d)} (${fmtNum(trialOnboarding.conversion_rate_pct, 1)}%)
+- Respondieron en WA: ${fmtNum(trialOnboarding.response_rate_pct, 1)}% | Unsubscribe: ${fmtNum(trialOnboarding.unsubscribe_rate_pct, 1)}%
+- Funnel por día (mensajes drip enviados):
+${dripLines}
+- Encuesta día 8: enviada a ${fmtNum(trialOnboarding.day8_survey.sent_30d)} | respondieron ${fmtNum(trialOnboarding.day8_survey.responded_30d)} (${fmtNum(trialOnboarding.day8_survey.response_rate_pct, 1)}%) | pendientes ${fmtNum(trialOnboarding.day8_survey.pending_30d)}
+  Respuestas: ${day8Breakdown || 'N/D'}
+- Día 9 PRIMER50 (onboarding cron): ${fmtNum(trialOnboarding.day9_primer50_sent_30d)} enviados
+- PRIMER50 vía Sofía (objeciones/ventas): ${fmtNum(sofiaSales.primer50_links_sent_30d)} links | share cupón vs trials ofrecidos: ${sofiaSales.coupon_share_pct != null ? `${fmtNum(sofiaSales.coupon_share_pct, 1)}%` : 'N/D'}`;
+}
+
 export function buildKpiAnalysisPrompt(data: KpiInsightsData): string {
-  const { kalyo, twilio, instagram, metaAds, ga4Landing, ga4App, clarity, searchConsole, searchConsoleEmpty } =
+  const { kalyo, twilio, instagram, metaAds, ga4Landing, ga4App, clarity, searchConsole, searchConsoleEmpty, operational } =
     data;
 
   const spendMxn = metaAds.spend;
@@ -136,6 +192,8 @@ ${
       ? 'SEO — Google Search Console: vinculado hoy, datos disponibles en 24-48h.'
       : 'SEO — Google Search Console: N/D (API no disponible)'
 }
+
+${formatOperationalBlock(operational)}
 
 Responde en este formato exacto con estas 4 secciones:
 

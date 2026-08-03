@@ -8,9 +8,11 @@ import {
   formatPsychologistNotification,
   phonesEquivalent,
 } from '@/lib/patient-inbound-utils';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { sendWhatsApp } from '@/lib/twilio';
 
 type BotCredentials = {
+  id?: string;
   twilio_account_sid: string | null;
   twilio_auth_token: string | null;
   twilio_whatsapp_number: string | null;
@@ -62,6 +64,36 @@ export async function findPatientByPhone(senderPhone: string): Promise<PatientRo
   }
 
   return matches[0];
+}
+
+async function logPatientInboundEvent(params: {
+  botId?: string;
+  patient: PatientRow;
+  senderPhone: string;
+  messageBody: string;
+  psychologistNotified: boolean;
+  psychologistPhone: string | null;
+}): Promise<void> {
+  try {
+    const supabase = createAdminClient();
+    const preview =
+      params.messageBody.length > 500
+        ? `${params.messageBody.slice(0, 500)}…`
+        : params.messageBody;
+
+    await supabase.from('patient_inbound_events').insert({
+      bot_id: params.botId ?? null,
+      patient_phone: normalizePhone(params.senderPhone) ?? params.senderPhone,
+      patient_id: params.patient.id,
+      patient_name: displayPatientName(params.patient.full_name),
+      psychologist_id: params.patient.psychologist_id,
+      psychologist_phone: params.psychologistPhone,
+      message_preview: preview,
+      psychologist_notified: params.psychologistNotified,
+    });
+  } catch (error) {
+    console.error('[patient-inbound] failed to log event', error);
+  }
 }
 
 export async function tryHandlePatientInbound(params: {
@@ -144,6 +176,15 @@ export async function tryHandlePatientInbound(params: {
   console.log(
     `[patient-inbound] handled | patient=${patient.id} | psych=${patient.psychologist_id} | notified=${Boolean(psychologistPhone)}`,
   );
+
+  void logPatientInboundEvent({
+    botId: params.bot.id,
+    patient,
+    senderPhone: params.senderPhone,
+    messageBody: params.messageBody,
+    psychologistNotified: Boolean(psychologistPhone),
+    psychologistPhone,
+  });
 
   return true;
 }

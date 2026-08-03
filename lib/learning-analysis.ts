@@ -1,6 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SALES_CONVERSATIONS_OR, TEAM_MEMBERS_FILTER } from '@/lib/ambassador-filters';
+import {
+  fetchOperationalMetrics,
+  type OperationalMetrics,
+} from '@/lib/kpi/operational-metrics';
 
 export const ANALYSIS_MODEL = 'claude-sonnet-4-6';
 export const MIN_CONVERSATIONS_FOR_ANALYSIS = 10;
@@ -58,6 +62,7 @@ export type LearningAnalysisResult =
     };
 
 const ANALYSIS_SYSTEM_PROMPT = `Eres analista de conversaciones de Botio (Sofía, asistente de ventas WhatsApp para Kalyo, SaaS de psicólogos).
+También recibes métricas operativas: patient_inbound (pacientes que escriben al número de Kalyo y se redirigen al psicólogo), funnel de onboarding trial (días 1-9), encuesta día 8 y cupones PRIMER50.
 Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto extra).
 
 Estructura exacta:
@@ -75,6 +80,8 @@ Estructura exacta:
 Reglas:
 - Escribe en español (México).
 - actionable_insights: exactamente 3 items, ordenados por impacto.
+- Si hay patient_inbound, evalúa si el volumen de pacientes vs leads de venta requiere ajustes en Sofía o en comunicación al psicólogo.
+- Si el funnel trial muestra caídas fuertes en días específicos o baja respuesta en encuesta día 8, menciónalo en actionable_insights.
 - Sé específico con patrones reales del payload, no genéricos.`;
 
 function truncateContent(text: string): string {
@@ -180,9 +187,33 @@ export async function fetchConversationsForAnalysis(
   });
 }
 
-export function buildAnalysisPrompt(groups: AnalysisGroups): string {
-  return `Analiza estas conversaciones de Botio (asistente de ventas Sofía para Kalyo, SaaS de psicólogos).
+export function buildAnalysisPrompt(
+  groups: AnalysisGroups,
+  operational?: OperationalMetrics,
+): string {
+  const operationalBlock = operational
+    ? `\nMÉTRICAS OPERATIVAS (últimos 30 días, contexto para insights):\n${JSON.stringify(
+        {
+          patient_inbound: operational.patientInbound,
+          whatsapp_routing: operational.whatsappRouting,
+          trial_onboarding: {
+            enrolled_30d: operational.trialOnboarding.enrolled_30d,
+            upgraded_30d: operational.trialOnboarding.upgraded_30d,
+            conversion_rate_pct: operational.trialOnboarding.conversion_rate_pct,
+            drip_funnel: operational.trialOnboarding.drip_funnel,
+            day8_survey: operational.trialOnboarding.day8_survey,
+            day9_primer50_sent_30d: operational.trialOnboarding.day9_primer50_sent_30d,
+          },
+          primer50_sofia_30d: operational.sofiaSales.primer50_links_sent_30d,
+          coupon_share_pct: operational.sofiaSales.coupon_share_pct,
+        },
+        null,
+        2,
+      )}\n`
+    : '';
 
+  return `Analiza estas conversaciones de Botio (asistente de ventas Sofía para Kalyo, SaaS de psicólogos).
+${operationalBlock}
 GANADAS (convirtieron):
 ${JSON.stringify(groups.won, null, 2)}
 
@@ -197,7 +228,9 @@ Identifica:
 2. Patrones de las PERDIDAS — qué falló
 3. Objeciones más comunes y respuestas que funcionaron
 4. Comparación entre ab_variant (si hay diferencias significativas)
-5. Top 3 INSIGHTS ACCIONABLES (qué cambiar en el prompt de Sofía)`;
+5. Impacto de patient_inbound vs conversaciones de venta (si aplica)
+6. Oportunidades en onboarding trial / encuesta día 8 / PRIMER50 según métricas operativas
+7. Top 3 INSIGHTS ACCIONABLES (qué cambiar en el prompt de Sofía o en flujos operativos)`;
 }
 
 export function parseInsightsJson(raw: string): LearningInsightsPayload {
@@ -216,7 +249,7 @@ export function parseInsightsJson(raw: string): LearningInsightsPayload {
 
 export async function analyzeConversationsWithClaude(
   groups: AnalysisGroups,
-  options?: { apiKey?: string },
+  options?: { apiKey?: string; operational?: OperationalMetrics },
 ): Promise<LearningInsightsPayload> {
   const apiKey = options?.apiKey ?? process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY');
@@ -226,7 +259,12 @@ export async function analyzeConversationsWithClaude(
     model: ANALYSIS_MODEL,
     max_tokens: 4096,
     system: ANALYSIS_SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: buildAnalysisPrompt(groups) }],
+    messages: [
+      {
+        role: 'user',
+        content: buildAnalysisPrompt(groups, options?.operational),
+      },
+    ],
   });
 
   const textBlock = response.content.find((b) => b.type === 'text');
@@ -288,7 +326,10 @@ export type RunLearningAnalysisOptions = {
   periodEnd?: string;
   minConversations?: number;
   skipTelegram?: boolean;
-  analyzeFn?: (groups: AnalysisGroups) => Promise<LearningInsightsPayload>;
+  analyzeFn?: (
+    groups: AnalysisGroups,
+    operational?: OperationalMetrics,
+  ) => Promise<LearningInsightsPayload>;
   sendTelegramFn?: (text: string) => Promise<{ sent: boolean; error?: string }>;
 };
 
@@ -373,8 +414,17 @@ export async function runLearningAnalysis(
   const total = conversations.length;
   const conversionRate = computeConversionRate(wonCount, total);
 
-  const analyzeFn = options?.analyzeFn ?? analyzeConversationsWithClaude;
-  const insights = await analyzeFn(groups);
+  let operational: OperationalMetrics | undefined;
+  try {
+    operational = await fetchOperationalMetrics();
+  } catch (error) {
+    console.warn('[learning-analysis] operational metrics unavailable', error);
+  }
+
+  const analyzeFn =
+    options?.analyzeFn ??
+    ((g, op) => analyzeConversationsWithClaude(g, { operational: op }));
+  const insights = await analyzeFn(groups, operational);
 
   const insightId = await saveLearningInsight(supabase, {
     periodStart,

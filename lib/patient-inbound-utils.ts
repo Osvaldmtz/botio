@@ -26,7 +26,7 @@ export function buildPhoneLookupSuffixes(senderPhone: string): string[] {
   for (const len of [7, 6, 5, 4]) {
     if (digits.length >= len) suffixes.push(digits.slice(-len));
   }
-  return [...new Set(suffixes)];
+  return Array.from(new Set(suffixes));
 }
 
 /** @deprecated Use buildPhoneLookupSuffixes */

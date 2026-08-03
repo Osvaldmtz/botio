@@ -1,3 +1,5 @@
+import type { OperationalMetrics } from '@/lib/kpi/operational-metrics';
+
 export type KpiInsightsData = {
   kalyo: {
     mrr: number | null;
@@ -69,5 +71,6 @@ export type KpiInsightsData = {
     topPageClicks: number;
   } | null;
   searchConsoleEmpty: boolean;
+  operational: OperationalMetrics;
   fetchedAt: string;
 };
