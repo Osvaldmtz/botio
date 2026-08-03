@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --import tsx --test lib/claude-reply-text.test.ts lib/meta-ads-summary.test.ts lib/google-ads-summary.test.ts",
+    "test": "node --import tsx --test lib/claude-reply-text.test.ts lib/meta-ads-summary.test.ts lib/google-ads-summary.test.ts lib/patient-inbound-handler.test.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

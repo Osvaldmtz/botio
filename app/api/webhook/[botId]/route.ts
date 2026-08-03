@@ -1,6 +1,7 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isKalyoBotId } from '@/lib/conversation-utils';
+import { tryHandlePatientInbound } from '@/lib/patient-inbound-handler';
 import { scheduleGhostReactivationIfEligible } from '@/lib/ghost-reactivation';
 import { sendWhatsApp, emptyTwimlResponse, validateTwilioSignature } from '@/lib/twilio';
 import { normalizePhone } from '@/lib/phone';
@@ -202,6 +203,18 @@ export async function POST(request: Request, { params }: Params) {
 
   if (!incoming.ok) {
     return sendDirectReply(bot as BotCredentials, from, incoming.reply);
+  }
+
+  if (isKalyoBotId(bot.id)) {
+    const handledAsPatient = await tryHandlePatientInbound({
+      senderPhone: from,
+      messageBody: incoming.body,
+      bot: bot as BotCredentials,
+    });
+    if (handledAsPatient) {
+      console.log(`[webhook] patient inbound handled | bot=${bot.id} | from=${from}`);
+      return emptyTwimlResponse();
+    }
   }
 
   let result;
