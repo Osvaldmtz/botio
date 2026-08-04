@@ -36,6 +36,15 @@ async function loadKalyoTwilioCreds() {
   return { accountSid, authToken, from };
 }
 
+function parseContentVariables(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    out[key] = String(value ?? '');
+  }
+  return out;
+}
+
 export async function POST(request: Request) {
   if (!authorize(request)) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
@@ -48,17 +57,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const phoneRaw =
-    typeof body === 'object' && body !== null && 'phone' in body
-      ? String((body as Record<string, unknown>).phone ?? '').trim()
-      : '';
-  const messageBody =
-    typeof body === 'object' && body !== null && 'body' in body
-      ? String((body as Record<string, unknown>).body ?? '').trim()
-      : '';
+  const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+  const phoneRaw = String(record.phone ?? '').trim();
+  const messageBody = String(record.body ?? '').trim();
+  const contentSid = String(record.content_sid ?? '').trim();
+  const contentVariables = parseContentVariables(record.content_variables);
 
-  if (!phoneRaw || !messageBody) {
-    return NextResponse.json({ ok: false, error: 'phone and body are required' }, { status: 400 });
+  if (!phoneRaw) {
+    return NextResponse.json({ ok: false, error: 'phone is required' }, { status: 400 });
+  }
+
+  if (!messageBody && !contentSid) {
+    return NextResponse.json(
+      { ok: false, error: 'body or content_sid is required' },
+      { status: 400 },
+    );
   }
 
   if (!isValidPhone(phoneRaw)) {
@@ -81,9 +94,11 @@ export async function POST(request: Request) {
       authToken: creds.authToken,
       from: creds.from,
       to,
-      body: messageBody,
+      ...(contentSid
+        ? { contentSid, contentVariables: contentVariables ?? {} }
+        : { body: messageBody }),
     });
-    return NextResponse.json({ ok: true, sid: result.sid });
+    return NextResponse.json({ ok: true, sid: result.sid, used_template: Boolean(contentSid) });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[kalyo/send-patient-whatsapp] send failed', message);
