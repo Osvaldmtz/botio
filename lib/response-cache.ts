@@ -47,7 +47,7 @@ const CACHE_PATTERNS: CachePattern[] = [
     name: 'quick_3',
     regex: /^(3|prueba gratis|trial)$/,
     response:
-      '¡Excelente! Te activo el trial Max de 7 días sin tarjeta de crédito — incluye agenda, Kalyo Meet, grabación y Kaly voz. ¿Ya tienes cuenta en Kalyo o es tu primera vez?',
+      '¡Excelente! Te activo la prueba gratis de Max por 7 días sin tarjeta de crédito — incluye agenda, Kalyo Meet, grabación y Kaly voz. ¿Ya tienes cuenta en Kalyo o es tu primera vez?',
   },
   {
     name: 'gracias',

@@ -44,7 +44,7 @@ export function formatDay1Welcome(ctx: TrialOnboardingMessageContext): string {
 
   return (
     `¡Hola ${name}! 👋 Soy Sofía.\n` +
-    `Tu trial Max de 7 días está activo. Vence el ${endDate}.\n\n` +
+    `Tu prueba gratis de Max por 7 días está activa. Vence el ${endDate}.\n\n` +
     `🔐 Acceso:\n` +
     `📧 ${email}\n` +
     passwordLine +
@@ -88,7 +88,7 @@ export function formatDay5(user: TrialOnboardingUser): string {
     `🎤 Kaly voz — dile: 'agenda cita mañana 3pm'\n` +
     `📹 Kalyo Meet — programa una sesión virtual\n\n` +
     `Son las razones por las que Max vale $${KALYO_PRICING.max.price_monthly} (vs Pro $${KALYO_PRICING.pro.price_monthly}).\n\n` +
-    `Te quedan 2 días de trial.`
+    `Te quedan 2 días de prueba.`
   );
 }
 
@@ -96,7 +96,7 @@ export function formatDay5(user: TrialOnboardingUser): string {
 export function formatDay6(user: TrialOnboardingUser): string {
   const name = displayName(user);
   return (
-    `${name}, tu trial Max termina mañana.\n\n` +
+    `${name}, tu prueba gratis de Max termina mañana.\n\n` +
     `¿Te quedas con:\n` +
     `🚀 Max $${KALYO_PRICING.max.price_monthly}/mes (recomendado)\n` +
     `💎 Pro $${KALYO_PRICING.pro.price_monthly}/mes (sin Meet ni Kaly voz)\n\n` +
@@ -107,7 +107,7 @@ export function formatDay6(user: TrialOnboardingUser): string {
 /** Día 7 — 168h: venció (legacy column day_15). */
 export function formatDay7Expired(): string {
   return (
-    `Tu trial Max venció hoy.\n\n` +
+    `Tu prueba gratis de Max terminó hoy.\n\n` +
     `Para continuar con acceso completo:\n` +
     `🚀 Max $${KALYO_PRICING.max.price_monthly}/mes\n` +
     `💎 Pro $${KALYO_PRICING.pro.price_monthly}/mes\n\n` +
@@ -124,7 +124,7 @@ export function formatDay9WithCoupon(user: TrialOnboardingUser): string {
 
   return (
     `Hola ${name} 👋\n\n` +
-    `Vi que tu trial Max terminó hace 2 días y no has continuado.\n\n` +
+    `Vi que tu prueba gratis de Max terminó hace 2 días y no has continuado.\n\n` +
     `Te dejo una oferta especial:\n\n` +
     `🎁 *50% OFF el primer mes*\n` +
     `🚀 Max: $${KALYO_PRICING.discount.max_with_discount} (era $${KALYO_PRICING.max.price_monthly})\n` +

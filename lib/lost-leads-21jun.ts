@@ -77,7 +77,7 @@ Te paso la info:
 
 Lo mejor para empezar: *7 días gratis sin tarjeta* en Max — incluye agenda, Meet y Kaly voz.
 
-¿Te activo el trial? Solo necesito tu nombre y email. 🙌`;
+¿Te activo la prueba gratis? Solo necesito tu nombre y email. 🙌`;
   }
 
   if (lead.group === 'B_LUIS') {
@@ -86,7 +86,7 @@ Lo mejor para empezar: *7 días gratis sin tarjeta* en Max — incluye agenda, M
 
 Soy Sofía de Kalyo. Recibí tu mensaje con tu email (${email}) pero hubo una falla técnica y no pude procesarlo en su momento. Mil disculpas por la espera.
 
-Buenas noticias: te puedo activar tu trial Max de 7 días gratis ahora mismo — incluye agenda, Meet y Kaly voz.
+Buenas noticias: te puedo activar tu prueba gratis de Max por 7 días ahora mismo — incluye agenda, Meet y Kaly voz.
 
 ¿Confirmas que quieres proceder con ese email? Solo respóndeme "sí" y te lo activo. 🚀`;
   }
@@ -112,5 +112,5 @@ Hace unas horas me escribiste pero tuvimos un problema técnico y no pude respon
 ✓ Reportes automáticos con IA
 ✓ *Kaly* — asistente clínico por voz
 
-¿Te activo el trial gratis? 🚀`;
+¿Te activo la prueba gratis? 🚀`;
 }

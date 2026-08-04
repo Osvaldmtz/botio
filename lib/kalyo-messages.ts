@@ -38,7 +38,7 @@ export function isSimpleGreetingMessage(text: string): boolean {
 }
 
 export function replySkipsQuickReplies(replyText: string): boolean {
-  return /¿ya tienes cuenta|nombre completo y email|compartes tu email|trial pro de 7/i.test(
+  return /¿ya tienes cuenta|nombre completo y email|compartes tu email|trial pro de 7|prueba gratis/i.test(
     replyText,
   );
 }
@@ -72,7 +72,7 @@ export function mapQuickReplySelection(text: string): string | null {
     return 'El usuario eligió Precios — presenta Max primero como recomendado, luego Pro como alternativa más básica. Usa datos oficiales de planes. NO incluyas quick replies al final.';
   }
   if (/^3$|prueba|trial|gratis/i.test(normalized)) {
-    return 'El usuario eligió Prueba gratis — inicia el Flujo Único de Trial: ofrece trial Max 7 días sin tarjeta (agenda, Meet, Kaly voz) y pregunta "¿Ya tienes cuenta en Kalyo o es tu primera vez?". NO incluyas quick replies al final.';
+    return 'El usuario eligió Prueba gratis — inicia el Flujo Único de Trial: ofrece prueba gratis de Max por 7 días sin tarjeta (agenda, Meet, Kaly voz) y pregunta "¿Ya tienes cuenta en Kalyo o es tu primera vez?". Di "prueba gratis", NUNCA digas "trial". NO incluyas quick replies al final.';
   }
   return null;
 }

@@ -27,7 +27,7 @@ export function formatDay8Survey(user: TrialOnboardingUser): string {
   const name = displayName(user);
   return (
     `Hola ${name} 👋\n\n` +
-    `Tu trial de Kalyo terminó ayer. ¿Qué te faltó para continuar?\n\n` +
+    `Tu prueba gratis de Kalyo terminó ayer. ¿Qué te faltó para continuar?\n\n` +
     `Responde con el número o la opción:\n` +
     `1️⃣ Precio\n` +
     `2️⃣ Faltan features\n` +

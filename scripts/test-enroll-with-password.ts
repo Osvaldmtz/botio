@@ -185,7 +185,7 @@ function testValidationErrors(): void {
     tempPassword: 'Kalyo-2026-ABCD',
   });
   assert(welcome.includes('Kalyo-2026-ABCD'), 'builder includes password for new account');
-  assert(welcome.includes('trial Max'), 'builder says Max for default welcome');
+  assert(welcome.includes('prueba gratis de Max'), 'builder says Max for default welcome');
 
   const reactivationWelcome = buildDirectEnrollmentWelcomeMessage({
     fullName: 'Ana',

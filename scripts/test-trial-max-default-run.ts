@@ -31,7 +31,7 @@ const welcome = buildImmediateWelcomeMessage('Ana', {
   tempPassword: 'Kalyo-2026-ABCD',
   trialEndsAt: '2026-07-23T00:00:00.000Z',
 });
-assert(welcome.includes('trial Max'), 'welcome mentions trial Max');
+assert(welcome.includes('prueba gratis de Max'), 'welcome mentions prueba gratis de Max');
 assert(welcome.includes('Sofía'), 'welcome from Sofía');
 assert(welcome.includes('Kalyo-2026-ABCD'), 'welcome includes password');
 
@@ -42,7 +42,7 @@ const activation = buildTrialActivationSuccessMessage({
   trialPlan: 'max',
   tempPassword: 'Kalyo-2026-ABCD',
 });
-assert(activation.includes('trial Max'), 'activation message says Max');
+assert(activation.includes('prueba gratis de Max'), 'activation message says Max');
 assert(activation.includes('Kalyo-2026-ABCD'), 'activation includes password');
 
 const directWelcome = buildDirectEnrollmentWelcomeMessage({
@@ -53,12 +53,12 @@ const directWelcome = buildDirectEnrollmentWelcomeMessage({
   tempPassword: 'Kalyo-2026-ABCD',
   trialPlan: 'max',
 });
-assert(directWelcome.includes('trial Max'), 'direct welcome says Max');
+assert(directWelcome.includes('prueba gratis de Max'), 'direct welcome says Max');
 assert(directWelcome.includes('Sofía'), 'direct welcome from Sofía');
 assert(directWelcome.includes('primer paciente'), 'direct welcome first step');
 
 const day6 = formatDay6({ trial_user_email: 'ana@test.com', trial_user_name: 'Ana' });
-assert(day6.includes('trial Max termina'), 'day 6 mentions trial Max');
+assert(day6.includes('prueba gratis de Max termina'), 'day 6 mentions prueba gratis de Max');
 assert(day6.includes('Max') && day6.includes('Pro'), 'day 6 asks Max vs Pro');
 assert(!day6.includes('PRIMER50'), 'day 6 has no coupon');
 
@@ -70,7 +70,7 @@ const proWelcome = buildDirectEnrollmentWelcomeMessage({
   tempPassword: 'Kalyo-2026-ABCD',
   trialPlan: 'pro',
 });
-assert(proWelcome.includes('trial Pro'), 'explicit pro welcome says Pro');
+assert(proWelcome.includes('prueba gratis de Pro'), 'explicit pro welcome says Pro');
 assert(!proWelcome.includes('Agenda + Kalyo Meet'), 'pro welcome skips Max feature block');
 
 console.log('✓ All trial Max default tests passed');

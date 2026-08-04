@@ -33,8 +33,8 @@ export function buildTrialActivationSuccessMessage(params: {
       : '\nSi olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n';
 
     return (
-      `${greeting} Tu trial ${planName} está activo 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${params.email}.${passwordLine}\n` +
-      `Tu trial ${planName} de 7 días empezó hoy. Termina el ${trialDate}.\n\n` +
+      `${greeting} Tu prueba gratis de ${planName} está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${params.email}.${passwordLine}\n` +
+      `Tu prueba gratis de ${planName} por 7 días empezó hoy. Termina el ${trialDate}.\n\n` +
       (plan === 'max' ? `Incluye:\n${buildTrialMaxFeaturesBlock()}\n\n` : '') +
       `¿Te ayudo con el setup inicial?`
     );
@@ -49,7 +49,7 @@ export function buildTrialActivationSuccessMessage(params: {
 
   return (
     `${greeting} Tu cuenta está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${params.email}.${passwordLine}` +
-    `Tu trial ${planName} de 7 días empezó hoy. Termina el ${trialDate}.${maxFeatures}\n` +
+    `Tu prueba gratis de ${planName} por 7 días empezó hoy. Termina el ${trialDate}.${maxFeatures}\n` +
     `¿Te ayudo con el setup inicial?`
   );
 }
@@ -87,7 +87,7 @@ export function buildImmediateWelcomeMessage(
 
   return (
     `¡Hola ${display}! 👋 Soy Sofía, asistente de Kalyo.\n\n` +
-    `Tu trial ${planName} de 7 días está activo. Aquí estaré para resolverte dudas o ayudarte durante este tiempo.` +
+    `Tu prueba gratis de ${planName} por 7 días está activa. Aquí estaré para resolverte dudas o ayudarte durante este tiempo.` +
     maxBlock +
     credentials +
     `\nTu primer paso:\n` +
@@ -125,7 +125,7 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
   if (input.isNewAccount) {
     return (
       `¡Hola ${name}! 👋 Soy Sofía de Kalyo.\n\n` +
-      `Tu trial ${planName} de 7 días está activo. Vence el ${endDate}.${maxBlock}\n` +
+      `Tu prueba gratis de ${planName} por 7 días está activa. Vence el ${endDate}.${maxBlock}\n` +
       `🔐 *Acceso a tu cuenta:*\n` +
       `🌐 https://app.kalyo.io/login\n` +
       `📧 Email: ${input.email}\n` +
@@ -141,7 +141,7 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
 
   return (
     `¡Hola ${name}! 👋 Soy Sofía de Kalyo.\n\n` +
-    `Reactivamos tu trial ${planName} por 7 días más. Vence el ${endDate}.${maxBlock}\n` +
+    `Reactivamos tu prueba gratis de ${planName} por 7 días más. Vence el ${endDate}.${maxBlock}\n` +
     `🔐 *Acceso a tu cuenta:*\n` +
     `🌐 https://app.kalyo.io/login\n` +
     `📧 Email: ${input.email}\n` +

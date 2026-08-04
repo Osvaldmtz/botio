@@ -48,12 +48,12 @@ assert(formatDay3(user).includes('PHQ-9'), 'day3 PHQ-9');
 assert(formatDay3(user).includes('assessments/new'), 'day3 assessments link');
 
 assert(formatDay5(user).includes('Kaly voz'), 'day5 kaly voice');
-assert(formatDay5(user).includes('2 días de trial'), 'day5 days left');
+assert(formatDay5(user).includes('2 días de prueba'), 'day5 days left');
 
 assert(formatDay6(user).includes('termina mañana'), 'day6 urgency');
 assert(formatDay6(user).includes('Responde MAX o PRO'), 'day6 CTA');
 
-assert(formatDay7Expired(user).includes('venció hoy'), 'day7 expired');
+assert(formatDay7Expired(user).includes('terminó hoy'), 'day7 expired');
 assert(formatDay7Expired(user).includes('modo free'), 'day7 free mode');
 
 const day9Coupon = formatDay9WithCoupon(user);

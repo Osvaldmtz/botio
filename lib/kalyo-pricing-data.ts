@@ -211,7 +211,7 @@ export function buildStandardPricePresentation(): string {
     `💎 *Pro — $${p.price_monthly}/mes*\n` +
     `${proBullets}\n\n` +
     `¿Quieres probarlo sin riesgo? Te activo *Max GRATIS 7 días* sin tarjeta — incluye agenda, Meet y Kaly voz.\n\n` +
-    `¿Te activo el trial?`
+    `¿Te activo la prueba gratis?`
   );
 }
 
@@ -236,16 +236,16 @@ PLANES DE KALYO:
 - Ultra ($${u.price_monthly} USD/mes): todo Max + Sofía WhatsApp 24/7, agendamiento automático, inbox supervisión, número WhatsApp Business propio, cobro con tarjeta
 
 ESTRATEGIA DE VENTA (OBLIGATORIA):
-1. Tu objetivo principal es activar TRIALS de Max, no cerrar ventas con descuento.
+1. Tu objetivo principal es activar pruebas gratis de Max, no cerrar ventas con descuento.
 2. Siempre presenta Max PRIMERO como plan recomendado.
-3. Ante precio o interés → ofrece trial Max 7 días GRATIS (sin tarjeta). NO menciones ${d.code} automáticamente.
+3. Ante precio o interés → ofrece prueba gratis de Max por 7 días (sin tarjeta). NO menciones ${d.code} automáticamente. Di "prueba gratis", NUNCA digas "trial".
 4. Pro = alternativa "más básica" solo cuando ya probaron o piden explícitamente algo más barato.
 5. Ultra = solo si preguntan por más features premium o automatización con Sofía.
 6. Starter = solo si insisten en gratuito permanente.
 
 ${d.code} — ÚLTIMO RECURSO (NO gancho inicial):
-- NUNCA en primera consulta de precio ni antes del trial.
-- Solo si: ya usó trial completo, dice "no puedo pagar $39", o después de 2-3 objeciones reales de precio.
+- NUNCA en primera consulta de precio ni antes de la prueba gratis.
+- Solo si: ya usó la prueba completa, dice "no puedo pagar $39", o después de 2-3 objeciones reales de precio.
 - Si aplica, ofrecer ${d.code} en Max primero ($${d.max_with_discount} primer mes).
 
 PRESENTACIÓN ESTÁNDAR DE PRECIOS (cuando pregunten cuánto cuesta / precio / planes):

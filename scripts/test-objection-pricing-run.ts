@@ -15,7 +15,7 @@ const firstPrice = formatObjectionResponse('price', { isRepeat: false, priceObje
 assert(firstPrice.includes('7 días'), 'first response offers trial');
 assert(firstPrice.includes('gratis'), 'first response mentions free trial');
 assert(!firstPrice.includes('PRIMER50'), 'first response does not mention PRIMER50');
-assert(firstPrice.includes('¿Te activo el trial?'), 'first response asks to activate trial');
+assert(firstPrice.includes('¿Te activo la prueba gratis?'), 'first response asks to activate prueba gratis');
 
 const secondPrice = formatObjectionResponse('price', { isRepeat: true, priceObjectionCount: 2 });
 assert(secondPrice.includes(maxLink), 'second response includes full-price Max link');

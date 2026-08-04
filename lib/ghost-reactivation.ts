@@ -7,8 +7,8 @@ import { getAppBaseUrl, getQstashClient } from '@/lib/qstash-client';
 import { sendWhatsApp } from '@/lib/twilio';
 
 const GHOST_MESSAGES: Record<number, string> = {
-  1: 'Hola, ¿pudiste ver mi mensaje? 😊 Te tengo reservado el trial de 7 días por si te interesa.',
-  2: 'El trial gratuito de Kalyo Pro sigue disponible para ti. ¿Te lo activo ahora?',
+  1: 'Hola, ¿pudiste ver mi mensaje? 😊 Te tengo reservada la prueba gratis de 7 días por si te interesa.',
+  2: 'La prueba gratis de Kalyo Pro sigue disponible para ti. ¿Te la activo ahora?',
   3: 'Última oportunidad 🙂 Si en algún momento quieres probar Kalyo gratis, aquí estoy. ¡Que tengas excelentes sesiones!',
 };
 
