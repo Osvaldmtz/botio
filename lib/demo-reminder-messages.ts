@@ -74,6 +74,14 @@ export function formatDemoDateTime(
   return { dateLabel, timeLabel, timezoneLabel };
 }
 
+/** 12h time for Twilio HSM templates (e.g. "10:00 a.m."). */
+export function formatDemoTime12h(scheduledAt: string, timezone: string): string {
+  const date = new Date(scheduledAt);
+  return formatInTimeZone(date, timezone, 'h:mm a', { locale: es })
+    .replace('a. m.', 'a.m.')
+    .replace('p. m.', 'p.m.');
+}
+
 export function formatReminder24h(
   demo: DemoReminderRow,
   display: DemoDisplayTimezone,
@@ -97,6 +105,45 @@ export function formatReminder24h(
     `2️⃣ Reagendar\n` +
     `3️⃣ Cancelar`
   );
+}
+
+/** Twilio Content SIDs for approved WhatsApp HSM demo reminder templates. */
+export const DEMO_REMINDER_24H_TEMPLATE_SID =
+  process.env.KALYO_DEMO_REMINDER_24H_TEMPLATE_SID ??
+  'HX44f9caa6103a46cffb1189abce9375bb';
+
+export const DEMO_REMINDER_1H_TEMPLATE_SID =
+  process.env.KALYO_DEMO_REMINDER_1H_TEMPLATE_SID ??
+  'HX7fdf03e45c64b4559dcad00ad290a69f';
+
+/** Content variables for the 24h HSM template ({{1}} name, {{2}} time, {{3}} meet link). */
+export function buildReminder24hContentVariables(
+  demo: DemoReminderRow,
+  display: DemoDisplayTimezone,
+): Record<string, string> | null {
+  const meetLink = demo.google_meet_link?.trim();
+  if (!meetLink) return null;
+
+  const name = renderName(demo.customer_name);
+  return {
+    '1': name || 'ahí',
+    '2': formatDemoTime12h(demo.scheduled_at, display.timezone),
+    '3': meetLink,
+  };
+}
+
+/** Content variables for the 1h HSM template ({{1}} name, {{2}} meet link). */
+export function buildReminder1hContentVariables(
+  demo: DemoReminderRow,
+): Record<string, string> | null {
+  const meetLink = demo.google_meet_link?.trim();
+  if (!meetLink) return null;
+
+  const name = renderName(demo.customer_name);
+  return {
+    '1': name || 'ahí',
+    '2': meetLink,
+  };
 }
 
 export function formatReminder1h(

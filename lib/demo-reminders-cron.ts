@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  buildReminder1hContentVariables,
+  buildReminder24hContentVariables,
+  DEMO_REMINDER_1H_TEMPLATE_SID,
+  DEMO_REMINDER_24H_TEMPLATE_SID,
   formatReminder1h,
   formatReminder24h,
   resolveDemoDisplayTimezone,
@@ -21,7 +25,9 @@ export type SendWhatsAppFn = (args: {
   authToken: string;
   from: string;
   to: string;
-  body: string;
+  body?: string;
+  contentSid?: string;
+  contentVariables?: Record<string, string>;
 }) => Promise<void>;
 
 const DEMO_SELECT =
@@ -41,9 +47,10 @@ function windowBounds(
 export async function fetchPending24hReminders(
   supabase: SupabaseClient,
 ): Promise<DemoReminderRow[]> {
+  // Hourly cron: demos scheduled 23–24h from now.
   const { from, to } = windowBounds(
-    23 * 60 * 60 * 1000 + 45 * 60 * 1000,
-    24 * 60 * 60 * 1000 + 15 * 60 * 1000,
+    23 * 60 * 60 * 1000,
+    24 * 60 * 60 * 1000,
   );
 
   const { data, error } = await supabase
@@ -61,7 +68,8 @@ export async function fetchPending24hReminders(
 export async function fetchPending1hReminders(
   supabase: SupabaseClient,
 ): Promise<DemoReminderRow[]> {
-  const { from, to } = windowBounds(45 * 60 * 1000, 75 * 60 * 1000);
+  // Hourly cron: demos scheduled ~1h from now (30–90 min window).
+  const { from, to } = windowBounds(30 * 60 * 1000, 90 * 60 * 1000);
 
   const { data, error } = await supabase
     .from('scheduled_demos')
@@ -94,6 +102,19 @@ async function sendReminder(params: {
     params.type === '24h'
       ? formatReminder24h(params.demo, display)
       : formatReminder1h(params.demo, display);
+  const contentSid =
+    params.type === '24h' ? DEMO_REMINDER_24H_TEMPLATE_SID : DEMO_REMINDER_1H_TEMPLATE_SID;
+  const contentVariables =
+    params.type === '24h'
+      ? buildReminder24hContentVariables(params.demo, display)
+      : buildReminder1hContentVariables(params.demo);
+
+  if (!contentVariables) {
+    console.error(
+      `[demo-reminders] skipped | demo_id=${params.demo.id} | reason=no_meet_link`,
+    );
+    return 'skipped';
+  }
 
   try {
     await params.sendFn({
@@ -101,7 +122,8 @@ async function sendReminder(params: {
       authToken: params.creds.authToken,
       from: params.creds.from,
       to: phone,
-      body,
+      contentSid,
+      contentVariables,
     });
   } catch (err) {
     console.error(`[demo-reminders] send failed | demo_id=${params.demo.id} | type=${params.type}`, err);

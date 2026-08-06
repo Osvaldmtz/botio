@@ -155,8 +155,16 @@ async function runTests(): Promise<void> {
 
   const conversationId = await ensureConversation();
   const mockCreds = { accountSid: 'ACtest', authToken: 'test', from: 'whatsapp:+10000000000' };
-  const mockSend = async (args: { to: string; body: string }) => {
-    sentMessages.push({ to: args.to, body: args.body });
+  const mockSend = async (args: {
+    to: string;
+    body?: string;
+    contentSid?: string;
+    contentVariables?: Record<string, string>;
+  }) => {
+    sentMessages.push({
+      to: args.to,
+      body: args.body ?? `[template:${args.contentSid}]`,
+    });
   };
 
   const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -170,7 +178,13 @@ async function runTests(): Promise<void> {
   const cron24 = await runDemoRemindersCron({
     supabase,
     creds: mockCreds,
-    sendFn: async (args) => mockSend({ to: args.to, body: args.body }),
+    sendFn: async (args) =>
+      mockSend({
+        to: args.to,
+        body: args.body,
+        contentSid: args.contentSid,
+        contentVariables: args.contentVariables,
+      }),
     sendTelegram: async (text) => {
       telegramCalls.push({ event: 'reminder_24h_sent', demoId: demo24Id, text });
     },
@@ -197,7 +211,13 @@ async function runTests(): Promise<void> {
   const cron24Again = await runDemoRemindersCron({
     supabase,
     creds: mockCreds,
-    sendFn: async (args) => mockSend({ to: args.to, body: args.body }),
+    sendFn: async (args) =>
+      mockSend({
+        to: args.to,
+        body: args.body,
+        contentSid: args.contentSid,
+        contentVariables: args.contentVariables,
+      }),
   });
   assert(sentMessages.length === 0, '24h idempotent — no re-send');
   assert(cron24Again.sent24h === 0, 'no second 24h send');
@@ -215,7 +235,13 @@ async function runTests(): Promise<void> {
   const cron1h = await runDemoRemindersCron({
     supabase,
     creds: mockCreds,
-    sendFn: async (args) => mockSend({ to: args.to, body: args.body }),
+    sendFn: async (args) =>
+      mockSend({
+        to: args.to,
+        body: args.body,
+        contentSid: args.contentSid,
+        contentVariables: args.contentVariables,
+      }),
     sendTelegram: async (text) => {
       telegramCalls.push({ event: 'reminder_1h_sent', demoId: demo1hId, text });
     },
@@ -302,7 +328,13 @@ async function runTests(): Promise<void> {
   const cronDespiteTelegramFail = await runDemoRemindersCron({
     supabase,
     creds: mockCreds,
-    sendFn: async (args) => mockSend({ to: args.to, body: args.body }),
+    sendFn: async (args) =>
+      mockSend({
+        to: args.to,
+        body: args.body,
+        contentSid: args.contentSid,
+        contentVariables: args.contentVariables,
+      }),
     sendTelegram: async () => {
       throw new Error('telegram down');
     },
