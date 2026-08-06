@@ -1,4 +1,8 @@
 import {
+  humanSupportTrialFooter,
+  humanSupportWelcomeFooter,
+} from '@/lib/kalyo-support-contact';
+import {
   TRIAL_MAX_FEATURE_BULLETS,
   trialPlanLabel,
   type TrialPlanChoice,
@@ -36,7 +40,8 @@ export function buildTrialActivationSuccessMessage(params: {
       `${greeting} Tu prueba gratis de ${planName} está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${params.email}.${passwordLine}\n` +
       `Tu prueba gratis de ${planName} por 7 días empezó hoy. Termina el ${trialDate}.\n\n` +
       (plan === 'max' ? `Incluye:\n${buildTrialMaxFeaturesBlock()}\n\n` : '') +
-      `¿Te ayudo con el setup inicial?`
+      `¿Te ayudo con el setup inicial?` +
+      humanSupportTrialFooter()
     );
   }
 
@@ -50,7 +55,8 @@ export function buildTrialActivationSuccessMessage(params: {
   return (
     `${greeting} Tu cuenta está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${params.email}.${passwordLine}` +
     `Tu prueba gratis de ${planName} por 7 días empezó hoy. Termina el ${trialDate}.${maxFeatures}\n` +
-    `¿Te ayudo con el setup inicial?`
+    `¿Te ayudo con el setup inicial?` +
+    humanSupportTrialFooter()
   );
 }
 
@@ -94,7 +100,8 @@ export function buildImmediateWelcomeMessage(
     `1️⃣ Entra a app.kalyo.io/login\n` +
     `2️⃣ Crea tu primer paciente\n` +
     `3️⃣ Aplica una evaluación con IA\n\n` +
-    `Cualquier duda, escríbeme. ¡Bienvenido/a! 🎉`
+    `Cualquier duda, escríbeme. ¡Bienvenido/a! 🎉` +
+    humanSupportWelcomeFooter()
   );
 }
 
@@ -135,7 +142,8 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
       `1. Entra y crea tu primer paciente\n` +
       `2. Aplica una evaluación (PHQ-9 es buena para empezar)\n` +
       `3. Prueba Kaly voz — dile "agenda cita mañana 3pm"\n\n` +
-      `¿Dudas? Aquí estoy. 🚀`
+      `¿Dudas? Aquí estoy. 🚀` +
+      humanSupportWelcomeFooter()
     );
   }
 
@@ -148,7 +156,8 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
     (input.tempPassword
       ? `🔑 Contraseña: ${input.tempPassword}\n\n(Te recomendamos cambiarla en Configuración cuando entres)\n\n`
       : `\nSi olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n\n`) +
-    `¿Dudas? Aquí estoy. 🚀`
+    `¿Dudas? Aquí estoy. 🚀` +
+    humanSupportWelcomeFooter()
   );
 }
 

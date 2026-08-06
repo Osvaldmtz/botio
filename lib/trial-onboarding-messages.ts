@@ -3,6 +3,7 @@ import { es } from 'date-fns/locale';
 import { formatDay8Survey } from '@/lib/trial-onboarding-day8-survey';
 import { getPaymentLink } from '@/lib/kalyo-payment-links';
 import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
+import { humanSupportWelcomeFooter } from '@/lib/kalyo-support-contact';
 import { renderName } from '@/lib/render-name';
 
 export type TrialOnboardingUser = {
@@ -51,7 +52,8 @@ export function formatDay1Welcome(ctx: TrialOnboardingMessageContext): string {
     `🌐 https://app.kalyo.io/login\n\n` +
     `📋 Primer paso:\n` +
     `Entra y crea tu primer paciente.\n\n` +
-    `¿Dudas? Aquí estoy 🚀`
+    `¿Dudas? Aquí estoy 🚀` +
+    humanSupportWelcomeFooter()
   );
 }
 
