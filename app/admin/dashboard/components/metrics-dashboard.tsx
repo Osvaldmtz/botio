@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { AdminShell } from '@/components/admin/admin-shell';
 import { StatsHeader } from '@/components/admin/stats-header';
+import { AcquisitionByChannelSection } from '@/components/admin/acquisition-by-channel-section';
 import { CLOSURE_REASON_UI } from '@/lib/conversation-closure-constants';
 
 type MRR = {
@@ -293,6 +294,8 @@ export function MetricsDashboard() {
           </div>
         </Section>
       </div>
+
+      <AcquisitionByChannelSection />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Section title="💀 Top objeciones que matan ventas">
