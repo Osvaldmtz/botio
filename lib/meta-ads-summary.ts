@@ -56,8 +56,10 @@ export type MetaAdsSummaryTotals = {
   cpa: number | null;
 };
 
+export type MetaAdsPeriod = 'last_7d' | 'last_30d';
+
 export type MetaAdsSummary = {
-  period: 'last_30d';
+  period: MetaAdsPeriod;
   currency: 'MXN';
   updated_at: string;
   totals: MetaAdsSummaryTotals;
@@ -164,10 +166,11 @@ export function buildMetaAdsSummary(
   insights: MetaCampaignInsightRaw[],
   statuses: MetaCampaignStatus[],
   updatedAt = new Date().toISOString(),
+  period: MetaAdsPeriod = 'last_30d',
 ): MetaAdsSummary {
   const campaigns = buildCampaignSummaryRows(insights, statuses);
   return {
-    period: 'last_30d',
+    period,
     currency: 'MXN',
     updated_at: updatedAt,
     totals: aggregateMetaAdsTotals(campaigns),

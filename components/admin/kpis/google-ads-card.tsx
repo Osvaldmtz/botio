@@ -131,7 +131,9 @@ export function GoogleAdsCard() {
           <p className="text-sm font-medium text-fg">Configura Google Ads en Vercel</p>
           <p className="max-w-sm text-xs text-fg-muted">
             Mientras se aprueba el Developer Token, usa Composio:{' '}
-            <code className="rounded bg-bg-muted px-1">COMPOSIO_API_KEY</code>,{' '}
+            <code className="rounded bg-bg-muted px-1">COMPOSIO_API_KEY</code> (Project key{' '}
+            <code className="rounded bg-bg-muted px-1">ak_*</code>, not MCP{' '}
+            <code className="rounded bg-bg-muted px-1">ck_*</code>),{' '}
             <code className="rounded bg-bg-muted px-1">COMPOSIO_USER_ID</code>,{' '}
             <code className="rounded bg-bg-muted px-1">
               COMPOSIO_GOOGLEADS_CONNECTED_ACCOUNT_ID

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   getActiveCustomerId,
   getHistoricalCustomerId,
+  getLoginCustomerIdForCustomer,
   getMetricsCustomerIds,
 } from './google-ads-config';
 
@@ -14,5 +15,10 @@ describe('google-ads-config', () => {
 
   it('returns both ids for rolling metrics', () => {
     assert.deepEqual(getMetricsCustomerIds(), ['4732777525', '4356627994']);
+  });
+
+  it('uses MCC login header only for the historical account', () => {
+    assert.equal(getLoginCustomerIdForCustomer('4356627994'), '2224952854');
+    assert.equal(getLoginCustomerIdForCustomer('4732777525'), null);
   });
 });

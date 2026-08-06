@@ -38,6 +38,7 @@ import { MetaAdsCard } from '@/components/admin/kpis/meta-ads-card';
 import { GoogleAdsCard } from '@/components/admin/kpis/google-ads-card';
 import { ChannelCompareCard } from '@/components/admin/kpis/channel-compare-card';
 import { AttributionCard } from '@/components/admin/kpis/attribution-card';
+import { WeeklyReportCard } from '@/components/admin/kpis/weekly-report-card';
 
 function fmtUsd(value: number | null | undefined): string {
   if (value == null) return '—';
@@ -487,6 +488,8 @@ export function ExecutiveKpiDashboard({ data }: Props) {
         <AttributionCard />
 
         <GscCard />
+
+        <WeeklyReportCard />
       </div>
     </KpiLayout>
   );

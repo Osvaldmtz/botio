@@ -33,8 +33,10 @@ export type GoogleAdsSummaryTotals = {
   cpa: number | null;
 };
 
+export type GoogleAdsPeriod = 'last_7d' | 'last_30d';
+
 export type GoogleAdsSummary = {
-  period: 'last_30d';
+  period: GoogleAdsPeriod;
   currency: 'COP';
   updated_at: string;
   configured: boolean;
@@ -109,10 +111,11 @@ export function buildGoogleAdsSummary(
   insights: GoogleCampaignInsightRaw[],
   updatedAt = new Date().toISOString(),
   configured = true,
+  period: GoogleAdsPeriod = 'last_30d',
 ): GoogleAdsSummary {
   const campaigns = buildGoogleCampaignSummaryRows(insights);
   return {
-    period: 'last_30d',
+    period,
     currency: 'COP',
     updated_at: updatedAt,
     configured,

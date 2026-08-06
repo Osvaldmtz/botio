@@ -89,6 +89,10 @@
       "schedule": "0 15 * * *"
     },
     {
+      "path": "/api/cron/weekly-marketing-report",
+      "schedule": "0 15 * * 1"
+    },
+    {
       "path": "/api/cron/meta-adset-budget",
       "schedule": "0 16 1,5,9,13,17,21,25,29 * *"
     }

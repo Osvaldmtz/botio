@@ -43,6 +43,15 @@ export function getLoginCustomerId(): string {
   return assertCustomerId(id, 'login_customer_id');
 }
 
+/** login-customer-id header is only required for MCC-managed child accounts (historical). */
+export function getLoginCustomerIdForCustomer(customerId: string): string | null {
+  const normalized = normalizeCustomerId(customerId);
+  if (normalized === getHistoricalCustomerId()) {
+    return getLoginCustomerId();
+  }
+  return null;
+}
+
 /** Customer IDs to query for LAST_30_DAYS (and similar rolling metrics). */
 export function getMetricsCustomerIds(): string[] {
   const active = getActiveCustomerId();

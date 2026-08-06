@@ -92,6 +92,7 @@ export function shouldFallbackToComposio(error: unknown): boolean {
     message.includes('rate limit') ||
     message.includes('html') ||
     message.includes('auth error') ||
+    message.includes('invalid_grant') ||
     message.includes('endpoint not found') ||
     message.includes('invalid json') ||
     message.includes('http 4') ||

@@ -1,13 +1,18 @@
 import 'server-only';
 
+import {
+  composioAuthHeaders,
+  composioExecuteUrl,
+  composioUserId,
+  getComposioApiKey,
+  type ComposioExecuteResponse,
+} from '@/lib/composio-api';
 import { formatUnknownError } from '@/lib/format-error';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export const SEO_SEMRUSH_DOMAIN = 'kalyo.io';
 
 const SEMRUSH_ANALYTICS_API = 'https://api.semrush.com/analytics/v1/';
-const COMPOSIO_EXECUTE_URL =
-  'https://backend.composio.dev/api/v3/tools/execute/SEMRUSH_BACKLINKS_OVERVIEW';
 const CACHE_KEY = 'semrush_domain_overview';
 
 export type SemrushDomainOverview = {
@@ -77,17 +82,6 @@ async function fetchSemrushDomainOverviewDirect(domain: string): Promise<Semrush
   return { target: domain, authority_score };
 }
 
-type ComposioExecuteResponse = {
-  data?: {
-    data?: unknown;
-    response_data?: unknown;
-    successful?: boolean;
-    error?: string;
-  };
-  successful?: boolean;
-  error?: string;
-};
-
 function extractComposioSemrushCsv(payload: unknown): string | null {
   if (typeof payload === 'string') return payload;
   if (!payload || typeof payload !== 'object') return null;
@@ -102,8 +96,12 @@ function extractComposioSemrushCsv(payload: unknown): string | null {
 }
 
 async function fetchSemrushDomainOverviewComposio(domain: string): Promise<SemrushDomainOverview | null> {
-  const apiKey = process.env.COMPOSIO_API_KEY?.trim();
-  if (!apiKey) return null;
+  let apiKey: string;
+  try {
+    apiKey = getComposioApiKey();
+  } catch {
+    return null;
+  }
 
   const body: Record<string, unknown> = {
     arguments: {
@@ -111,7 +109,7 @@ async function fetchSemrushDomainOverviewComposio(domain: string): Promise<Semru
       target_type: 'root_domain',
       export_columns: ['ascore'],
     },
-    user_id: process.env.COMPOSIO_USER_ID?.trim() || 'botio-kalyo',
+    user_id: composioUserId(),
   };
 
   const connectedAccountId = process.env.COMPOSIO_SEMRUSH_CONNECTED_ACCOUNT_ID?.trim();
@@ -119,12 +117,9 @@ async function fetchSemrushDomainOverviewComposio(domain: string): Promise<Semru
     body.connected_account_id = connectedAccountId;
   }
 
-  const res = await fetch(COMPOSIO_EXECUTE_URL, {
+  const res = await fetch(composioExecuteUrl('SEMRUSH_BACKLINKS_OVERVIEW'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-    },
+    headers: composioAuthHeaders(apiKey),
     body: JSON.stringify(body),
     cache: 'no-store',
   });
@@ -138,10 +133,16 @@ async function fetchSemrushDomainOverviewComposio(domain: string): Promise<Semru
   }
 
   if (!res.ok) {
-    throw new Error(json.error ?? json.data?.error ?? `Composio SEMrush HTTP ${res.status}`);
+    throw new Error(
+      formatUnknownError(json.error ?? json.data?.error) ||
+        `Composio SEMrush HTTP ${res.status}`,
+    );
   }
 
-  const payload = json.data?.data ?? json.data?.response_data ?? json.data;
+  const payload =
+    (json.data as { data?: unknown; response_data?: unknown } | undefined)?.data ??
+    (json.data as { response_data?: unknown } | undefined)?.response_data ??
+    json.data;
   const csv = extractComposioSemrushCsv(payload);
   if (!csv) return null;
 

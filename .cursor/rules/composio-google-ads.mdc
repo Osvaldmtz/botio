@@ -12,11 +12,11 @@ Config en `config/google-ads.json`:
 | `active_customer_id` | `4732777525` | Crear/modificar campañas, mutaciones, operación |
 | `historical_customer_id` | `4356627994` | Solo lectura — historial |
 | `login_customer_id` | `2224952854` | MCC (OAuth directo) |
-| `conversion_tag_colombia` | `AW-18345611562` | gtag — **no** es customer_id |
+| `conversion_tag_colombia` | `AW-18371122366` | gtag — **no** es customer_id |
 
 ## Reglas de customer_id en Composio
 
-**NO** usar `AW-18345611562` como `customer_id`.
+**NO** usar `AW-18371122366` (ni ningún `AW-*`) como `customer_id`.
 
 ### Métricas (LAST_30_DAYS, resúmenes, conversiones)
 

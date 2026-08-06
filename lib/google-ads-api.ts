@@ -4,19 +4,20 @@ import { OAuth2Client } from 'google-auth-library';
 import { formatUnknownError } from '@/lib/format-error';
 import {
   getActiveCustomerId,
-  getLoginCustomerId,
+  getHistoricalCustomerId,
+  getLoginCustomerIdForCustomer,
   getMetricsCustomerIds,
 } from '@/lib/google-ads-config';
 import {
   formatGoogleAdsApiError,
   parseGoogleAdsHttpBody,
   readHttpResponseBody,
-  shouldFallbackToComposio,
 } from '@/lib/google-ads-http';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   buildGoogleAdsSummary,
   emptyGoogleAdsSummary,
+  type GoogleAdsPeriod,
   type GoogleAdsSummary,
   type GoogleCampaignInsightRaw,
   type GoogleCampaignStatus,
@@ -25,8 +26,18 @@ import {
 const GOOGLE_ADS_API = 'https://googleads.googleapis.com/v25';
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
 const STALE_CACHE_KEY = 'google_ads_campaign_summary_last_30d';
-const COMPOSIO_EXECUTE_URL =
-  'https://backend.composio.dev/api/v3/tools/execute/GOOGLEADS_SEARCH_STREAM_GAQL';
+
+/** Composio fallback disabled by default — OAuth direct is primary. Set GOOGLE_ADS_COMPOSIO_FALLBACK=true to re-enable. */
+function isGoogleAdsComposioFallbackEnabled(): boolean {
+  return process.env.GOOGLE_ADS_COMPOSIO_FALLBACK === 'true';
+}
+import {
+  composioAuthHeaders,
+  composioExecuteUrl,
+  composioUserId,
+  getComposioApiKey,
+  type ComposioExecuteResponse,
+} from '@/lib/composio-api';
 
 export {
   getActiveCustomerId,
@@ -37,7 +48,7 @@ export {
   GOOGLE_ADS_CUSTOMER_ID,
 } from '@/lib/google-ads-config';
 
-/** AW-18345611562 is the gtag conversion label — not a valid Google Ads customer_id. */
+/** AW-* tags (e.g. AW-18371122366) are gtag conversion labels — not valid Google Ads customer_id. */
 const INVALID_CUSTOMER_ID_PREFIX = /^AW-/i;
 
 /**
@@ -88,17 +99,6 @@ export {
   shouldFallbackToComposio,
 } from '@/lib/google-ads-http';
 
-type ComposioExecuteResponse = {
-  data?: {
-    results?: Array<{ metrics?: GaqlSearchRow['metrics'] }>;
-    successful?: boolean;
-    error?: string;
-  };
-  successful?: boolean;
-  error?: string;
-  message?: string;
-};
-
 function toNumber(raw: string | number | undefined | null): number {
   if (raw == null) return 0;
   const n = typeof raw === 'string' ? Number(raw) : Number(raw);
@@ -134,7 +134,10 @@ function isGoogleAdsComposioConfigured(): boolean {
 }
 
 export function isGoogleAdsConfigured(): boolean {
-  return isGoogleAdsOAuthConfigured() || isGoogleAdsComposioConfigured();
+  return (
+    isGoogleAdsOAuthConfigured() ||
+    (isGoogleAdsComposioFallbackEnabled() && isGoogleAdsComposioConfigured())
+  );
 }
 
 async function readStaleCache<T>(cacheKey: string): Promise<T | null> {
@@ -228,7 +231,7 @@ async function searchGoogleAdsGaqlOAuth(
     Accept: 'application/json',
   };
 
-  const loginCustomerId = getLoginCustomerId();
+  const loginCustomerId = getLoginCustomerIdForCustomer(customerId);
   if (loginCustomerId) {
     headers['login-customer-id'] = loginCustomerId;
   }
@@ -261,14 +264,11 @@ async function searchGoogleAdsGaqlComposio(
   query: string,
   customerId: string,
 ): Promise<GaqlSearchRow[]> {
-  const apiKey = process.env.COMPOSIO_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error('Missing COMPOSIO_API_KEY for Google Ads');
-  }
+  const apiKey = getComposioApiKey();
 
   const body: Record<string, unknown> = {
     arguments: googleAdsComposioToolArguments({ query, customer_id: customerId }),
-    user_id: process.env.COMPOSIO_USER_ID?.trim() || 'botio-kalyo',
+    user_id: composioUserId(),
   };
 
   const connectedAccountId = process.env.COMPOSIO_GOOGLEADS_CONNECTED_ACCOUNT_ID?.trim();
@@ -276,12 +276,9 @@ async function searchGoogleAdsGaqlComposio(
     body.connected_account_id = connectedAccountId;
   }
 
-  const res = await fetch(COMPOSIO_EXECUTE_URL, {
+  const res = await fetch(composioExecuteUrl('GOOGLEADS_SEARCH_STREAM_GAQL'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-    },
+    headers: composioAuthHeaders(apiKey),
     body: JSON.stringify(body),
     next: { revalidate: 0 },
   });
@@ -330,28 +327,17 @@ async function searchGoogleAdsGaqlForCustomer(
   customerId: string,
 ): Promise<GaqlSearchRow[]> {
   if (isGoogleAdsOAuthConfigured()) {
-    try {
-      return await searchGoogleAdsGaqlOAuth(query, customerId);
-    } catch (error) {
-      if (isGoogleAdsComposioConfigured() && shouldFallbackToComposio(error)) {
-        console.warn(
-          `[google-ads-api] OAuth failed for ${customerId}, falling back to Composio:`,
-          formatGoogleAdsApiError(error),
-        );
-        return searchGoogleAdsGaqlComposio(query, customerId);
-      }
-      throw error;
-    }
+    return searchGoogleAdsGaqlOAuth(query, customerId);
   }
-  if (isGoogleAdsComposioConfigured()) {
+  if (isGoogleAdsComposioFallbackEnabled() && isGoogleAdsComposioConfigured()) {
     return searchGoogleAdsGaqlComposio(query, customerId);
   }
   if (process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim()) {
     throw new Error(
-      'GOOGLE_ADS_DEVELOPER_TOKEN set but OAuth credentials incomplete (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN)',
+      'Google Ads OAuth not configured (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN). Composio fallback is disabled.',
     );
   }
-  throw new Error('Google Ads not configured');
+  throw new Error('Google Ads not configured (OAuth required; Composio fallback disabled)');
 }
 
 /** GAQL against the active (operational) account — use for mutations and single-account reads. */
@@ -368,6 +354,109 @@ export async function searchGoogleAdsGaqlMetrics(query: string): Promise<GaqlSea
   return batches.flat();
 }
 
+const CAMPAIGN_QUERY_LAST_30D = `
+  SELECT
+    campaign.id,
+    campaign.name,
+    campaign.status,
+    metrics.cost_micros,
+    metrics.impressions,
+    metrics.clicks,
+    metrics.conversions
+  FROM campaign
+  WHERE segments.date DURING LAST_30_DAYS
+`.trim();
+
+function buildCampaignQueryForDateRange(startDate: string, endDate: string): string {
+  return `
+  SELECT
+    campaign.id,
+    campaign.name,
+    campaign.status,
+    metrics.cost_micros,
+    metrics.impressions,
+    metrics.clicks,
+    metrics.conversions
+  FROM campaign
+  WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
+`.trim();
+}
+
+async function fetchGoogleAdsCampaignSummaryForCustomerIds(
+  customerIds: string[],
+  query: string,
+  period: 'last_7d' | 'last_30d',
+): Promise<GoogleAdsSummary> {
+  const now = new Date().toISOString();
+  if (!isGoogleAdsConfigured()) {
+    return buildGoogleAdsSummary([], now, false, period);
+  }
+  const batches = await Promise.all(
+    customerIds.map((customerId) => searchGoogleAdsGaqlForCustomer(query, customerId)),
+  );
+  return buildGoogleAdsSummary(parseGaqlRows(batches.flat()), now, true, period);
+}
+
+/** Campaign summary for an explicit date range (used by weekly report). */
+export async function fetchGoogleAdsCampaignSummaryForDateRange(
+  startDate: string,
+  endDate: string,
+  customerIds: string[],
+  period: 'last_7d' | 'last_30d' = 'last_7d',
+): Promise<GoogleAdsSummary> {
+  const query = buildCampaignQueryForDateRange(startDate, endDate);
+  return fetchGoogleAdsCampaignSummaryForCustomerIds(customerIds, query, period);
+}
+
+export type GoogleAdsDualAccountReport = {
+  active_customer_id: string;
+  historical_customer_id: string;
+  active: GoogleAdsSummary;
+  historical: GoogleAdsSummary;
+  combined: GoogleAdsSummary;
+  errors?: Partial<Record<'active' | 'historical' | 'combined', string>>;
+};
+
+/** Per-account and merged LAST_30_DAYS campaign summary for dual-account verification. */
+export async function fetchGoogleAdsDualAccountReport(): Promise<GoogleAdsDualAccountReport> {
+  const active_customer_id = getActiveCustomerId();
+  const historical_customer_id = getHistoricalCustomerId();
+  const now = new Date().toISOString();
+  const errors: Partial<Record<'active' | 'historical' | 'combined', string>> = {};
+
+  async function safeFetch(
+    key: 'active' | 'historical' | 'combined',
+    customerIds: string[],
+  ): Promise<GoogleAdsSummary> {
+    try {
+      const batches = await Promise.all(
+        customerIds.map((customerId) =>
+          searchGoogleAdsGaqlForCustomer(CAMPAIGN_QUERY_LAST_30D, customerId),
+        ),
+      );
+      return buildGoogleAdsSummary(parseGaqlRows(batches.flat()), now, true);
+    } catch (error) {
+      errors[key] = formatGoogleAdsApiError(error);
+      return buildGoogleAdsSummary([], now, true);
+    }
+  }
+
+  const [active, historical, combined] = await Promise.all([
+    safeFetch('active', [active_customer_id]),
+    safeFetch('historical', [historical_customer_id]),
+    safeFetch('combined', getMetricsCustomerIds()),
+  ]);
+
+  return {
+    active_customer_id,
+    historical_customer_id,
+    active,
+    historical,
+    combined,
+    ...(Object.keys(errors).length > 0 ? { errors } : {}),
+  };
+}
+
 function sumCostMicrosFromRows(results: GaqlSearchRow[]): number {
   return results.reduce((sum, row) => {
     const metrics = row.metrics ?? {};
@@ -376,7 +465,7 @@ function sumCostMicrosFromRows(results: GaqlSearchRow[]): number {
 }
 
 /**
- * Fetch Google Ads cost for CAC metrics (Composio or OAuth).
+ * Fetch Google Ads cost for CAC metrics (OAuth direct; Composio only if GOOGLE_ADS_COMPOSIO_FALLBACK=true).
  * Combines active + historical accounts for LAST_30_DAYS; active only for ALL_TIME.
  */
 export async function fetchGoogleAdsSpendCop(window: GoogleAdsSpendWindow): Promise<number> {
@@ -412,18 +501,7 @@ export async function fetchGoogleAdsCampaignSummary(): Promise<GoogleAdsSummary>
     return emptyGoogleAdsSummary(false);
   }
 
-  const query = `
-    SELECT
-      campaign.id,
-      campaign.name,
-      campaign.status,
-      metrics.cost_micros,
-      metrics.impressions,
-      metrics.clicks,
-      metrics.conversions
-    FROM campaign
-    WHERE segments.date DURING LAST_30_DAYS
-  `.trim();
+  const query = CAMPAIGN_QUERY_LAST_30D;
 
   try {
     const results = await searchGoogleAdsGaqlMetrics(query);
@@ -444,7 +522,7 @@ export async function fetchGoogleAdsCampaignSummary(): Promise<GoogleAdsSummary>
 
 /** @deprecated Use fetchGoogleAdsCampaignSummary */
 export async function fetchGoogleAdsSummary(): Promise<{
-  period: 'last_30d';
+  period: GoogleAdsPeriod;
   currency: 'COP';
   updated_at: string;
   spend: number;
