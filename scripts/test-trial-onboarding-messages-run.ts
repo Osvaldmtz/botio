@@ -53,8 +53,10 @@ assert(formatDay5(user).includes('2 días de prueba'), 'day5 days left');
 assert(formatDay6(user).includes('termina mañana'), 'day6 urgency');
 assert(formatDay6(user).includes('Responde MAX o PRO'), 'day6 CTA');
 
-assert(formatDay7Expired(user).includes('terminó hoy'), 'day7 expired');
-assert(formatDay7Expired(user).includes('modo free'), 'day7 free mode');
+assert(formatDay7Expired().includes('terminó hoy'), 'day7 expired');
+assert(formatDay7Expired().includes('modo free'), 'day7 free mode');
+assert(formatDay7Expired().includes('https://wa.me/528114112000'), 'day7 wa.me link');
+assert(formatDay7Expired().includes('dudas antes de decidir'), 'day7 pre-decision invite');
 
 const day9Coupon = formatDay9WithCoupon(user);
 assert(day9Coupon.includes('PRIMER50'), 'day9 coupon code');

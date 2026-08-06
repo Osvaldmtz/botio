@@ -1,5 +1,7 @@
 import 'server-only';
 import { syncKalyoMetrics } from '@/lib/kalyo-metrics';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { syncTrialUpgradesFromKalyo } from '@/lib/trial-upgrade-sync';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +19,9 @@ export async function GET(request: Request) {
 
   try {
     const summary = await syncKalyoMetrics();
-    return Response.json(summary);
+    const botio = createAdminClient();
+    const trialUpgrades = await syncTrialUpgradesFromKalyo(botio);
+    return Response.json({ ...summary, trial_upgrades: trialUpgrades });
   } catch (error) {
     const message =
       error instanceof Error

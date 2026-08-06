@@ -3,7 +3,7 @@ import { es } from 'date-fns/locale';
 import { formatDay8Survey } from '@/lib/trial-onboarding-day8-survey';
 import { getPaymentLink } from '@/lib/kalyo-payment-links';
 import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
-import { humanSupportWelcomeFooter } from '@/lib/kalyo-support-contact';
+import { humanSupportDay15Footer, humanSupportWelcomeFooter } from '@/lib/kalyo-support-contact';
 import { renderName } from '@/lib/render-name';
 
 export type TrialOnboardingUser = {
@@ -113,7 +113,8 @@ export function formatDay7Expired(): string {
     `Para continuar con acceso completo:\n` +
     `🚀 Max $${KALYO_PRICING.max.price_monthly}/mes\n` +
     `💎 Pro $${KALYO_PRICING.pro.price_monthly}/mes\n\n` +
-    `Sin decisión, tu cuenta pasa a modo free (${KALYO_PRICING.starter.max_patients} pacientes).`
+    `Sin decisión, tu cuenta pasa a modo free (${KALYO_PRICING.starter.max_patients} pacientes).` +
+    humanSupportDay15Footer()
   );
 }
 

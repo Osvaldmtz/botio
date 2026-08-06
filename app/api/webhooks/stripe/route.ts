@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   handleActiveSubscriptionPaid,
+  handleCheckoutSessionCompleted,
   handleInvoicePaymentSucceeded,
 } from '@/lib/stripe-paid-webhook';
 
@@ -38,32 +39,41 @@ export async function POST(request: Request) {
 
   try {
     if (event.type === 'customer.subscription.created') {
-      const updated = await handleActiveSubscriptionPaid(
+      const result = await handleActiveSubscriptionPaid(
         supabase,
         stripe,
         event.data.object as Stripe.Subscription,
         event.type,
       );
-      return Response.json({ received: true, outcome_updated: updated });
+      return Response.json({ received: true, ...result });
     }
 
     if (event.type === 'customer.subscription.updated') {
-      const updated = await handleActiveSubscriptionPaid(
+      const result = await handleActiveSubscriptionPaid(
         supabase,
         stripe,
         event.data.object as Stripe.Subscription,
         event.type,
       );
-      return Response.json({ received: true, outcome_updated: updated });
+      return Response.json({ received: true, ...result });
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const result = await handleCheckoutSessionCompleted(
+        supabase,
+        stripe,
+        event.data.object as Stripe.Checkout.Session,
+      );
+      return Response.json({ received: true, ...result });
     }
 
     if (event.type === 'invoice.payment_succeeded') {
-      const updated = await handleInvoicePaymentSucceeded(
+      const result = await handleInvoicePaymentSucceeded(
         supabase,
         stripe,
         event.data.object as Stripe.Invoice,
       );
-      return Response.json({ received: true, outcome_updated: updated });
+      return Response.json({ received: true, ...result });
     }
   } catch (err) {
     console.error(`[stripe-webhook] ${event.type} handler failed`, err);
