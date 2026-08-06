@@ -13,8 +13,17 @@ function fmtUsd(value: number | null | undefined): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
+function fmtUsdCpa(value: number | null | undefined): string {
+  if (value == null) return '—';
+  return `$${Number(value).toFixed(2)}`;
+}
+
 function fmtNative(value: number, currency: 'MXN' | 'COP'): string {
   return `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })} ${currency}`;
+}
+
+function fmtNativeCpa(value: number, currency: 'MXN' | 'COP'): string {
+  return `$${Number(value).toFixed(2)} ${currency}`;
 }
 
 function parseFetchError(body: unknown, status: number): string {
@@ -236,22 +245,22 @@ export function ChannelCompareCard() {
                   label="CPA"
                   metaValue={
                     data.meta.available && data.meta.cpa_usd != null
-                      ? `${fmtUsd(data.meta.cpa_usd)} USD`
+                      ? `${fmtUsdCpa(data.meta.cpa_usd)} USD`
                       : '—'
                   }
                   googleValue={
                     data.google.available && data.google.cpa_usd != null
-                      ? `${fmtUsd(data.google.cpa_usd)} USD`
+                      ? `${fmtUsdCpa(data.google.cpa_usd)} USD`
                       : '—'
                   }
                   metaSub={
                     data.meta.available && data.meta.cpa != null
-                      ? fmtNative(data.meta.cpa, 'MXN')
+                      ? fmtNativeCpa(data.meta.cpa, 'MXN')
                       : undefined
                   }
                   googleSub={
                     data.google.available && data.google.cpa != null
-                      ? fmtNative(data.google.cpa, 'COP')
+                      ? fmtNativeCpa(data.google.cpa, 'COP')
                       : undefined
                   }
                   winner={data.winners.cpa}
