@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { composioAuthHeaders, composioExecuteUrl, getComposioApiKey } from './composio-api';
+import { composioAuthHeaders, composioExecuteUrl, getComposioApiKey, isComposioRestConfigured } from './composio-api';
 
 describe('composio-api', () => {
   it('composioAuthHeaders uses x-api-key for REST API', () => {
@@ -22,6 +22,18 @@ describe('composio-api', () => {
     process.env.COMPOSIO_API_KEY = 'ck_5JCDh9pjkfY5A5N76Xug';
     try {
       assert.throws(() => getComposioApiKey(), /MCP consumer key/);
+      assert.equal(isComposioRestConfigured(), false);
+    } finally {
+      process.env.COMPOSIO_API_KEY = prev;
+    }
+  });
+
+  it('isComposioRestConfigured accepts Project API keys', () => {
+    const prev = process.env.COMPOSIO_API_KEY;
+    process.env.COMPOSIO_API_KEY = 'ak_test_project_key';
+    try {
+      assert.equal(isComposioRestConfigured(), true);
+      assert.equal(getComposioApiKey(), 'ak_test_project_key');
     } finally {
       process.env.COMPOSIO_API_KEY = prev;
     }

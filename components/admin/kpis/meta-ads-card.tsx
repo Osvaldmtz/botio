@@ -15,6 +15,11 @@ function fmtMxn(value: number | null | undefined): string {
   return `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} MXN`;
 }
 
+function fmtMxnCpa(value: number | null | undefined): string {
+  if (value == null) return '—';
+  return `$${Number(value).toFixed(2)} MXN`;
+}
+
 function statusBadge(status: string) {
   const active = status === 'ACTIVE';
   return (
@@ -137,7 +142,7 @@ export function MetaAdsCard() {
         />
         <KpiVividMetric
           label="CPA"
-          value={data.totals.cpa != null ? fmtMxn(data.totals.cpa) : '—'}
+          value={data.totals.cpa != null ? fmtMxnCpa(data.totals.cpa) : '—'}
           icon={MessageCircle}
           accent="sky"
           compact
@@ -194,7 +199,7 @@ export function MetaAdsCard() {
                 key: 'cpa',
                 header: 'CPA',
                 render: (row) => (
-                  <span className="tabular-nums">{row.cpa != null ? fmtMxn(row.cpa) : '—'}</span>
+                  <span className="tabular-nums">{row.cpa != null ? fmtMxnCpa(row.cpa) : '—'}</span>
                 ),
               },
             ]}

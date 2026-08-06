@@ -12,23 +12,43 @@ export type ComposioExecuteResponse = {
 };
 
 /** Project API keys (ak_*) for backend.composio.dev REST — NOT MCP consumer keys (ck_*). */
+export function isComposioRestProjectKey(apiKey: string): boolean {
+  return apiKey.startsWith('ak_');
+}
+
+export function isComposioMcpConsumerKey(apiKey: string): boolean {
+  return apiKey.startsWith('ck_');
+}
+
+/** True when COMPOSIO_API_KEY is a Project key (ak_*) usable with backend.composio.dev REST. */
+export function isComposioRestConfigured(): boolean {
+  const apiKey = process.env.COMPOSIO_API_KEY?.trim();
+  return Boolean(apiKey && isComposioRestProjectKey(apiKey));
+}
+
 export function getComposioApiKey(): string {
   const apiKey = process.env.COMPOSIO_API_KEY?.trim();
   if (!apiKey) {
     throw new Error('Missing COMPOSIO_API_KEY for Composio');
   }
-  if (apiKey.startsWith('ck_')) {
+  if (isComposioMcpConsumerKey(apiKey)) {
     throw new Error(
       'COMPOSIO_API_KEY looks like an MCP consumer key (ck_*). ' +
         'Botio uses the REST API at backend.composio.dev and needs a Project API key (ak_*) ' +
         'from Composio → Settings → Project Settings → API Keys.',
     );
   }
+  if (!isComposioRestProjectKey(apiKey)) {
+    throw new Error(
+      'COMPOSIO_API_KEY must be a Composio Project API key (ak_*). ' +
+        'MCP consumer keys (ck_*) cannot call backend.composio.dev.',
+    );
+  }
   return apiKey;
 }
 
 export function isComposioConfigured(): boolean {
-  return Boolean(process.env.COMPOSIO_API_KEY?.trim());
+  return isComposioRestConfigured();
 }
 
 export function composioExecuteUrl(toolSlug: string): string {

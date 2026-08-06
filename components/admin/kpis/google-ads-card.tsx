@@ -15,6 +15,11 @@ function fmtCop(value: number | null | undefined): string {
   return `$${value.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} COP`;
 }
 
+function fmtCopCpa(value: number | null | undefined): string {
+  if (value == null) return '—';
+  return `$${Number(value).toFixed(2)} COP`;
+}
+
 function statusBadge(status: string) {
   const active = status === 'ENABLED';
   return (
@@ -130,18 +135,16 @@ export function GoogleAdsCard() {
           <Settings className="h-8 w-8 text-fg-muted" />
           <p className="text-sm font-medium text-fg">Configura Google Ads en Vercel</p>
           <p className="max-w-sm text-xs text-fg-muted">
-            Mientras se aprueba el Developer Token, usa Composio:{' '}
-            <code className="rounded bg-bg-muted px-1">COMPOSIO_API_KEY</code> (Project key{' '}
-            <code className="rounded bg-bg-muted px-1">ak_*</code>, not MCP{' '}
+            Preferido:{' '}
+            <code className="rounded bg-bg-muted px-1">GOOGLE_ADS_DEVELOPER_TOKEN</code> + OAuth (
+            <code className="rounded bg-bg-muted px-1">GOOGLE_ADS_CLIENT_ID</code>,{' '}
+            <code className="rounded bg-bg-muted px-1">CLIENT_SECRET</code>,{' '}
+            <code className="rounded bg-bg-muted px-1">REFRESH_TOKEN</code>,{' '}
+            <code className="rounded bg-bg-muted px-1">GOOGLE_ADS_CUSTOMER_ID</code>). Fallback
+            opcional con Composio REST: Project key{' '}
+            <code className="rounded bg-bg-muted px-1">ak_*</code> (no MCP{' '}
             <code className="rounded bg-bg-muted px-1">ck_*</code>),{' '}
-            <code className="rounded bg-bg-muted px-1">COMPOSIO_USER_ID</code>,{' '}
-            <code className="rounded bg-bg-muted px-1">
-              COMPOSIO_GOOGLEADS_CONNECTED_ACCOUNT_ID
-            </code>{' '}
-            y <code className="rounded bg-bg-muted px-1">GOOGLE_ADS_CUSTOMER_ID</code>. Cuando
-            tengas el token, agrega{' '}
-            <code className="rounded bg-bg-muted px-1">GOOGLE_ADS_DEVELOPER_TOKEN</code> y las
-            credenciales OAuth para usar la API directa.
+            <code className="rounded bg-bg-muted px-1">GOOGLE_ADS_COMPOSIO_FALLBACK=true</code>.
           </p>
         </div>
       </KpiVividPanel>
@@ -185,7 +188,7 @@ export function GoogleAdsCard() {
         />
         <KpiVividMetric
           label="CPA"
-          value={data.totals.cpa != null ? fmtCop(data.totals.cpa) : '—'}
+          value={data.totals.cpa != null ? fmtCopCpa(data.totals.cpa) : '—'}
           icon={MessageCircle}
           accent="sky"
           compact
@@ -242,7 +245,7 @@ export function GoogleAdsCard() {
                 key: 'cpa',
                 header: 'CPA',
                 render: (row) => (
-                  <span className="tabular-nums">{row.cpa != null ? fmtCop(row.cpa) : '—'}</span>
+                  <span className="tabular-nums">{row.cpa != null ? fmtCopCpa(row.cpa) : '—'}</span>
                 ),
               },
             ]}

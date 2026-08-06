@@ -12,6 +12,7 @@ import {
   formatGoogleAdsApiError,
   parseGoogleAdsHttpBody,
   readHttpResponseBody,
+  shouldFallbackToComposio,
 } from '@/lib/google-ads-http';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -36,6 +37,7 @@ import {
   composioExecuteUrl,
   composioUserId,
   getComposioApiKey,
+  isComposioRestConfigured,
   type ComposioExecuteResponse,
 } from '@/lib/composio-api';
 
@@ -130,7 +132,7 @@ export function isGoogleAdsOAuthConfigured(): boolean {
 }
 
 function isGoogleAdsComposioConfigured(): boolean {
-  return Boolean(process.env.COMPOSIO_API_KEY?.trim());
+  return isComposioRestConfigured();
 }
 
 export function isGoogleAdsConfigured(): boolean {
@@ -327,7 +329,22 @@ async function searchGoogleAdsGaqlForCustomer(
   customerId: string,
 ): Promise<GaqlSearchRow[]> {
   if (isGoogleAdsOAuthConfigured()) {
-    return searchGoogleAdsGaqlOAuth(query, customerId);
+    try {
+      return await searchGoogleAdsGaqlOAuth(query, customerId);
+    } catch (error) {
+      if (
+        isGoogleAdsComposioFallbackEnabled() &&
+        isGoogleAdsComposioConfigured() &&
+        shouldFallbackToComposio(error)
+      ) {
+        console.warn(
+          `[google-ads-api] OAuth failed for ${customerId}, falling back to Composio (ak_*):`,
+          formatGoogleAdsApiError(error),
+        );
+        return searchGoogleAdsGaqlComposio(query, customerId);
+      }
+      throw error;
+    }
   }
   if (isGoogleAdsComposioFallbackEnabled() && isGoogleAdsComposioConfigured()) {
     return searchGoogleAdsGaqlComposio(query, customerId);
