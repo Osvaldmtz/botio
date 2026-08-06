@@ -101,7 +101,7 @@ export function buildTrialEnrolledTelegramText(params: {
     `📍 Source: ${params.source}\n` +
     `📅 Trial vence: ${trialDateStr}\n` +
     `${formatWelcomeDeliveryLine(params.welcomeResult)}\n\n` +
-    `El cliente recibirá onboarding en días 1 (welcome), 2, 3, 5, 6, 7 y opcional 9 (PRIMER50).`
+    `El cliente recibirá onboarding en días 1 (welcome), 2, 3, 5 (PRIMER50 anticipado), 6, 7, encuesta 8 y recordatorio 9 (PRIMER50).`
   );
 }
 

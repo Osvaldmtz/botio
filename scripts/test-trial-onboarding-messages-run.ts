@@ -48,7 +48,9 @@ assert(formatDay3(user).includes('PHQ-9'), 'day3 PHQ-9');
 assert(formatDay3(user).includes('assessments/new'), 'day3 assessments link');
 
 assert(formatDay5(user).includes('Kaly voz'), 'day5 kaly voice');
-assert(formatDay5(user).includes('2 días de prueba'), 'day5 days left');
+assert(formatDay5(user).includes('2 días de tu prueba'), 'day5 urgency');
+assert(formatDay5(user).includes('PRIMER50'), 'day5 coupon code');
+assert(formatDay5(user).includes(String(KALYO_PRICING.discount.max_with_discount)), 'day5 max price');
 
 assert(formatDay6(user).includes('termina mañana'), 'day6 urgency');
 assert(formatDay6(user).includes('Responde MAX o PRO'), 'day6 CTA');
@@ -60,6 +62,7 @@ assert(formatDay7Expired().includes('dudas antes de decidir'), 'day7 pre-decisio
 
 const day9Coupon = formatDay9WithCoupon(user);
 assert(day9Coupon.includes('PRIMER50'), 'day9 coupon code');
+assert(day9Coupon.includes('recordatorio final'), 'day9 final reminder angle');
 assert(day9Coupon.includes(String(KALYO_PRICING.discount.max_with_discount)), 'day9 max price');
 assert(day9Coupon.includes(String(KALYO_PRICING.discount.pro_with_discount)), 'day9 pro price');
 

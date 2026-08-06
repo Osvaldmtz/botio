@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  formatDay9NoCoupon,
   formatDay9WithCoupon,
   formatOnboardingMessage,
   type OnboardingNarrativeDay,
@@ -62,7 +61,7 @@ type CronDayConfig = {
 
 /**
  * Legacy DB columns → narrative day timing from trial_started_at:
- * day_2 → 24h | day_3 → 72h | day_7 → 120h (d5) | day_13 → 144h (d6) | day_15 → 168h (d7) | day_9 → 216h
+ * day_2 → 24h | day_3 → 72h | day_7 → 120h (d5 + PRIMER50) | day_13 → 144h (d6) | day_15 → 168h (d7) | day_9 → 216h (recordatorio PRIMER50)
  */
 const CRON_DAY_CONFIG: Record<OnboardingCronDay, CronDayConfig> = {
   2: { narrativeDay: 2, column: 'day_2_sent_at', minHoursAgo: 23, maxHoursAgo: 25 },
@@ -115,18 +114,14 @@ export async function fetchPendingOnboardingDay(
   return (data ?? []) as TrialOnboardingRow[];
 }
 
-function buildMessageBody(
-  day: OnboardingCronDay,
-  row: TrialOnboardingRow,
-  variant?: 'coupon' | 'no_coupon',
-): string {
+function buildMessageBody(day: OnboardingCronDay, row: TrialOnboardingRow): string {
   const user = {
     trial_user_name: row.trial_user_name,
     trial_user_email: row.trial_user_email,
   };
 
   if (day === 9) {
-    return variant === 'no_coupon' ? formatDay9NoCoupon(user) : formatDay9WithCoupon(user);
+    return formatDay9WithCoupon(user);
   }
 
   return formatOnboardingMessage(CRON_DAY_CONFIG[day].narrativeDay, user, row.trial_ends_at);
@@ -148,11 +143,7 @@ async function sendOnboardingDay(params: {
     return 'skipped';
   }
 
-  const body = buildMessageBody(
-    params.day,
-    params.row,
-    params.day9Status === 'sent_no_coupon' ? 'no_coupon' : 'coupon',
-  );
+  const body = buildMessageBody(params.day, params.row);
 
   try {
     await params.sendFn({
@@ -253,19 +244,14 @@ async function processDay9Row(params: {
     return 'skipped';
   }
 
-  const withCoupon = eligibility.action === 'send_coupon';
-  const messageMetadata = withCoupon
-    ? {
-        coupon_offered: true,
-        coupon_code: KALYO_PRICING.discount.code,
-      }
-    : undefined;
-
   return sendOnboardingDay({
     ...params,
     day: 9,
-    day9Status: withCoupon ? 'sent_coupon' : 'sent_no_coupon',
-    messageMetadata,
+    day9Status: 'sent_coupon',
+    messageMetadata: {
+      coupon_offered: true,
+      coupon_code: KALYO_PRICING.discount.code,
+    },
   });
 }
 
@@ -322,6 +308,13 @@ export async function runTrialOnboardingCron(params: {
               creds: params.creds,
               sendFn,
               sendTelegram: params.sendTelegram,
+              messageMetadata:
+                day === 5
+                  ? {
+                      coupon_offered: true,
+                      coupon_code: KALYO_PRICING.discount.code,
+                    }
+                  : undefined,
             });
 
       if (result === 'sent') summary[`sent_day${day}`]++;

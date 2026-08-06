@@ -12,7 +12,7 @@ export default function TrialOnboardingPage() {
   return (
     <AdminShell
       title="Onboarding trials"
-      subtitle="Onboarding trial Max: día 1 (welcome), 2, 3, 5, 6, 7, encuesta 8 y opcional 9 (PRIMER50)."
+      subtitle="Onboarding trial Max: día 1 (welcome), 2, 3, 5 (features + PRIMER50), 6, 7, encuesta 8 y recordatorio 9 (PRIMER50)."
     >
       <TrialOnboardingDashboard />
     </AdminShell>

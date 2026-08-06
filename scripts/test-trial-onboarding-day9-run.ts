@@ -161,19 +161,19 @@ async function runTests(): Promise<void> {
     upgraded_to_paid_at: null,
     day_15_sent_at: new Date().toISOString(),
   });
-  assert(noCouponEligibility.action === 'send_no_coupon', 'prior coupon → no_coupon message');
+  assert(noCouponEligibility.action === 'send_coupon', 'prior coupon → final reminder with coupon');
 
   sentBodies.length = 0;
-  const cronNoCoupon = await runTrialOnboardingCron({
+  const cronReminder = await runTrialOnboardingCron({
     supabase,
     creds: { accountSid: 'ACtest', authToken: 'test', from: 'whatsapp:+10000000000' },
     sendFn: async (args) => {
       sentBodies.push(args.body);
     },
   });
-  assert((cronNoCoupon.sent_day9 ?? 0) >= 1, 'day9 no-coupon sent');
-  assert(sentBodies.some((b) => b.includes('cuando estés listo')), 'soft follow-up body');
-  assert(!sentBodies.some((b) => b.includes('PRIMER50')), 'no coupon in no-coupon path');
+  assert((cronReminder.sent_day9 ?? 0) >= 1, 'day9 final reminder sent');
+  assert(sentBodies.some((b) => b.includes('recordatorio final')), 'final reminder body');
+  assert(sentBodies.some((b) => b.includes('PRIMER50')), 'coupon repeated in final reminder');
 
   await cleanup();
   console.log('✓ All trial onboarding day 9 tests passed');

@@ -3,7 +3,6 @@ import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
 
 export type Day9Eligibility =
   | { action: 'send_coupon' }
-  | { action: 'send_no_coupon' }
   | { action: 'skip'; reason: string; status: string };
 
 export async function hadPriorCouponOffer(
@@ -95,15 +94,6 @@ export async function evaluateDay9Eligibility(
 
   if (await isKalyoSubscriptionActive(row.trial_user_email)) {
     return { action: 'skip', reason: 'active_subscription', status: 'skipped_paid' };
-  }
-
-  const hadCoupon = await hadPriorCouponOffer(supabase, {
-    conversationId: row.conversation_id,
-    email: row.trial_user_email,
-  });
-
-  if (hadCoupon) {
-    return { action: 'send_no_coupon' };
   }
 
   return { action: 'send_coupon' };

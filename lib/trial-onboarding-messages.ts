@@ -81,7 +81,24 @@ export function formatDay3(user: TrialOnboardingUser): string {
   );
 }
 
-/** Día 5 — 120h: features Max (legacy column day_7). */
+function formatPrimer50OfferBlock(): string {
+  const code = KALYO_PRICING.discount.code;
+  const maxLink = getPaymentLink('max', code);
+  const proLink = getPaymentLink('pro', code);
+
+  return (
+    `🎁 *50% OFF el primer mes*\n` +
+    `🚀 Max: $${KALYO_PRICING.discount.max_with_discount} (era $${KALYO_PRICING.max.price_monthly})\n` +
+    `💎 Pro: $${KALYO_PRICING.discount.pro_with_discount} (era $${KALYO_PRICING.pro.price_monthly})\n\n` +
+    `Cupón: ${code}\n\n` +
+    `${maxLink}\n` +
+    `${proLink}\n\n` +
+    `Válida solo si no habías contratado antes.\n` +
+    `¿Cuál te sirve?`
+  );
+}
+
+/** Día 5 — 120h: features Max + PRIMER50 anticipado (legacy column day_7). */
 export function formatDay5(user: TrialOnboardingUser): string {
   const name = displayName(user);
   return (
@@ -90,7 +107,9 @@ export function formatDay5(user: TrialOnboardingUser): string {
     `🎤 Kaly voz — dile: 'agenda cita mañana 3pm'\n` +
     `📹 Kalyo Meet — programa una sesión virtual\n\n` +
     `Son las razones por las que Max vale $${KALYO_PRICING.max.price_monthly} (vs Pro $${KALYO_PRICING.pro.price_monthly}).\n\n` +
-    `Te quedan 2 días de prueba.`
+    `Te quedan 2 días de prueba.\n\n` +
+    `Oferta especial — *solo por los próximos 2 días de tu prueba*:\n\n` +
+    formatPrimer50OfferBlock()
   );
 }
 
@@ -118,29 +137,19 @@ export function formatDay7Expired(): string {
   );
 }
 
-/** Día 9 — 216h: PRIMER50 (condicional). */
+/** Día 9 — 216h: recordatorio final PRIMER50 (condicional: trial vencido + no pagó). */
 export function formatDay9WithCoupon(user: TrialOnboardingUser): string {
   const name = displayName(user);
-  const code = KALYO_PRICING.discount.code;
-  const maxLink = getPaymentLink('max', code);
-  const proLink = getPaymentLink('pro', code);
 
   return (
     `Hola ${name} 👋\n\n` +
-    `Vi que tu prueba gratis de Max terminó hace 2 días y no has continuado.\n\n` +
-    `Te dejo una oferta especial:\n\n` +
-    `🎁 *50% OFF el primer mes*\n` +
-    `🚀 Max: $${KALYO_PRICING.discount.max_with_discount} (era $${KALYO_PRICING.max.price_monthly})\n` +
-    `💎 Pro: $${KALYO_PRICING.discount.pro_with_discount} (era $${KALYO_PRICING.pro.price_monthly})\n\n` +
-    `Cupón: ${code}\n\n` +
-    `${maxLink}\n` +
-    `${proLink}\n\n` +
-    `Válida solo si no habías contratado antes.\n` +
-    `¿Cuál te sirve?`
+    `Hace unos días te compartí PRIMER50 — 50% OFF tu primer mes — y tu prueba ya terminó.\n\n` +
+    `Este es el *recordatorio final*:\n\n` +
+    formatPrimer50OfferBlock()
   );
 }
 
-/** Día 9 — sin repetir cupón. */
+/** Día 9 — seguimiento suave sin cupón (legacy; ya no se envía desde el cron). */
 export function formatDay9NoCoupon(user: TrialOnboardingUser): string {
   const name = displayName(user);
   return (

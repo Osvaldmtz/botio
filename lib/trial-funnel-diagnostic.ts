@@ -86,10 +86,10 @@ const DRIP_LABELS: Record<DripStepKey, string> = {
   welcome_d1: 'Día 1 — Welcome enviado',
   day2: 'Día 2 — Primer paciente',
   day3: 'Día 3 — Tests PHQ/GAD',
-  day5: 'Día 5 — Kaly voz',
+  day5: 'Día 5 — Kaly voz + PRIMER50',
   day6: 'Día 6 — Urgencia',
   day7_expired: 'Día 7 — Trial vencido',
-  day9: 'Día 9 — PRIMER50',
+  day9: 'Día 9 — PRIMER50 recordatorio',
   responded: 'Respondió WhatsApp',
   paid_onboarding: 'Paid (onboarding)',
 };
