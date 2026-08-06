@@ -1,0 +1,13 @@
+{
+  "active_customer_id": "4732777525",
+  "historical_customer_id": "4356627994",
+  "login_customer_id": "2224952854",
+  "conversion_tag_colombia": "AW-18345611562",
+  "composio_account_alias": "kalyo",
+  "composio_connected_account_id": "googleads_forger-punky",
+  "notes": {
+    "active_customer_id": "Cuenta operativa — crear/modificar campañas y mutaciones",
+    "historical_customer_id": "Cuenta legacy — solo lectura; métricas LAST_30_DAYS se combinan con active",
+    "conversion_tag_colombia": "gtag AW-* — no es un customer_id de 10 dígitos"
+  }
+}

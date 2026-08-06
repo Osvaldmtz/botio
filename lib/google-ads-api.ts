@@ -3,6 +3,11 @@ import 'server-only';
 import { OAuth2Client } from 'google-auth-library';
 import { formatUnknownError } from '@/lib/format-error';
 import {
+  getActiveCustomerId,
+  getLoginCustomerId,
+  getMetricsCustomerIds,
+} from '@/lib/google-ads-config';
+import {
   formatGoogleAdsApiError,
   parseGoogleAdsHttpBody,
   readHttpResponseBody,
@@ -23,8 +28,39 @@ const STALE_CACHE_KEY = 'google_ads_campaign_summary_last_30d';
 const COMPOSIO_EXECUTE_URL =
   'https://backend.composio.dev/api/v3/tools/execute/GOOGLEADS_SEARCH_STREAM_GAQL';
 
-export const GOOGLE_ADS_CUSTOMER_ID =
-  process.env.GOOGLE_ADS_CUSTOMER_ID?.replace(/\D/g, '') || '4356627994';
+export {
+  getActiveCustomerId,
+  getHistoricalCustomerId,
+  getLoginCustomerId,
+  getMetricsCustomerIds,
+  getGoogleAdsConfig,
+  GOOGLE_ADS_CUSTOMER_ID,
+} from '@/lib/google-ads-config';
+
+/** AW-18345611562 is the gtag conversion label — not a valid Google Ads customer_id. */
+const INVALID_CUSTOMER_ID_PREFIX = /^AW-/i;
+
+/**
+ * Build Composio GOOGLEADS_* tool arguments with an explicit customer_id.
+ * Pass `customer_id` in args for metrics (active vs historical); defaults to active.
+ */
+export function googleAdsComposioToolArguments(
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const candidate = String(args.customer_id ?? getActiveCustomerId());
+  if (INVALID_CUSTOMER_ID_PREFIX.test(candidate)) {
+    throw new Error(
+      `Invalid Google Ads customer_id "${candidate}". AW-* is a gtag conversion label, not a customer_id.`,
+    );
+  }
+  const raw = candidate.replace(/\D/g, '');
+  if (!/^\d{10}$/.test(raw)) {
+    throw new Error(
+      `Invalid Google Ads customer_id "${args.customer_id ?? ''}". Expected 10 digits.`,
+    );
+  }
+  return { ...args, customer_id: raw };
+}
 
 export type GoogleAdsSpendWindow = 'LAST_30_DAYS' | 'ALL_TIME';
 
@@ -89,7 +125,7 @@ export function isGoogleAdsOAuthConfigured(): boolean {
       process.env.GOOGLE_ADS_CLIENT_ID?.trim() &&
       process.env.GOOGLE_ADS_CLIENT_SECRET?.trim() &&
       process.env.GOOGLE_ADS_REFRESH_TOKEN?.trim() &&
-      GOOGLE_ADS_CUSTOMER_ID,
+      getActiveCustomerId(),
   );
 }
 
@@ -175,7 +211,10 @@ function parseGaqlRows(results: GaqlSearchRow[] | undefined): GoogleCampaignInsi
   });
 }
 
-async function searchGoogleAdsGaqlOAuth(query: string): Promise<GaqlSearchRow[]> {
+async function searchGoogleAdsGaqlOAuth(
+  query: string,
+  customerId: string,
+): Promise<GaqlSearchRow[]> {
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim();
   if (!developerToken) {
     throw new Error('Missing GOOGLE_ADS_DEVELOPER_TOKEN');
@@ -189,20 +228,17 @@ async function searchGoogleAdsGaqlOAuth(query: string): Promise<GaqlSearchRow[]>
     Accept: 'application/json',
   };
 
-  const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/\D/g, '');
+  const loginCustomerId = getLoginCustomerId();
   if (loginCustomerId) {
     headers['login-customer-id'] = loginCustomerId;
   }
 
-  const res = await fetch(
-    `${GOOGLE_ADS_API}/customers/${GOOGLE_ADS_CUSTOMER_ID}/googleAds:search`,
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ query }),
-      next: { revalidate: 0 },
-    },
-  );
+  const res = await fetch(`${GOOGLE_ADS_API}/customers/${customerId}/googleAds:search`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query }),
+    next: { revalidate: 0 },
+  });
 
   const { contentType, bodyText } = await readHttpResponseBody(res);
   const json = parseGoogleAdsHttpBody(res.status, contentType, bodyText);
@@ -221,17 +257,17 @@ function composioResponseError(json: ComposioExecuteResponse, httpStatus: number
   return `Composio Google Ads HTTP ${httpStatus}`;
 }
 
-async function searchGoogleAdsGaqlComposio(query: string): Promise<GaqlSearchRow[]> {
+async function searchGoogleAdsGaqlComposio(
+  query: string,
+  customerId: string,
+): Promise<GaqlSearchRow[]> {
   const apiKey = process.env.COMPOSIO_API_KEY?.trim();
   if (!apiKey) {
     throw new Error('Missing COMPOSIO_API_KEY for Google Ads');
   }
 
   const body: Record<string, unknown> = {
-    arguments: {
-      query,
-      customer_id: GOOGLE_ADS_CUSTOMER_ID,
-    },
+    arguments: googleAdsComposioToolArguments({ query, customer_id: customerId }),
     user_id: process.env.COMPOSIO_USER_ID?.trim() || 'botio-kalyo',
   };
 
@@ -289,20 +325,26 @@ async function searchGoogleAdsGaqlComposio(query: string): Promise<GaqlSearchRow
   return (data?.results ?? []) as GaqlSearchRow[];
 }
 
-async function searchGoogleAdsGaql(query: string): Promise<GaqlSearchRow[]> {
+async function searchGoogleAdsGaqlForCustomer(
+  query: string,
+  customerId: string,
+): Promise<GaqlSearchRow[]> {
   if (isGoogleAdsOAuthConfigured()) {
     try {
-      return await searchGoogleAdsGaqlOAuth(query);
+      return await searchGoogleAdsGaqlOAuth(query, customerId);
     } catch (error) {
       if (isGoogleAdsComposioConfigured() && shouldFallbackToComposio(error)) {
-        console.warn('[google-ads-api] OAuth failed, falling back to Composio:', formatGoogleAdsApiError(error));
-        return searchGoogleAdsGaqlComposio(query);
+        console.warn(
+          `[google-ads-api] OAuth failed for ${customerId}, falling back to Composio:`,
+          formatGoogleAdsApiError(error),
+        );
+        return searchGoogleAdsGaqlComposio(query, customerId);
       }
       throw error;
     }
   }
   if (isGoogleAdsComposioConfigured()) {
-    return searchGoogleAdsGaqlComposio(query);
+    return searchGoogleAdsGaqlComposio(query, customerId);
   }
   if (process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim()) {
     throw new Error(
@@ -310,6 +352,20 @@ async function searchGoogleAdsGaql(query: string): Promise<GaqlSearchRow[]> {
     );
   }
   throw new Error('Google Ads not configured');
+}
+
+/** GAQL against the active (operational) account — use for mutations and single-account reads. */
+export async function searchGoogleAdsGaql(query: string): Promise<GaqlSearchRow[]> {
+  return searchGoogleAdsGaqlForCustomer(query, getActiveCustomerId());
+}
+
+/** GAQL across active + historical accounts — use for rolling metrics (LAST_30_DAYS). */
+export async function searchGoogleAdsGaqlMetrics(query: string): Promise<GaqlSearchRow[]> {
+  const customerIds = getMetricsCustomerIds();
+  const batches = await Promise.all(
+    customerIds.map((customerId) => searchGoogleAdsGaqlForCustomer(query, customerId)),
+  );
+  return batches.flat();
 }
 
 function sumCostMicrosFromRows(results: GaqlSearchRow[]): number {
@@ -321,11 +377,14 @@ function sumCostMicrosFromRows(results: GaqlSearchRow[]): number {
 
 /**
  * Fetch Google Ads cost for CAC metrics (Composio or OAuth).
- * Returns spend in COP (account currency).
+ * Combines active + historical accounts for LAST_30_DAYS; active only for ALL_TIME.
  */
 export async function fetchGoogleAdsSpendCop(window: GoogleAdsSpendWindow): Promise<number> {
   const query = `SELECT metrics.cost_micros FROM customer WHERE segments.date DURING ${window}`;
-  const results = await searchGoogleAdsGaql(query);
+  const results =
+    window === 'LAST_30_DAYS'
+      ? await searchGoogleAdsGaqlMetrics(query)
+      : await searchGoogleAdsGaql(query);
   return sumCostMicrosFromRows(results) / 1_000_000;
 }
 
@@ -342,7 +401,7 @@ export async function fetchGoogleAds(): Promise<{
 
 /**
  * Campaign-level Google Ads summary (last 30d): spend, CTR, conversions, CPA.
- * Cached 4h in meta_cache. Uses OAuth when configured, else Composio fallback.
+ * Merges metrics from active + historical accounts. Cached 4h in meta_cache.
  */
 export async function fetchGoogleAdsCampaignSummary(): Promise<GoogleAdsSummary> {
   const cacheKey = STALE_CACHE_KEY;
@@ -367,7 +426,7 @@ export async function fetchGoogleAdsCampaignSummary(): Promise<GoogleAdsSummary>
   `.trim();
 
   try {
-    const results = await searchGoogleAdsGaql(query);
+    const results = await searchGoogleAdsGaqlMetrics(query);
     const insights = parseGaqlRows(results);
     const summary = buildGoogleAdsSummary(insights, new Date().toISOString(), true);
     await writeCache(cacheKey, summary);

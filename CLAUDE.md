@@ -39,13 +39,14 @@ Integración directa vía OAuth en `lib/google-ads-api.ts`. Script one-time: `sc
 | Variable | Dónde vive | Valor / estado |
 |----------|------------|----------------|
 | `GOOGLE_ADS_DEVELOPER_TOKEN` | Vercel Production + Preview | Test token (Acceso al Explorador) |
-| `GOOGLE_ADS_CUSTOMER_ID` | Vercel Production + Preview + Development | `4356627994` (cuenta con campañas) |
+| `GOOGLE_ADS_CUSTOMER_ID` | Vercel Production + Preview + Development | `4732777525` (cuenta activa — mutaciones). **No** usar `AW-18345611562` (etiqueta gtag). |
+| `GOOGLE_ADS_HISTORICAL_CUSTOMER_ID` | Vercel (opcional) | `4356627994` (legacy; métricas LAST_30_DAYS se combinan con activa) |
 | `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | Vercel Production + Preview | `2224952854` (MCC manager) |
 | `GOOGLE_ADS_CLIENT_ID` | Vercel + `.env.local` | `kalyo-production` OAuth Desktop app |
 | `GOOGLE_ADS_CLIENT_SECRET` | Vercel + `.env.local` | Configurado (Production + Preview) |
 | `GOOGLE_ADS_REFRESH_TOKEN` | Vercel Production + Preview | Configurado (OAuth osvamtz@gmail.com) |
 
-**Fallback Composio** (legacy): `COMPOSIO_API_KEY`, `COMPOSIO_USER_ID`, `COMPOSIO_GOOGLEADS_CONNECTED_ACCOUNT_ID`. Si `GOOGLE_ADS_DEVELOPER_TOKEN` está seteado, la API directa OAuth tiene prioridad y Composio no se usa.
+**Fallback Composio** (legacy): `COMPOSIO_API_KEY`, `COMPOSIO_USER_ID`, `COMPOSIO_GOOGLEADS_CONNECTED_ACCOUNT_ID`. Métricas LAST_30_DAYS: consultar ambas cuentas (`4732777525` + `4356627994`); mutaciones: solo activa. Ver `config/google-ads.json` y `googleAdsComposioToolArguments` en `lib/google-ads-api.ts`.
 
 **Dashboard:** `/admin/kpis` → panel Google Ads · API `GET /api/google-ads/summary` · caché 4h en `meta_cache`.
 
