@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, ListTodo, LogOut, Settings } from 'lucide-react';
+import { BarChart3, ListTodo, LogOut, Mail, Settings } from 'lucide-react';
 import { Tabs } from '@/components/ui/tabs';
 import { logoutAction } from '@/app/admin/actions';
 import { NotificationPermissionPrompt } from './notification-permission-prompt';
@@ -21,6 +21,7 @@ export function AdminHeader() {
   const isRoadmap = pathname?.startsWith('/admin/roadmap');
   const isDashboard =
     pathname === '/admin/dashboard' || pathname === '/admin';
+  const isEmailing = pathname?.startsWith('/admin/emailing');
   const isKpis = pathname?.startsWith('/admin/kpis');
   const isTasks = pathname?.startsWith('/admin/tasks');
   const isConversations =
@@ -31,6 +32,12 @@ export function AdminHeader() {
       href: '/admin/dashboard',
       label: 'Dashboard',
       active: isDashboard,
+    },
+    {
+      href: '/admin/emailing',
+      label: 'Emailing',
+      active: isEmailing,
+      icon: <Mail className="h-3.5 w-3.5" strokeWidth={1.5} />,
     },
     {
       href: '/admin/conversations',

@@ -37,6 +37,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/emailing-jobs",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/cron/trial-onboarding",
       "schedule": "0 * * * *"
     },
