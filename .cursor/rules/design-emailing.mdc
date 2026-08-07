@@ -1,0 +1,412 @@
+# Kalyo Dashboard — Style Reference
+> Dashboard clínico funcional y de confianza: datos claros, jerarquía limpia, sin ruido visual.
+
+**Theme:** light  
+**Source:** Screenshot — Emaily SaaS dashboard (Behance), adaptado para Kalyo  
+**Adapted:** Accent azul → morado Kalyo · Contexto clínico, no email marketing
+
+---
+
+## Tokens — Colors
+
+| Name | Value | Token | Role |
+|------|-------|-------|------|
+| Background | `#F1F3F8` | `--color-bg` | Fondo general de la app |
+| Surface 0 | `#FFFFFF` | `--color-surface-0` | Cards, modales, paneles |
+| Surface 1 | `#F8F9FC` | `--color-surface-1` | Rows alternadas, inputs, sidebar hover |
+| Border | `#E4E7EF` | `--color-border` | Separadores, bordes de card |
+| Border subtle | `#EEF0F6` | `--color-border-subtle` | Dividers internos leves |
+| Text primary | `#1A1B2E` | `--color-text-primary` | Títulos, números grandes, nav activo |
+| Text secondary | `#5C6380` | `--color-text-secondary` | Labels, subtítulos, descripciones |
+| Text muted | `#9299B0` | `--color-text-muted` | Placeholders, metadata, timestamps |
+| Accent | `#7C3AED` | `--color-accent` | CTAs, links, focus rings, estados activos |
+| Accent light | `#EDE9FE` | `--color-accent-light` | Backgrounds de badges activos, hover sutil |
+| Accent dark | `#5B21B6` | `--color-accent-dark` | Hover en botones primarios |
+| Positive | `#16A34A` | `--color-positive` | Deltas positivos (+12%, +6.3%) |
+| Positive bg | `#DCFCE7` | `--color-positive-bg` | Badge background positivo |
+| Negative | `#DC2626` | `--color-negative` | Deltas negativos (-27%), alertas |
+| Negative bg | `#FEE2E2` | `--color-negative-bg` | Badge background negativo |
+| Warning | `#D97706` | `--color-warning` | Estados intermedios, gauge amarillo |
+| Warning bg | `#FEF3C7` | `--color-warning-bg` | Badge background advertencia |
+| Chart line 1 | `#7C3AED` | `--color-chart-1` | Métrica principal (ingresos / sesiones) |
+| Chart line 2 | `#F97316` | `--color-chart-2` | Métrica secundaria (click rate / asistencia) |
+| Chart line 3 | `#94A3B8` | `--color-chart-3` | Métrica terciaria (cancelaciones / bajas) |
+| Chart area 1 | `#7C3AED1A` | `--color-chart-area-1` | Fill bajo curva principal (10% opacidad) |
+| Nav dark | `#1A1B2E` | `--color-nav` | Background de sidebar oscuro (si aplica) |
+
+---
+
+## Tokens — Typography
+
+### Inter — UI principal · `--font-sans`
+- **Substitute Google Font:** Inter (disponible directo)
+- **Weights usados:** 400, 500, 600
+- **NUNCA usar:** 700+ (lee genérico y pesado)
+
+### JetBrains Mono — Datos numéricos y metadata · `--font-mono`
+- **Substitute Google Font:** JetBrains Mono
+- **Weights usados:** 400, 500
+- **Uso:** fechas, timestamps, IDs, métricas puntuales
+
+### Type Scale
+
+| Role | Size | Weight | Line Height | Letter Spacing |
+|------|------|--------|-------------|----------------|
+| Display / KPI grande | 32px | 600 | 1.1 | -0.025em |
+| Heading 1 | 24px | 600 | 1.2 | -0.02em |
+| Heading 2 | 18px | 600 | 1.3 | -0.015em |
+| Heading 3 | 16px | 500 | 1.4 | 0 |
+| Body | 14px | 400 | 1.6 | 0 |
+| Body small | 13px | 400 | 1.5 | 0 |
+| Label / caption | 12px | 500 | 1.4 | 0.02em |
+| Mono / metadata | 12px | 400 | 1.5 | 0 |
+
+---
+
+## Tokens — Spacing & Shapes
+
+**Base unit:** 4px  
+**Density:** comfortable (para uso clínico — no compact, requiere legibilidad)
+
+### Border Radius
+
+| Elemento | Value |
+|----------|-------|
+| Cards | `16px` |
+| Buttons primarios | `10px` |
+| Buttons secundarios / ghost | `10px` |
+| Inputs | `10px` |
+| Badges / chips | `999px` (pill) |
+| Avatares | `50%` |
+| Modales | `20px` |
+| Tooltips | `8px` |
+
+> **Regla:** Todo redondo o nada redondo. Kalyo usa `rounded-xl` (16px) en cards y `rounded-[10px]` en controles interactivos. Pills solo en badges de estado.
+
+### Layout
+
+- **Page max-width:** 1280px
+- **Sidebar width:** 240px (colapsado: 64px)
+- **Section gap:** 24px
+- **Card padding:** 24px
+- **Element gap (dentro de card):** 16px
+- **Grid interno:** 12 columnas, gutter 24px
+- **Top bar height:** 64px
+
+---
+
+## Surfaces & Elevation
+
+| Level | Nombre | Value | Propósito |
+|-------|--------|-------|-----------|
+| 0 | Base | `#F1F3F8` | Fondo de página |
+| 1 | Card | `#FFFFFF` | Tarjetas estándar |
+| 2 | Elevated | `#FFFFFF` + border | Dropdowns, popovers |
+| 3 | Modal | `#FFFFFF` + overlay | Modales, drawers |
+
+**Regla de elevación:** Kalyo usa **bordes, no sombras** para separar capas.  
+Excepción: modales usan `box-shadow: 0 20px 60px rgba(26, 27, 46, 0.12)`.
+
+```css
+/* Border estándar de card */
+border: 1px solid #E4E7EF;
+
+/* Shadow reservado para modales */
+box-shadow: 0 20px 60px rgba(26, 27, 46, 0.12);
+```
+
+---
+
+## Components
+
+### Metric Tile (KPI Card)
+```
+┌─────────────────────────────────┐
+│ Título métrica          [icono] │  ← 14px · 500 · text-secondary
+│                                 │
+│ 38.2%          [mini chart]     │  ← 32px · 600 · text-primary · font-mono
+│ ▼ -27%  vs período anterior     │  ← 13px · negative/positive + bg badge
+└─────────────────────────────────┘
+```
+- Padding: 24px
+- Border radius: 16px
+- Background: surface-0
+- El número grande usa `--font-mono` si es porcentaje o cifra
+- Delta badge: pill con color según positivo/negativo
+
+### Performance Chart
+- Área bajo curva principal: `--color-chart-area-1` (10% opacidad)
+- 3 líneas máximo en mismo gráfico
+- Leyenda encima del gráfico, alineada derecha
+- Eje Y sin grid lines visibles (solo guías en hover)
+- Tooltip: fondo `#1A1B2E`, texto blanco, border radius 8px
+
+### Gauge / Score
+```
+Semicírculo de 180°
+- Rango bajo (0-40):    #DC2626
+- Rango medio (40-70):  #D97706
+- Rango alto (70-100):  #16A34A
+- Indicador: aguja delgada 2px, color text-primary
+- Número central: 40px · 600 · font-mono
+- Label "Rate" debajo: 14px · text-secondary
+```
+
+### Quick Action Button
+- Grid 2×2
+- Cada botón: icono 24px en contenedor 40px redondeado (accent-light bg) + label 13px debajo
+- Hover: accent-light → accent con ícono blanco
+- Padding: 16px
+
+### Automation / Item List
+- Icono circular 40px (color tonal del contexto)
+- Título 14px · 500 · text-primary
+- Subtítulo 13px · text-secondary
+- Badge de métrica: pill pequeño accent o warning
+- Separador: border-subtle entre items
+
+### Schedule Timeline
+- Encabezado con date range en chip (border, no filled)
+- Horas en eje X: 12px · mono · text-muted
+- Evento activo: card con border-left 3px accent, bg accent-light
+- Evento siguiente: card con border, bg surface-1
+
+### Status Badges
+```
+● Activo     → bg: positive-bg  · text: positive  · dot: positive
+● Pendiente  → bg: warning-bg   · text: warning   · dot: warning
+● Cancelado  → bg: negative-bg  · text: negative  · dot: negative
+● Inactivo   → bg: surface-1    · text: text-muted · dot: border
+```
+Todos pill (border-radius 999px), 12px · 500, padding 4px 10px.
+
+### Primary Button
+```css
+background: var(--color-accent);        /* #7C3AED */
+color: #FFFFFF;
+border-radius: 10px;
+padding: 10px 20px;
+font-size: 14px;
+font-weight: 500;
+transition: background 150ms ease;
+
+&:hover { background: var(--color-accent-dark); }  /* #5B21B6 */
+&:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+```
+
+### Secondary Button / Ghost
+```css
+background: transparent;
+border: 1px solid var(--color-border);
+color: var(--color-text-primary);
+border-radius: 10px;
+padding: 10px 20px;
+font-size: 14px;
+font-weight: 500;
+
+&:hover { background: var(--color-surface-1); }
+```
+
+---
+
+## Do's and Don'ts
+
+### Do ✅
+- Usar `--color-accent` (#7C3AED morado Kalyo) como único color de acción — links, CTAs, focus, estados activos
+- Separar secciones con `border: 1px solid --color-border`, no con fondos de color
+- Usar `font-weight: 500-600` en headings — nunca 700+
+- Usar `--font-mono` para KPIs numéricos, porcentajes y fechas
+- Mantener letter-spacing negativo en textos display (-0.025em para 32px+)
+- Usar colores de estado (positive/negative/warning) SOLO para deltas y badges de estado clínico
+- Cards siempre con `border-radius: 16px` — consistente en toda la app
+- Backgrounds de cards siempre `#FFFFFF` — nunca colored backgrounds en cards de datos
+- Whitespace generoso: mínimo 24px entre secciones
+- Tooltips de gráficas: fondo oscuro `#1A1B2E`, texto blanco
+
+### Don't ❌
+- ❌ Usar gradientes purple→violet como decoración (solo en ilustraciones específicas)
+- ❌ Mezclar border-radius: si una card es 16px, todas son 16px
+- ❌ Más de 3 líneas en el mismo gráfico
+- ❌ Usar el color negativo (#DC2626) para cualquier cosa que no sea error/alerta/delta negativo
+- ❌ Body text en `--font-mono` — solo para números, fechas, código
+- ❌ Poner sombras en cards estándar (solo modales)
+- ❌ Usar `font-weight: 700` en headings — resulta genérico
+- ❌ Background puro `#FFFFFF` en la página — siempre usar `#F1F3F8` como base
+- ❌ Colores de chart fuera del sistema definido (chart-1, chart-2, chart-3)
+- ❌ Más de 2 colores de acción visibles al mismo tiempo en la misma sección
+
+---
+
+## Motion
+
+**Duración base:** `150ms` (definida en `08-UI_UX.md` del proyecto)  
+**Easing estándar:** `ease` (cubic-bezier implícito del navegador — suficiente para este contexto)
+
+| Tipo de transición | Duración | Propiedad |
+|--------------------|----------|-----------|
+| Hover en botones / links | 150ms | `background`, `color`, `border-color` |
+| Hover en cards | 150ms | `box-shadow`, `border-color` |
+| Fade de tooltips / popovers | 150ms | `opacity` |
+| Apertura de modales | 200ms | `opacity` + `transform: scale(0.97→1)` |
+| Apertura de sidebar colapsado | 250ms | `width` |
+| Estado de loading (skeleton) | — | `animate-pulse` de Tailwind |
+
+```css
+/* Aplica en globals.css para heredar en toda la app */
+* {
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* Override para elementos que NO deben transicionar */
+[data-no-transition] {
+  transition: none !important;
+}
+```
+
+**Reglas:**
+- Nunca animar `layout` properties (`width`, `height`) en elementos de datos — solo en UI chrome (sidebar, modales)
+- `transform` y `opacity` son las únicas propiedades seguras para 60fps en listas largas
+- Skeleton loaders: `animate-pulse` de Tailwind, nunca spinners en contenido inline
+
+---
+
+## shadcn/ui — Mapeo de tokens
+
+El proyecto usa shadcn/ui (`design-system.mdc`). Los tokens de Kalyo mapean así a las variables CSS que shadcn consume:
+
+```css
+/* En globals.css — sección :root (light mode) */
+:root {
+  /* shadcn base → Kalyo tokens */
+  --background:        220 18% 96%;    /* #F1F3F8 */
+  --foreground:        234 26% 14%;    /* #1A1B2E */
+
+  --card:              0 0% 100%;      /* #FFFFFF */
+  --card-foreground:   234 26% 14%;    /* #1A1B2E */
+
+  --popover:           0 0% 100%;      /* #FFFFFF */
+  --popover-foreground: 234 26% 14%;  /* #1A1B2E */
+
+  --primary:           262 84% 58%;   /* #7C3AED — morado Kalyo */
+  --primary-foreground: 0 0% 100%;    /* #FFFFFF */
+
+  --secondary:         220 18% 97%;   /* #F8F9FC */
+  --secondary-foreground: 234 26% 14%;
+
+  --muted:             220 18% 97%;   /* #F8F9FC */
+  --muted-foreground:  229 16% 55%;   /* #9299B0 */
+
+  --accent:            263 87% 95%;   /* #EDE9FE — accent-light */
+  --accent-foreground: 262 84% 58%;   /* #7C3AED */
+
+  --destructive:       0 72% 51%;     /* #DC2626 */
+  --destructive-foreground: 0 0% 100%;
+
+  --border:            220 18% 91%;   /* #E4E7EF */
+  --input:             220 18% 91%;   /* #E4E7EF */
+  --ring:              262 84% 58%;   /* #7C3AED — focus ring = accent */
+
+  --radius: 0.625rem;                 /* 10px — base radius para inputs/buttons */
+}
+```
+
+> **Nota:** shadcn usa HSL sin `hsl()` wrapper (solo los valores `H S% L%`). El `--radius` de shadcn corresponde a `--radius-input/btn` (10px). Las cards usan `--radius-card` (16px) directamente vía Tailwind.
+
+**Componentes shadcn priorizados para Kalyo:**
+- `Button` — primary/secondary/ghost/destructive
+- `Card` + `CardHeader` + `CardContent`
+- `Badge` — para estados clínicos
+- `Dialog` — modales de confirmación
+- `Select` + `Combobox` — filtros de pacientes/sesiones
+- `Table` — listados clínicos
+- `Tabs` — navegación interna de perfil de paciente
+- `Toast` — notificaciones de acciones
+
+---
+
+## Tailwind v4 — Drop in your `globals.css`
+
+```css
+@import "tailwindcss";
+
+@theme {
+  /* === COLORS === */
+  --color-bg:              #F1F3F8;
+  --color-surface-0:       #FFFFFF;
+  --color-surface-1:       #F8F9FC;
+  --color-border:          #E4E7EF;
+  --color-border-subtle:   #EEF0F6;
+
+  --color-text-primary:    #1A1B2E;
+  --color-text-secondary:  #5C6380;
+  --color-text-muted:      #9299B0;
+
+  --color-accent:          #7C3AED;
+  --color-accent-light:    #EDE9FE;
+  --color-accent-dark:     #5B21B6;
+
+  --color-positive:        #16A34A;
+  --color-positive-bg:     #DCFCE7;
+  --color-negative:        #DC2626;
+  --color-negative-bg:     #FEE2E2;
+  --color-warning:         #D97706;
+  --color-warning-bg:      #FEF3C7;
+
+  --color-chart-1:         #7C3AED;
+  --color-chart-2:         #F97316;
+  --color-chart-3:         #94A3B8;
+  --color-chart-area-1:    rgb(124 58 237 / 0.10);
+
+  --color-nav:             #1A1B2E;
+
+  /* === TYPOGRAPHY === */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* === TYPE SCALE === */
+  --text-display:  clamp(28px, 3vw, 32px);
+  --text-h1:       clamp(20px, 2vw, 24px);
+  --text-h2:       18px;
+  --text-h3:       16px;
+  --text-body:     14px;
+  --text-sm:       13px;
+  --text-caption:  12px;
+
+  /* === BORDER RADIUS === */
+  --radius-card:   16px;
+  --radius-input:  10px;
+  --radius-btn:    10px;
+  --radius-modal:  20px;
+  --radius-badge:  999px;
+  --radius-tooltip: 8px;
+
+  /* === SPACING === */
+  --spacing-section: 24px;
+  --spacing-card:    24px;
+  --spacing-gap:     16px;
+
+  /* === LAYOUT === */
+  --layout-max:      1280px;
+  --layout-sidebar:  240px;
+  --layout-topbar:   64px;
+
+  /* === SHADOWS === */
+  --shadow-modal: 0 20px 60px rgb(26 27 46 / 0.12);
+}
+```
+
+---
+
+## Similar Brands (referencia de calidad)
+
+- **Linear** — misma densidad funcional limpia, cards con border no shadow, tipografía medium weight
+- **Vercel Dashboard** — fondo off-white, métricas con mono, border separators
+- **Resend** — accent monocromático, tablas limpias, sin decoración
+- **Retool** — grid de métricas, gauges, charts multi-línea en dark/light
+
+---
+
+**Source:** Screenshot Emaily Email Marketing Dashboard (Behance, 2024), adaptado para Kalyo  
+**Extracted:** 2026-08-07  
+**Adaptation:** Accent `#4F7CF8` → `#7C3AED` (Kalyo purple) · Contexto email → clínico/psicología
