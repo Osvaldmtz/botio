@@ -683,6 +683,21 @@ export async function enrollTrialFromKalyoWebhook(
     console.error('[trial-onboarding-webhook] outcome mark failed', outcomeErr);
   }
 
+  try {
+    const { runOnboardingTrialAutomation } = await import(
+      '@/lib/emailing/automations'
+    );
+    const emailing = await runOnboardingTrialAutomation({
+      email,
+      psychologistName: name,
+    });
+    console.log(
+      `[trial-onboarding-webhook] onboarding_trial | email=${email} | ran=${emailing.ran} | sent=${emailing.sent} | queued=${emailing.queued}`,
+    );
+  } catch (emailErr) {
+    console.error('[trial-onboarding-webhook] onboarding_trial failed', emailErr);
+  }
+
   return {
     success: true,
     trial_onboarding_id: row.id as string,

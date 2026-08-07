@@ -28,15 +28,19 @@ function mapSequence(row: EmailSequenceRow): EmailSequence {
 }
 
 function mapLog(row: EmailLogRow): EmailLog {
+  const campaignName = row.campaign_name?.trim() || null;
   return {
     id: row.id,
     to: row.to_email,
     sequenceId: row.sequence_id,
-    sequence: row.email_sequences?.name ?? '—',
+    campaignId: row.campaign_id ?? null,
+    campaign: campaignName,
+    sequence: campaignName ?? row.email_sequences?.name ?? '—',
     status: row.status,
     sentAt: row.sent_at,
     emailId: row.resend_id ?? '',
     openedAt: row.opened_at,
+    errorMessage: row.error_message ?? null,
   };
 }
 
@@ -179,7 +183,7 @@ export async function getMetrics(
 
   type Row = {
     id: string;
-    sequence_id: string;
+    sequence_id: string | null;
     status: string;
     opened_at: string | null;
     clicked_at: string | null;
@@ -205,9 +209,10 @@ export async function getMetrics(
   >();
 
   for (const row of rows) {
-    const current = byId.get(row.sequence_id) ?? {
-      sequenceId: row.sequence_id,
-      sequence: row.email_sequences?.name ?? '—',
+    const key = row.sequence_id ?? 'campaign';
+    const current = byId.get(key) ?? {
+      sequenceId: row.sequence_id ?? 'campaign',
+      sequence: row.email_sequences?.name ?? 'Campañas',
       sent: 0,
       opened: 0,
       clicked: 0,
@@ -217,7 +222,7 @@ export async function getMetrics(
     if (row.status === 'opened' || row.opened_at) current.opened += 1;
     if (row.clicked_at) current.clicked += 1;
     if (row.status === 'bounced') current.bounced += 1;
-    byId.set(row.sequence_id, current);
+    byId.set(key, current);
   }
 
   const pct = (n: number, d: number) => (d === 0 ? 0 : Math.round((n / d) * 1000) / 10);

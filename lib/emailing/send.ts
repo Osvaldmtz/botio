@@ -2,9 +2,14 @@ import 'server-only';
 import { Resend } from 'resend';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { personalizeTemplate } from './personalize';
+import {
+  WELCOME_TRANSACTIONAL_FROM,
+  WELCOME_UNSUBSCRIBE_HEADERS,
+} from './templates/welcome-transactional';
 import type { EmailSequenceRow } from './types';
 
 const FROM = 'Kalyo <hola@kalyo.io>';
+const WELCOME_SEQUENCE_ID = 'a0000001-0000-4000-8000-000000000001';
 
 function getResend(): Resend {
   const apiKey = process.env.RESEND_API_KEY;
@@ -24,12 +29,14 @@ export async function sendSequenceEmail(params: {
   const { supabase, sequence, to, psychologistName } = params;
   const html = personalizeTemplate(sequence.html_template, psychologistName);
   const resend = getResend();
+  const isWelcome = sequence.id === WELCOME_SEQUENCE_ID;
 
   const { data, error } = await resend.emails.send({
-    from: FROM,
+    from: isWelcome ? WELCOME_TRANSACTIONAL_FROM : FROM,
     to,
     subject: sequence.subject,
     html,
+    headers: { ...WELCOME_UNSUBSCRIBE_HEADERS },
   });
 
   if (error) {

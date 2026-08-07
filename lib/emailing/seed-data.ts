@@ -1,5 +1,10 @@
 /** Stable seed rows — keep in sync with supabase/migrations/0054_emailing.sql */
 
+import {
+  WELCOME_TRANSACTIONAL_HTML,
+  WELCOME_TRANSACTIONAL_SUBJECT,
+} from './templates/welcome-transactional';
+
 function wrap(bodyTitle: string, bodyHtml: string): string {
   return `<!DOCTYPE html>
 <html lang="es">
@@ -28,16 +33,12 @@ function wrap(bodyTitle: string, bodyHtml: string): string {
 export const EMAIL_SEQUENCE_SEEDS = [
   {
     id: 'a0000001-0000-4000-8000-000000000001',
-    name: 'Welcome',
-    trigger_tag: 'trial-activo',
+    name: 'Bienvenida plan Pro/Max',
+    trigger_tag: 'subscription-activo',
     cancel_on_tag: null as string | null,
     delay_days: 0,
-    subject: 'Bienvenido a Kalyo',
-    html_template: wrap(
-      '¡Hola{{name}}!',
-      `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#3F3F46;">Bienvenido a tu trial de Kalyo. Estamos aquí para ayudarte a gestionar tu consulta clínica con menos fricción.</p>
-       <p style="margin:0;font-size:16px;line-height:1.6;color:#3F3F46;">Empieza completando tu perfil — te guiaremos paso a paso.</p>`,
-    ),
+    subject: WELCOME_TRANSACTIONAL_SUBJECT,
+    html_template: WELCOME_TRANSACTIONAL_HTML,
     active: true,
     sort_order: 1,
   },

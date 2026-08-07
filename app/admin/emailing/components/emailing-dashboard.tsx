@@ -20,13 +20,14 @@ const TABS: { id: TabId; label: string }[] = [
 
 function statusTone(status: EmailLog['status']): 'primary' | 'info' | 'hot' {
   if (status === 'opened') return 'info';
-  if (status === 'bounced') return 'hot';
+  if (status === 'bounced' || status === 'error') return 'hot';
   return 'primary';
 }
 
 function statusLabel(status: EmailLog['status']): string {
   if (status === 'opened') return 'abierto';
   if (status === 'bounced') return 'rebotado';
+  if (status === 'error') return 'error';
   return 'enviado';
 }
 

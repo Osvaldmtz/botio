@@ -5,6 +5,7 @@ import {
   handleActiveSubscriptionPaid,
   handleCheckoutSessionCompleted,
   handleInvoicePaymentSucceeded,
+  handleSubscriptionCancelled,
 } from '@/lib/stripe-paid-webhook';
 
 export const runtime = 'nodejs';
@@ -49,13 +50,37 @@ export async function POST(request: Request) {
     }
 
     if (event.type === 'customer.subscription.updated') {
+      const subscription = event.data.object as Stripe.Subscription;
+      if (
+        subscription.status === 'canceled' ||
+        subscription.cancel_at_period_end
+      ) {
+        // Only fire recovery when status becomes canceled (not merely scheduled)
+        if (subscription.status === 'canceled') {
+          const cancelled = await handleSubscriptionCancelled(
+            supabase,
+            stripe,
+            subscription,
+          );
+          return Response.json({ received: true, ...cancelled });
+        }
+      }
       const result = await handleActiveSubscriptionPaid(
         supabase,
         stripe,
-        event.data.object as Stripe.Subscription,
+        subscription,
         event.type,
       );
       return Response.json({ received: true, ...result });
+    }
+
+    if (event.type === 'customer.subscription.deleted') {
+      const cancelled = await handleSubscriptionCancelled(
+        supabase,
+        stripe,
+        event.data.object as Stripe.Subscription,
+      );
+      return Response.json({ received: true, ...cancelled });
     }
 
     if (event.type === 'checkout.session.completed') {

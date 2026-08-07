@@ -1,9 +1,11 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { processScheduledCampaigns } from '@/lib/emailing/campaigns';
 import { processDueEmailJobs } from '@/lib/emailing/jobs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
 function authorizeCron(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -19,8 +21,11 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createAdminClient();
-    const summary = await processDueEmailJobs(supabase);
-    return Response.json(summary);
+    const [jobs, campaigns] = await Promise.all([
+      processDueEmailJobs(supabase),
+      processScheduledCampaigns(supabase),
+    ]);
+    return Response.json({ jobs, campaigns });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[emailing-jobs] cron failed', error);

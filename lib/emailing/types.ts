@@ -1,4 +1,4 @@
-export type EmailLogStatus = 'sent' | 'opened' | 'bounced';
+export type EmailLogStatus = 'sent' | 'opened' | 'bounced' | 'error';
 export type EmailJobStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
 
 export type EmailSequence = {
@@ -18,12 +18,15 @@ export type EmailSequence = {
 export type EmailLog = {
   id: string;
   to: string;
-  sequenceId: string;
+  sequenceId: string | null;
+  campaignId: string | null;
+  campaign: string | null;
   sequence: string;
   status: EmailLogStatus;
   sentAt: string;
   emailId: string;
   openedAt: string | null;
+  errorMessage: string | null;
 };
 
 export type EmailMetrics = {
@@ -61,7 +64,10 @@ export type EmailSequenceRow = {
 export type EmailLogRow = {
   id: string;
   to_email: string;
-  sequence_id: string;
+  sequence_id: string | null;
+  campaign_id?: string | null;
+  campaign_name?: string | null;
+  error_message?: string | null;
   resend_id: string | null;
   status: EmailLogStatus;
   sent_at: string;

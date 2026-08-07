@@ -2,6 +2,7 @@ import 'server-only';
 import type Stripe from 'stripe';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { processCustomerPaid } from '@/lib/conversation-outcome';
+import { runWelcomePaidAutomation } from '@/lib/emailing/automations';
 
 const SUBSCRIPTION_INVOICE_REASONS = new Set([
   'subscription_create',
@@ -52,6 +53,20 @@ export async function handleActiveSubscriptionPaid(
   const result = await processCustomerPaid(supabase, email, 'stripe_webhook', {
     subscriptionId: subscription.id,
   });
+
+  try {
+    const emailing = await runWelcomePaidAutomation({
+      supabase,
+      email,
+      psychologistName: undefined,
+    });
+    console.log(
+      `[stripe-webhook] welcome_paid | email=${email} | ran=${emailing.ran} | sent=${emailing.sent} | queued=${emailing.queued}`,
+    );
+  } catch (emailErr) {
+    console.error('[stripe-webhook] welcome_paid failed', emailErr);
+  }
+
   console.log(
     `[stripe-webhook] ${eventType} | email=${email} | outcome_updated=${result.outcome_updated} | onboarding_updated=${result.onboarding_updated} | conversation_created=${result.conversation_created}`,
   );
@@ -59,6 +74,35 @@ export async function handleActiveSubscriptionPaid(
     outcome_updated: result.outcome_updated,
     onboarding_updated: result.onboarding_updated,
   };
+}
+
+export async function handleSubscriptionCancelled(
+  supabase: SupabaseClient,
+  stripe: Stripe,
+  subscription: Stripe.Subscription,
+): Promise<{ recovery_queued: boolean }> {
+  const customerId = readCustomerId(subscription.customer);
+  if (!customerId) return { recovery_queued: false };
+
+  const email = await getStripeCustomerEmail(stripe, customerId);
+  if (!email) return { recovery_queued: false };
+
+  try {
+    const { runRecoveryCancelledAutomation } = await import(
+      '@/lib/emailing/automations'
+    );
+    const result = await runRecoveryCancelledAutomation({
+      supabase,
+      email,
+    });
+    console.log(
+      `[stripe-webhook] recovery_cancelled | email=${email} | ran=${result.ran} | queued=${result.queued}`,
+    );
+    return { recovery_queued: result.ran && result.queued > 0 };
+  } catch (err) {
+    console.error('[stripe-webhook] recovery_cancelled failed', err);
+    return { recovery_queued: false };
+  }
 }
 
 export async function handleInvoicePaymentSucceeded(

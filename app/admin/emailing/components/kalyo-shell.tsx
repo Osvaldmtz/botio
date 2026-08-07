@@ -12,7 +12,7 @@ import {
 import { cn } from '@/lib/cn';
 import { Tabs } from './ui/tabs';
 import { KalyoDashboard } from './kalyo-dashboard';
-import { EmailingDashboard } from './emailing-dashboard';
+import { CampaignsOps } from './campaigns-ops';
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-3.5 w-3.5" /> },
@@ -73,7 +73,7 @@ export function KalyoShell() {
 
       <main className="mx-auto max-w-kalyo px-4 py-ky-section sm:px-6">
         {tab === 'dashboard' ? <KalyoDashboard /> : null}
-        {tab === 'campanas' ? <EmailingDashboard /> : null}
+        {tab === 'campanas' ? <CampaignsOps /> : null}
         {tab === 'pacientes' || tab === 'analiticas' ? (
           <div className="rounded-ky-card border border-ky-border bg-ky-surface-0 p-ky-card text-center">
             <p className="text-ky-h3 text-ky-text-primary">

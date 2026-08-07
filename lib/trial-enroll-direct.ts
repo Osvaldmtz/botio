@@ -527,6 +527,21 @@ export async function enrollTrialDirect(
     console.error('[trial-enroll-direct] outcome mark failed', outcomeErr);
   }
 
+  try {
+    const { runOnboardingTrialAutomation } = await import(
+      '@/lib/emailing/automations'
+    );
+    const emailing = await runOnboardingTrialAutomation({
+      email,
+      psychologistName: input.fullName,
+    });
+    console.log(
+      `[trial-enroll-direct] onboarding_trial | email=${email} | ran=${emailing.ran} | sent=${emailing.sent} | queued=${emailing.queued}`,
+    );
+  } catch (emailErr) {
+    console.error('[trial-enroll-direct] onboarding_trial failed', emailErr);
+  }
+
   console.log(
     `[trial-enroll-direct] success | enrollment=${enrollmentId} | conv=${conversationId} | welcome_sid=${welcomeSid}`,
   );
