@@ -219,7 +219,8 @@ async function sendOnboardingDay(params: {
   return 'sent';
 }
 
-async function processDay9Row(params: {
+/** Process a single day-9 row (exported for isolated integration tests). */
+export async function processTrialOnboardingDay9Row(params: {
   supabase: SupabaseClient;
   row: TrialOnboardingRow;
   creds: TwilioCreds;
@@ -294,7 +295,7 @@ export async function runTrialOnboardingCron(params: {
     for (const row of pending) {
       const result =
         day === 9
-          ? await processDay9Row({
+          ? await processTrialOnboardingDay9Row({
               supabase: params.supabase,
               row,
               creds: params.creds,
