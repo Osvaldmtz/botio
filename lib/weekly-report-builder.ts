@@ -6,6 +6,7 @@ import { formatUnknownError } from '@/lib/format-error';
 import { ANALYSIS_MODEL } from '@/lib/learning-analysis';
 import { fetchWeeklyReportData } from '@/lib/weekly-report';
 import type {
+  ChatGPTAdsWeeklyReport,
   GoogleAdsWeeklyReport,
   GscWeeklyReport,
   MetaAdsWeeklyReport,
@@ -52,6 +53,7 @@ export type WeeklyMarketingReport = {
   gsc: GscWeeklyReport;
   google_ads: GoogleAdsWeeklyReport;
   meta_ads: MetaAdsWeeklyReport;
+  chatgpt_ads: ChatGPTAdsWeeklyReport;
   channel_compare: WeeklyChannelCompare;
   seo_position: WeeklySeoPositionChanges;
   errors: string[];
@@ -288,6 +290,7 @@ export async function buildWeeklyMarketingReport(): Promise<WeeklyMarketingRepor
   if (fetchers.gsc.error) errors.push(`GSC: ${fetchers.gsc.error}`);
   if (fetchers.google_ads.error) errors.push(`Google Ads: ${fetchers.google_ads.error}`);
   if (fetchers.meta_ads.error) errors.push(`Meta Ads: ${fetchers.meta_ads.error}`);
+  if (fetchers.chatgpt_ads.error) errors.push(`ChatGPT Ads: ${fetchers.chatgpt_ads.error}`);
   if ('_error' in seoResult && seoResult._error) errors.push(`SEO posiciones: ${seoResult._error}`);
 
   const channel_compare = buildWeeklyChannelCompare(
@@ -314,6 +317,7 @@ export async function buildWeeklyMarketingReport(): Promise<WeeklyMarketingRepor
     gsc: fetchers.gsc,
     google_ads: fetchers.google_ads,
     meta_ads: fetchers.meta_ads,
+    chatgpt_ads: fetchers.chatgpt_ads,
     channel_compare,
     seo_position,
     errors,

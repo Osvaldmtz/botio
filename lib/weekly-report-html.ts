@@ -171,6 +171,15 @@ export function renderWeeklyReportHtml(report: WeeklyMarketingReport): string {
     ${renderKeywordTable(report.seo_position.top_improved, 'Top keywords que subieron')}
     ${renderKeywordTable(report.seo_position.top_declined, 'Top keywords que bajaron')}
   </section>
+
+  <section>
+    <h2>6. ChatGPT Ads</h2>
+    <p class="muted">Conversiones por utm_source=chatgpt en psychologists.attribution (sin API de OpenAI Ads).</p>
+    <div class="metrics">
+      <div class="metric"><label>Registros</label><value>${report.chatgpt_ads.registrations}</value></div>
+      <div class="metric"><label>Activaciones</label><value>${report.chatgpt_ads.activations}</value></div>
+    </div>
+  </section>
 </body>
 </html>`;
 }

@@ -40,6 +40,10 @@ export function formatWeeklyReportTelegram(
     '',
     '<b>SEO posiciones</b>',
     `↑ ${report.seo_position.keywords_improved ?? '—'} · ↓ ${report.seo_position.keywords_declined ?? '—'}`,
+    '',
+    '📊 <b>ChatGPT Ads</b>',
+    `Registros: ${report.chatgpt_ads.registrations}`,
+    `Activaciones: ${report.chatgpt_ads.activations}`,
   ];
 
   if (report.errors.length) {

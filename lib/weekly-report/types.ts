@@ -114,3 +114,16 @@ export type MetaAdsWeeklyReport = {
   updated_at: string;
   error?: string;
 };
+
+/** Conversions attributed via psychologists.attribution->>'utm_source' = chatgpt. */
+export type ChatGPTAdsWeeklyReport = {
+  period: WeeklyPeriod;
+  range: DateRange;
+  previous_range: DateRange;
+  registrations: number;
+  activations: number;
+  previous_registrations: number;
+  previous_activations: number;
+  updated_at: string;
+  error?: string;
+};

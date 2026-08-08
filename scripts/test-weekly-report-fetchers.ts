@@ -85,6 +85,12 @@ async function main() {
     console.log(`  [${c.effective_status}] ${c.campaign_name}: $${c.spend} MXN, ${c.conversations} conv`);
   }
 
+  console.log('\n=== CHATGPT ADS ===');
+  if (data.chatgpt_ads.error) console.log('ERROR:', data.chatgpt_ads.error);
+  console.log(`Range: ${data.chatgpt_ads.range.startDate} → ${data.chatgpt_ads.range.endDate}`);
+  console.log(`Registros: ${data.chatgpt_ads.registrations}`);
+  console.log(`Activaciones: ${data.chatgpt_ads.activations}`);
+
   console.log('\n--- Full JSON (truncated campaigns) ---');
   const slim = {
     ...data,
