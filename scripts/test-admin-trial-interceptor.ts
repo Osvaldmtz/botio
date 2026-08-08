@@ -262,6 +262,19 @@ function testActivaImperativeLabeled(): void {
   assert(parsed!.trialPlan === 'max', 'activa labeled max plan');
 }
 
+/** Production failure: WhatsApp paste with tab-separated labels + "Activa trial de 7 dias en plan Max". */
+function testActivaTabSeparatedLabeled(): void {
+  const msg =
+    'Activa trial de 7 dias en plan Max para \nNombre\tJuanis Garcia Gonzalez\nEmail\tjuanisgargon@hotmail.com\nWhatsApp\t+525237810878';
+  assert(shouldInterceptAdminTrialActivation(msg), 'tab-labeled activa triggers intercept');
+  const parsed = parseAdminTrialRequestFromMessages([{ role: 'user', content: msg }]);
+  assert(parsed !== null, 'tab-labeled activa parses complete');
+  assert(parsed!.email === 'juanisgargon@hotmail.com', 'tab-labeled email');
+  assert(parsed!.fullName === 'Juanis Garcia Gonzalez', 'tab-labeled name without label prefix');
+  assert(parsed!.phone === '+525237810878', 'tab-labeled phone');
+  assert(parsed!.trialPlan === 'max', 'tab-labeled plan Max');
+}
+
 console.log('Admin trial interceptor tests\n');
 testCommaFormat();
 console.log('  ✓ comma format');
@@ -297,6 +310,8 @@ testActivaImperativeMultiline();
 console.log('  ✓ activa imperative multiline (production failure case)');
 testActivaImperativeLabeled();
 console.log('  ✓ activa imperative labeled (production failure case)');
+testActivaTabSeparatedLabeled();
+console.log('  ✓ activa tab-separated labeled (production failure case)');
 testInterceptorWouldRejectMissingPhoneWithoutPriorContext();
 console.log('  ✓ interceptor rejects missing phone without prior context');
 testPlanParser();

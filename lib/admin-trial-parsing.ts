@@ -9,10 +9,19 @@ export const ADMIN_TRIAL_MISSING_PHONE_MESSAGE =
   'Sin WhatsApp no puedo enviarle onboarding.\n' +
   'Formato: +5215512345678';
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-const PHONE_LABELED_RE =
-  /(?:whatsapp|whats\s*app|tel[eé]fono|celular|m[óo]vil|wa)\s*:?\s*(\+?\d[\d\s().-]{8,})/i;
-const NAME_LABELED_RE = /(?:nombre|name)\s*:?\s*(.+)/i;
+/** Colon or tab/space after label (WhatsApp paste often uses tabs). */
+const LABEL_SEP = String.raw`(?:\s*:\s*|\t+\s*|\s+)`;
+const PHONE_LABELED_RE = new RegExp(
+  String.raw`(?:whatsapp|whats\s*app|tel[eé]fono|celular|m[óo]vil|wa)${LABEL_SEP}(\+?\d[\d\s().-]{8,})`,
+  'i',
+);
+const NAME_LABELED_RE = new RegExp(
+  String.raw`(?:nombre|name)${LABEL_SEP}(.+)`,
+  'i',
+);
 const PLAN_LABELED_RE = /(?:plan)\s*:?\s*(max|pro)\b/i;
+const FIELD_LABEL_LINE_RE =
+  /^(?:plan|nombre|name|correo|email|whatsapp|whats\s*app|tel[eé]fono|celular)\b/i;
 const COMMA_FORMAT_RE =
   /activar\s+trial(?:\s+(max|pro))?\s*:?\s*([^,\n]+?)\s*,\s*([^\s,@]+@[^\s,]+)\s*,\s*(\+?\d[\d\s().-]{8,})/i;
 const COMMA_FORMAT_TWO_PART_RE =
@@ -85,38 +94,43 @@ function parseMultilineAdminTrialRequest(
     .filter(Boolean);
 
   const emailLine = lines.find((line) => EMAIL_RE.test(line));
-  const email = emailLine?.match(EMAIL_RE)?.[0]?.toLowerCase();
+  const email =
+    emailLine?.match(EMAIL_RE)?.[0]?.toLowerCase() ?? extractEmail(cleaned) ?? undefined;
   if (!email) return null;
 
   const phoneLine = lines.find((line) => /\+\d/.test(line.replace(/[\s().-]/g, '')));
-  const phone = phoneLine ? extractPhone(phoneLine) : null;
+  const phone = (phoneLine ? extractPhone(phoneLine) : null) ?? extractPhone(cleaned);
   if (!phone) return null;
 
+  const labeledName = extractLabeledName(cleaned);
   const nameLine = lines.find((line) => {
     if (line === emailLine || line === phoneLine) return false;
     if (EMAIL_RE.test(line)) return false;
     if (ADMIN_TRIAL_TRIGGER_RE.test(line)) return false;
-    if (/^(?:plan|nombre|name|correo|email|whatsapp)\s*:/i.test(line)) return false;
+    if (FIELD_LABEL_LINE_RE.test(line)) return false;
     return looksLikeNameOnlyMessage(line);
   });
 
-  if (!nameLine) return null;
+  const fullName = labeledName ?? nameLine?.trim();
+  if (!fullName) return null;
 
   return {
     email,
     phone,
-    fullName: nameLine.trim(),
+    fullName,
     trialPlan: parseAdminTrialPlanFromText(cleaned) ?? undefined,
   };
 }
 
 function extractLabeledName(text: string): string | null {
-  const match = text.match(NAME_LABELED_RE);
+  const cleaned = normalizeAdminTrialText(text);
+  const match = cleaned.match(NAME_LABELED_RE);
   if (!match?.[1]) return null;
   const name = match[1]
     .split(/\n/)[0]
-    .replace(/\s*(?:correo|email|whatsapp|whats\s*app|tel[eé]fono)\s*:.*$/i, '')
+    .replace(/\s*(?:correo|email|whatsapp|whats\s*app|tel[eé]fono)\b.*$/i, '')
     .trim();
+  if (!name || FIELD_LABEL_LINE_RE.test(name)) return null;
   return name || null;
 }
 

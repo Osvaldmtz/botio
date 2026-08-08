@@ -2,6 +2,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isKalyoBotId } from '@/lib/conversation-utils';
 import { tryHandlePatientInbound } from '@/lib/patient-inbound-handler';
+import { shouldBypassPatientInbound } from '@/lib/patient-inbound-routing';
 import { scheduleGhostReactivationIfEligible } from '@/lib/ghost-reactivation';
 import { sendWhatsApp, emptyTwimlResponse, validateTwilioSignature } from '@/lib/twilio';
 import { normalizePhone } from '@/lib/phone';
@@ -206,14 +207,25 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   if (isKalyoBotId(bot.id)) {
-    const handledAsPatient = await tryHandlePatientInbound({
-      senderPhone: from,
-      messageBody: incoming.body,
-      bot: bot as BotCredentials,
-    });
-    if (handledAsPatient) {
-      console.log(`[webhook] patient inbound handled | bot=${bot.id} | from=${from}`);
-      return emptyTwimlResponse();
+    if (
+      shouldBypassPatientInbound({
+        senderPhone: from,
+        messageBody: incoming.body,
+      })
+    ) {
+      console.log(
+        `[webhook] patient inbound bypassed | bot=${bot.id} | from=${from}`,
+      );
+    } else {
+      const handledAsPatient = await tryHandlePatientInbound({
+        senderPhone: from,
+        messageBody: incoming.body,
+        bot: bot as BotCredentials,
+      });
+      if (handledAsPatient) {
+        console.log(`[webhook] patient inbound handled | bot=${bot.id} | from=${from}`);
+        return emptyTwimlResponse();
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { shouldBypassPatientInbound } from './patient-inbound-routing';
 import {
   buildPhoneLookupSuffix,
   buildPhoneLookupSuffixes,
@@ -7,6 +8,39 @@ import {
   formatPsychologistNotification,
   phonesEquivalent,
 } from './patient-inbound-utils';
+
+describe('shouldBypassPatientInbound', () => {
+  it('bypasses known team operator phones even for casual messages', () => {
+    assert.equal(
+      shouldBypassPatientInbound({
+        senderPhone: '+528114112000',
+        messageBody: 'Hola',
+      }),
+      true,
+    );
+  });
+
+  it('bypasses admin trial activation commands for any sender', () => {
+    assert.equal(
+      shouldBypassPatientInbound({
+        senderPhone: '+525511111111',
+        messageBody:
+          'Activa trial de 7 dias en plan Max para \nNombre\tJuanis Garcia Gonzalez\nEmail\tjuanisgargon@hotmail.com\nWhatsApp\t+525237810878',
+      }),
+      true,
+    );
+  });
+
+  it('does not bypass ordinary patient messages from non-team phones', () => {
+    assert.equal(
+      shouldBypassPatientInbound({
+        senderPhone: '+525511111111',
+        messageBody: 'Hola, quiero agendar una cita',
+      }),
+      false,
+    );
+  });
+});
 
 describe('phonesEquivalent', () => {
   it('matches identical E.164 numbers', () => {
