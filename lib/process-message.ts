@@ -68,6 +68,7 @@ import {
 } from '@/lib/ambassador-handler';
 import { isAmbassadorFlowsEnabled } from '@/lib/ambassador-filters';
 import { responseContainsLumaLink } from '@/lib/embajador-faqs';
+import { handleCongresoFlow } from '@/lib/congreso-handler';
 
 const HISTORY_LIMIT = 20;
 const FALLBACK_MESSAGE =
@@ -102,6 +103,7 @@ export type ProcessMessageSource =
   | 'ambassador_handler'
   | 'purchase_intent_handler'
   | 'demo_scheduling_calendly'
+  | 'congreso_handler'
   | 'ab-test-variant-f-turn2';
 
 export type ProcessIncomingMessageInput = {
@@ -141,9 +143,11 @@ type BotRow = {
 
 type ConversationRow = {
   id: string;
+  bot_id: string;
   is_closed: boolean;
   lead_captured: boolean;
   handoff_active: boolean;
+  is_ambassador: boolean | null;
   pipeline_stage: string | null;
   pipeline_stage_updated_by: string | null;
   customer_phone: string;
@@ -224,7 +228,7 @@ async function upsertConversation(
       { onConflict: 'bot_id,customer_phone' },
     )
     .select(
-      'id, is_closed, lead_captured, handoff_active, pipeline_stage, pipeline_stage_updated_by, customer_phone, last_message_at, metadata',
+      'id, bot_id, is_closed, lead_captured, handoff_active, is_ambassador, pipeline_stage, pipeline_stage_updated_by, customer_phone, last_message_at, metadata',
     )
     .single();
 
@@ -342,7 +346,51 @@ export async function processIncomingMessage(
 
   let isAmbassadorLead = false;
 
+  if (!isKalyoBotId(bot.id) && /congreso/i.test(messageBody)) {
+    console.warn(
+      `[Congreso] skipped — bot=${bot.id} is not KALYO_BOT_ID=${process.env.KALYO_BOT_ID ?? '(unset)'}`,
+    );
+  }
+
   if (isKalyoBotId(bot.id)) {
+    // Congreso — Plan MAX 30 días (activation intent; before demo/ambassador/Claude).
+    console.log(
+      `[Congreso] interceptor enter | bot=${bot.id} | isKalyo=${isKalyoBotId(bot.id)} | msg="${messageBody.slice(0, 80)}"`,
+    );
+    const congresoReply = await handleCongresoFlow(
+      messageBody,
+      {
+        id: conversation.id,
+        bot_id: conversation.bot_id,
+        customer_phone: conversation.customer_phone,
+        handoff_active: Boolean(conversation.handoff_active),
+        is_ambassador: conversation.is_ambassador,
+        metadata: conversation.metadata ?? {},
+      },
+      supabase,
+    );
+    if (congresoReply) {
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: congresoReply,
+        source: 'text',
+        source_type: 'claude',
+        metadata: { source: 'congreso_handler' },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      console.log(
+        `[process-message] channel=${channel} | source=congreso_handler | conv=${conversation.id}`,
+      );
+      return {
+        replyText: congresoReply,
+        storedReply: congresoReply,
+        conversationId: conversation.id,
+        source: 'congreso_handler',
+      };
+    }
+
     // Demo Calendly — before ambassador/Claude. Explicit demo request is a client signal;
     // must not be blocked by a stale is_ambassador flag on the conversation.
     if (detectDemoIntent(messageBody)) {

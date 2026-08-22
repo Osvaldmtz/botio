@@ -45,6 +45,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/congreso-onboarding",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/cron/objection-followup",
       "schedule": "0 14 * * *"
     },
