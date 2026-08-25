@@ -34,6 +34,9 @@ type Props = {
   stripeMrr: number | null;
   manualMrr: number | null;
   totalMrr: number | null;
+  totalActiveSubscribers: number | null;
+  manualActiveOnly: number | null;
+  totalNewSubsThisMonth: number | null;
 };
 
 export function RevenueKpiDashboard({
@@ -43,6 +46,9 @@ export function RevenueKpiDashboard({
   stripeMrr,
   manualMrr,
   totalMrr,
+  totalActiveSubscribers,
+  manualActiveOnly,
+  totalNewSubsThisMonth,
 }: Props) {
   return (
     <KpiVividPage
@@ -63,6 +69,9 @@ export function RevenueKpiDashboard({
           stripeMrr={stripeMrr}
           manualMrr={manualMrr}
           totalMrr={totalMrr}
+          totalActiveSubscribers={totalActiveSubscribers}
+          manualActiveOnly={manualActiveOnly}
+          totalNewSubsThisMonth={totalNewSubsThisMonth}
         />
       )}
     </KpiVividPage>
@@ -77,6 +86,9 @@ function RevenueContent({
   stripeMrr,
   manualMrr,
   totalMrr,
+  totalActiveSubscribers,
+  manualActiveOnly,
+  totalNewSubsThisMonth,
 }: {
   latest: KalyoMetricRow | null;
   history: KalyoMetricRow[];
@@ -85,6 +97,9 @@ function RevenueContent({
   stripeMrr: number | null;
   manualMrr: number | null;
   totalMrr: number | null;
+  totalActiveSubscribers: number | null;
+  manualActiveOnly: number | null;
+  totalNewSubsThisMonth: number | null;
 }) {
   const pro = latest?.plan_pro ?? 0;
   const max = latest?.plan_max ?? 0;
@@ -92,7 +107,7 @@ function RevenueContent({
   const proPct = total > 0 ? ((pro / total) * 100).toFixed(1) : '0';
   const maxPct = total > 0 ? ((max / total) * 100).toFixed(1) : '0';
   const kalyoMrr = Number(latest?.mrr ?? 0);
-  const activeSubs = stripeActiveSubscribers ?? 0;
+  const activeSubs = totalActiveSubscribers ?? stripeActiveSubscribers ?? 0;
   const kalyoSubs = latest?.active_subscribers ?? 0;
   const churned30d = latest?.churned_30d ?? 0;
   const churnRate = Number(latest?.churn_rate ?? 0);
@@ -162,14 +177,31 @@ function RevenueContent({
         />
         <KpiVividMetric
           label="Suscriptores"
-          value={stripeActiveSubscribers != null ? activeSubs.toLocaleString() : '—'}
+          value={
+            totalActiveSubscribers != null || stripeActiveSubscribers != null
+              ? activeSubs.toLocaleString()
+              : '—'
+          }
           icon={Users}
           accent="sky"
+          hint={
+            stripeActiveSubscribers != null && manualActiveOnly != null
+              ? `Stripe: ${stripeActiveSubscribers} | Manual: ${manualActiveOnly}`
+              : totalNewSubsThisMonth != null
+                ? `Nuevos este mes: +${totalNewSubsThisMonth}`
+                : undefined
+          }
           progress={
-            stripeActiveSubscribers != null
+            totalActiveSubscribers != null || stripeActiveSubscribers != null
               ? { current: activeSubs, goal: ACTIVE_SUBSCRIBER_GOAL }
               : undefined
           }
+        />
+        <KpiVividMetric
+          label="New este mes"
+          value={totalNewSubsThisMonth != null ? `+${totalNewSubsThisMonth}` : '—'}
+          icon={TrendingUp}
+          accent="emerald"
         />
         <KpiVividMetric label="Trialing" value={(latest?.trialing ?? 0).toLocaleString()} icon={FlaskConical} accent="violet" />
         <KpiVividMetric label="Pro / Max" value={`${pro} / ${max}`} icon={Layers} accent="indigo" />

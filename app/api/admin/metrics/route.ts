@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/admin-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getMRRCached } from '@/lib/stripe-mrr';
-import { getActiveManualMrrUsd } from '@/lib/manual-payments';
+import { getManualOnlySubscriberStats } from '@/lib/manual-payments';
 import { fetchMetricsBundle } from '@/lib/metrics-queries';
 import { generateInsights } from '@/lib/dashboard-insights';
 
@@ -19,11 +19,13 @@ export async function GET() {
     const [mrr, metrics, manual] = await Promise.all([
       getMRRCached(),
       fetchMetricsBundle(supabase),
-      getActiveManualMrrUsd(supabase),
+      getManualOnlySubscriberStats(supabase),
     ]);
     const insights = generateInsights(metrics, mrr);
     const stripeMrr = mrr.available ? mrr.current_mrr_usd : 0;
     const totalMrrUsd = Math.round((stripeMrr + manual.manual_mrr_usd) * 100) / 100;
+    const stripeActive = mrr.available ? mrr.active_subscriptions : 0;
+    const stripeNew = mrr.available ? mrr.new_subs_this_month : 0;
 
     return NextResponse.json({
       mrr: {
@@ -32,6 +34,12 @@ export async function GET() {
         manual_mrr_usd: manual.manual_mrr_usd,
         total_mrr_usd: totalMrrUsd,
         current_mrr_usd: mrr.available ? totalMrrUsd : mrr.current_mrr_usd,
+        stripe_active_subscriptions: stripeActive,
+        manual_active_subscriptions: manual.active_count,
+        active_subscriptions: stripeActive + manual.active_count,
+        stripe_new_subs_this_month: stripeNew,
+        manual_new_subs_this_month: manual.new_this_month,
+        new_subs_this_month: stripeNew + manual.new_this_month,
       },
       funnel: metrics.funnel,
       by_channel: metrics.by_channel,

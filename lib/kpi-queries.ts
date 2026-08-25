@@ -31,7 +31,7 @@ import type {
 } from '@/lib/kpi/utils';
 import { aggregateTwilio } from '@/lib/kpi/utils';
 import { fetchStripeActiveSubscriberCount, getMRRCached } from '@/lib/stripe-mrr';
-import { getActiveManualMrrUsd } from '@/lib/manual-payments';
+import { getManualOnlySubscriberStats } from '@/lib/manual-payments';
 import { fetchOperationalMetrics, emptyOperationalMetrics } from '@/lib/kpi/operational-metrics';
 import {
   emptyKpiSeoDetail,
@@ -97,18 +97,27 @@ async function safeFetch<T>(
 
 export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
   const botio = createAdminClient();
-  const [kalyoLatest, kalyoHistory, twilio, igInsights, metaToday, landing, stripeSubs, stripeMrr, manualMrr] =
-    await Promise.all([
-      getLatestKalyoMetrics(),
-      getKalyoMetricsHistory(30),
-      getTwilioMetrics(30),
-      safeFetch('instagram_reach', () => fetchInstagramInsights(undefined, 'last_30d')),
-      safeFetch('meta_spend_today', () => fetchMetaAds('today')),
-      safeFetch('ga4_landing', () => getLandingMetrics(30)),
-      fetchStripeActiveSubscriberCount(),
-      getMRRCached(),
-      safeFetch('manual_mrr', () => getActiveManualMrrUsd(botio)),
-    ]);
+  const [
+    kalyoLatest,
+    kalyoHistory,
+    twilio,
+    igInsights,
+    metaToday,
+    landing,
+    stripeSubs,
+    stripeMrr,
+    manualStats,
+  ] = await Promise.all([
+    getLatestKalyoMetrics(),
+    getKalyoMetricsHistory(30),
+    getTwilioMetrics(30),
+    safeFetch('instagram_reach', () => fetchInstagramInsights(undefined, 'last_30d')),
+    safeFetch('meta_spend_today', () => fetchMetaAds('today')),
+    safeFetch('ga4_landing', () => getLandingMetrics(30)),
+    fetchStripeActiveSubscriberCount(),
+    getMRRCached(),
+    safeFetch('manual_mrr', () => getManualOnlySubscriberStats(botio)),
+  ]);
 
   const errors: Record<string, string> = {};
   if (igInsights.error) errors.instagram = igInsights.error;
@@ -118,7 +127,7 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
   if (stripeMrr.error) {
     errors.stripe = errors.stripe ? `${errors.stripe}; ${stripeMrr.error}` : stripeMrr.error;
   }
-  if (manualMrr.error) errors.manual_payments = manualMrr.error;
+  if (manualStats.error) errors.manual_payments = manualStats.error;
 
   const igReach7d = (igInsights.data ?? []).slice(-7).reduce((sum, p) => sum + p.reach, 0);
   const metaSpendToday = (metaToday.data ?? []).reduce(
@@ -131,11 +140,20 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
   const sofiaSales = await fetchSofiaSalesMetrics(kalyoLatest, kalyoHistory);
 
   const stripeMrrUsd = stripeMrr.available ? stripeMrr.current_mrr_usd : null;
-  const manualMrrUsd = manualMrr.data?.manual_mrr_usd ?? null;
+  const manualMrrUsd = manualStats.data?.manual_mrr_usd ?? null;
   const totalMrr =
     stripeMrrUsd != null || manualMrrUsd != null
       ? Math.round(((stripeMrrUsd ?? 0) + (manualMrrUsd ?? 0)) * 100) / 100
       : null;
+
+  const manualActiveOnly = manualStats.data?.active_count ?? null;
+  const totalActiveSubscribers =
+    stripeSubs.count != null || manualActiveOnly != null
+      ? (stripeSubs.count ?? 0) + (manualActiveOnly ?? 0)
+      : null;
+  const totalNewSubsThisMonth = stripeMrr.available
+    ? stripeMrr.new_subs_this_month + (manualStats.data?.new_this_month ?? 0)
+    : (manualStats.data?.new_this_month ?? null);
 
   return {
     kalyo: kalyoLatest,
@@ -150,6 +168,9 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
     stripeMrr: stripeMrrUsd,
     manualMrr: manualMrrUsd,
     totalMrr,
+    totalActiveSubscribers,
+    manualActiveOnly,
+    totalNewSubsThisMonth,
     sofiaSales,
     errors,
   };

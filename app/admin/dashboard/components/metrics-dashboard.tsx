@@ -14,7 +14,11 @@ type MRR = {
   manual_mrr_usd?: number;
   total_mrr_usd?: number;
   active_subscriptions: number;
+  stripe_active_subscriptions?: number;
+  manual_active_subscriptions?: number;
   new_subs_this_month: number;
+  stripe_new_subs_this_month?: number;
+  manual_new_subs_this_month?: number;
   churned_this_month: number;
   net_growth_mrr_usd: number;
   mrr_growth_pct: number | null;
@@ -213,11 +217,19 @@ export function MetricsDashboard() {
             key: 'active',
             label: 'Active subs',
             value: String(mrr.active_subscriptions),
+            hint:
+              mrr.stripe_active_subscriptions != null || mrr.manual_active_subscriptions != null
+                ? `Stripe: ${mrr.stripe_active_subscriptions ?? 0} | Manual: ${mrr.manual_active_subscriptions ?? 0}`
+                : undefined,
           },
           {
             key: 'new',
             label: 'New este mes',
             value: `+${mrr.new_subs_this_month}`,
+            hint:
+              mrr.stripe_new_subs_this_month != null || mrr.manual_new_subs_this_month != null
+                ? `Stripe: ${mrr.stripe_new_subs_this_month ?? 0} | Manual: ${mrr.manual_new_subs_this_month ?? 0}`
+                : undefined,
             delta: 'up',
           },
           {

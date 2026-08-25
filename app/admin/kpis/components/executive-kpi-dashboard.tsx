@@ -79,11 +79,11 @@ export function ExecutiveKpiDashboard({ data }: Props) {
 
   const landingUsers30d = data.landingDaily.reduce((s, r) => s + r.users, 0);
 
-  const subs = data.stripeActiveSubscribers ?? 0;
+  const subs = data.totalActiveSubscribers ?? data.stripeActiveSubscribers ?? 0;
   const mrr = data.totalMrr ?? data.stripeMrr;
   const stripeMrr = data.stripeMrr;
   const manualMrr = data.manualMrr;
-  const arpu = subs > 0 && data.stripeMrr != null ? data.stripeMrr / subs : null;
+  const arpu = subs > 0 && mrr != null ? mrr / subs : null;
   const costPerMsg =
     waAgg.total_sent > 0 ? waAgg.total_cost_usd / waAgg.total_sent : null;
 
@@ -247,11 +247,20 @@ export function ExecutiveKpiDashboard({ data }: Props) {
                 />
                 <KpiVividMetric
                   label="Suscriptores"
-                  value={data.stripeActiveSubscribers != null ? fmtNum(subs) : '—'}
+                  value={
+                    data.totalActiveSubscribers != null || data.stripeActiveSubscribers != null
+                      ? fmtNum(subs)
+                      : '—'
+                  }
                   icon={Users}
                   accent="sky"
+                  hint={
+                    data.manualActiveOnly != null && data.stripeActiveSubscribers != null
+                      ? `Stripe: ${fmtNum(data.stripeActiveSubscribers)} | Manual: ${fmtNum(data.manualActiveOnly)}`
+                      : undefined
+                  }
                   progress={
-                    data.stripeActiveSubscribers != null
+                    data.totalActiveSubscribers != null || data.stripeActiveSubscribers != null
                       ? { current: subs, goal: ACTIVE_SUBSCRIBER_GOAL }
                       : undefined
                   }

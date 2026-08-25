@@ -297,20 +297,85 @@ export async function getActiveManualMrrUsd(botio: SupabaseClient): Promise<{
   active_count: number;
   active_amount_usd: number;
 }> {
-  const { data, error } = await botio
-    .from('manual_payments')
-    .select('amount_usd')
-    .gt('ends_at', new Date().toISOString());
+  const stats = await getManualOnlySubscriberStats(botio);
+  return {
+    manual_mrr_usd: stats.manual_mrr_usd,
+    active_count: stats.active_count,
+    active_amount_usd: stats.active_amount_usd,
+  };
+}
+
+async function fetchStripeLinkedEmails(): Promise<Set<string>> {
+  const kalyo = getKalyoClient();
+  const { data, error } = await kalyo
+    .from('psychologists')
+    .select('email')
+    .not('stripe_subscription_id', 'is', null);
+
+  if (error) {
+    throw new Error(`Kalyo stripe-linked email lookup failed: ${error.message}`);
+  }
+
+  const emails = new Set<string>();
+  for (const row of data ?? []) {
+    const email = (row.email as string | null)?.trim().toLowerCase();
+    if (email) emails.add(email);
+  }
+  return emails;
+}
+
+/**
+ * Manual payments that are NOT already represented by a Stripe-linked Kalyo account.
+ * Used to supplement Stripe active/new counts without double counting.
+ */
+export async function getManualOnlySubscriberStats(botio: SupabaseClient): Promise<{
+  active_count: number;
+  new_this_month: number;
+  manual_mrr_usd: number;
+  active_amount_usd: number;
+  active_emails: string[];
+}> {
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const monthStartIso = monthStart.toISOString();
+  const nowIso = new Date().toISOString();
+
+  const [{ data: manualRows, error }, stripeLinked] = await Promise.all([
+    botio
+      .from('manual_payments')
+      .select('psychologist_email, amount_usd, starts_at, ends_at')
+      .gt('ends_at', nowIso),
+    fetchStripeLinkedEmails(),
+  ]);
 
   if (error) throw new Error(error.message);
 
-  const rows = data ?? [];
-  const active_amount_usd = rows.reduce((sum, row) => sum + Number(row.amount_usd ?? 0), 0);
+  const activeEmails = new Set<string>();
+  let active_amount_usd = 0;
+  let new_this_month = 0;
+
+  for (const row of manualRows ?? []) {
+    const email = (row.psychologist_email as string | null)?.trim().toLowerCase() ?? '';
+    if (!email || stripeLinked.has(email)) continue;
+    if (activeEmails.has(email)) continue;
+
+    activeEmails.add(email);
+    active_amount_usd += Number(row.amount_usd ?? 0);
+
+    const startsAt = row.starts_at as string | null;
+    if (startsAt && startsAt >= monthStartIso) {
+      new_this_month += 1;
+    }
+  }
+
   const manual_mrr_usd = Math.round((active_amount_usd / 12) * 100) / 100;
 
   return {
+    active_count: activeEmails.size,
+    new_this_month,
     manual_mrr_usd,
-    active_count: rows.length,
     active_amount_usd: Math.round(active_amount_usd * 100) / 100,
+    active_emails: Array.from(activeEmails),
   };
 }

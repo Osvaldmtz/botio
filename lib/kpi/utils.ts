@@ -30,6 +30,11 @@ export type ExecutiveSummaryData = {
   stripeMrr: number | null;
   manualMrr: number | null;
   totalMrr: number | null;
+  /** Stripe active + manual-only actives (no Stripe link), no double count. */
+  totalActiveSubscribers: number | null;
+  manualActiveOnly: number | null;
+  /** Stripe new this month + manual-only started this month. */
+  totalNewSubsThisMonth: number | null;
   sofiaSales: import('@/lib/sofia-sales-metrics').SofiaSalesMetrics | null;
   errors: Record<string, string>;
 };
