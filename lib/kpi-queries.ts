@@ -31,6 +31,7 @@ import type {
 } from '@/lib/kpi/utils';
 import { aggregateTwilio } from '@/lib/kpi/utils';
 import { fetchStripeActiveSubscriberCount, getMRRCached } from '@/lib/stripe-mrr';
+import { getActiveManualMrrUsd } from '@/lib/manual-payments';
 import { fetchOperationalMetrics, emptyOperationalMetrics } from '@/lib/kpi/operational-metrics';
 import {
   emptyKpiSeoDetail,
@@ -95,7 +96,8 @@ async function safeFetch<T>(
 }
 
 export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
-  const [kalyoLatest, kalyoHistory, twilio, igInsights, metaToday, landing, stripeSubs, stripeMrr] =
+  const botio = createAdminClient();
+  const [kalyoLatest, kalyoHistory, twilio, igInsights, metaToday, landing, stripeSubs, stripeMrr, manualMrr] =
     await Promise.all([
       getLatestKalyoMetrics(),
       getKalyoMetricsHistory(30),
@@ -105,6 +107,7 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
       safeFetch('ga4_landing', () => getLandingMetrics(30)),
       fetchStripeActiveSubscriberCount(),
       getMRRCached(),
+      safeFetch('manual_mrr', () => getActiveManualMrrUsd(botio)),
     ]);
 
   const errors: Record<string, string> = {};
@@ -115,6 +118,7 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
   if (stripeMrr.error) {
     errors.stripe = errors.stripe ? `${errors.stripe}; ${stripeMrr.error}` : stripeMrr.error;
   }
+  if (manualMrr.error) errors.manual_payments = manualMrr.error;
 
   const igReach7d = (igInsights.data ?? []).slice(-7).reduce((sum, p) => sum + p.reach, 0);
   const metaSpendToday = (metaToday.data ?? []).reduce(
@@ -126,6 +130,13 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
 
   const sofiaSales = await fetchSofiaSalesMetrics(kalyoLatest, kalyoHistory);
 
+  const stripeMrrUsd = stripeMrr.available ? stripeMrr.current_mrr_usd : null;
+  const manualMrrUsd = manualMrr.data?.manual_mrr_usd ?? null;
+  const totalMrr =
+    stripeMrrUsd != null || manualMrrUsd != null
+      ? Math.round(((stripeMrrUsd ?? 0) + (manualMrrUsd ?? 0)) * 100) / 100
+      : null;
+
   return {
     kalyo: kalyoLatest,
     kalyoHistory,
@@ -136,7 +147,9 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
     landingSessions30d: landing.data ? landingSessions30d : null,
     landingDaily,
     stripeActiveSubscribers: stripeSubs.count,
-    stripeMrr: stripeMrr.available ? stripeMrr.current_mrr_usd : null,
+    stripeMrr: stripeMrrUsd,
+    manualMrr: manualMrrUsd,
+    totalMrr,
     sofiaSales,
     errors,
   };

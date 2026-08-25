@@ -10,6 +10,9 @@ import { CLOSURE_REASON_UI } from '@/lib/conversation-closure-constants';
 type MRR = {
   available: boolean;
   current_mrr_usd: number;
+  stripe_mrr_usd?: number;
+  manual_mrr_usd?: number;
+  total_mrr_usd?: number;
   active_subscriptions: number;
   new_subs_this_month: number;
   churned_this_month: number;
@@ -196,9 +199,14 @@ export function MetricsDashboard() {
         items={[
           {
             key: 'mrr',
-            label: 'MRR',
-            value: mrr.available ? `$${mrr.current_mrr_usd}` : '—',
-            hint: mrr.mrr_growth_pct !== null ? `${mrr.mrr_growth_pct > 0 ? '+' : ''}${mrr.mrr_growth_pct}%` : mrr.error,
+            label: 'MRR Total',
+            value: mrr.available ? `$${mrr.total_mrr_usd ?? mrr.current_mrr_usd}` : '—',
+            hint:
+              mrr.available && (mrr.stripe_mrr_usd != null || mrr.manual_mrr_usd != null)
+                ? `Stripe: $${mrr.stripe_mrr_usd ?? 0} | Manual: $${mrr.manual_mrr_usd ?? 0}`
+                : mrr.mrr_growth_pct !== null
+                  ? `${mrr.mrr_growth_pct > 0 ? '+' : ''}${mrr.mrr_growth_pct}%`
+                  : mrr.error,
             delta: mrr.mrr_growth_pct !== null && mrr.mrr_growth_pct > 0 ? 'up' : 'neutral',
           },
           {

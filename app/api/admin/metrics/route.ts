@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/admin-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getMRRCached } from '@/lib/stripe-mrr';
+import { getActiveManualMrrUsd } from '@/lib/manual-payments';
 import { fetchMetricsBundle } from '@/lib/metrics-queries';
 import { generateInsights } from '@/lib/dashboard-insights';
 
@@ -15,11 +16,23 @@ export async function GET() {
 
   try {
     const supabase = createAdminClient();
-    const [mrr, metrics] = await Promise.all([getMRRCached(), fetchMetricsBundle(supabase)]);
+    const [mrr, metrics, manual] = await Promise.all([
+      getMRRCached(),
+      fetchMetricsBundle(supabase),
+      getActiveManualMrrUsd(supabase),
+    ]);
     const insights = generateInsights(metrics, mrr);
+    const stripeMrr = mrr.available ? mrr.current_mrr_usd : 0;
+    const totalMrrUsd = Math.round((stripeMrr + manual.manual_mrr_usd) * 100) / 100;
 
     return NextResponse.json({
-      mrr,
+      mrr: {
+        ...mrr,
+        stripe_mrr_usd: mrr.available ? mrr.current_mrr_usd : 0,
+        manual_mrr_usd: manual.manual_mrr_usd,
+        total_mrr_usd: totalMrrUsd,
+        current_mrr_usd: mrr.available ? totalMrrUsd : mrr.current_mrr_usd,
+      },
       funnel: metrics.funnel,
       by_channel: metrics.by_channel,
       top_objections: metrics.top_objections,

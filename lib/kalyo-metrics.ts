@@ -6,6 +6,7 @@ import { fetchMetaAds } from '@/lib/meta-api';
 import { fetchGoogleAds } from '@/lib/google-ads-api';
 import { copToUsd, getUsdFxRates, mxnToUsd } from '@/lib/fx-rates';
 import { computeLtvCacRatio, computeLtvDerived } from '@/lib/kpi/ltv-utils';
+import type { ManualPaymentPlan } from '@/lib/manual-payments-types';
 
 const PRO_PRICE_USD = 29;
 const MAX_PRICE_USD = 39;
@@ -13,6 +14,7 @@ const MAX_PRICE_USD = 39;
 const EXCLUDED_TRIAL_STATUSES = new Set(['active', 'canceled', 'inactive']);
 
 type PsychologistRow = {
+  email: string | null;
   plan: string;
   subscription_status: string | null;
   trial_ends_at: string | null;
@@ -215,7 +217,7 @@ export async function syncKalyoMetrics(): Promise<{
     { data: churnCandidates, error: churnError },
     { count: churnedAlltime, error: churnAllError },
   ] = await Promise.all([
-    kalyo.from('psychologists').select('plan, subscription_status, trial_ends_at'),
+    kalyo.from('psychologists').select('email, plan, subscription_status, trial_ends_at'),
     kalyo
       .from('psychologists')
       .select('subscription_status, updated_at')
@@ -230,12 +232,35 @@ export async function syncKalyoMetrics(): Promise<{
   if (churnError) throw churnError;
   if (churnAllError) throw churnAllError;
 
+  const botio = createAdminClient();
+  const { data: manualRows, error: manualError } = await botio
+    .from('manual_payments')
+    .select('psychologist_email, plan, amount_usd')
+    .gt('ends_at', new Date().toISOString());
+  if (manualError) throw manualError;
+
   const rows = (activeRows ?? []) as PsychologistRow[];
   let mrr = 0;
   let active_subscribers = 0;
   let trialing = 0;
   let plan_pro = 0;
   let plan_max = 0;
+  const countedEmails = new Set<string>();
+
+  function addPaidSubscriber(plan: string, email?: string | null) {
+    const key = email?.trim().toLowerCase() ?? '';
+    if (key && countedEmails.has(key)) return;
+    if (key) countedEmails.add(key);
+
+    active_subscribers += 1;
+    if (plan === 'starter') {
+      plan_pro += 1;
+      mrr += PRO_PRICE_USD;
+    } else if (plan === 'professional' || plan === 'clinic') {
+      plan_max += 1;
+      mrr += MAX_PRICE_USD;
+    }
+  }
 
   for (const row of rows) {
     if (isActiveTrial(row)) {
@@ -245,15 +270,13 @@ export async function syncKalyoMetrics(): Promise<{
 
     const status = row.subscription_status ?? '';
     if (status !== 'active') continue;
+    addPaidSubscriber(row.plan, row.email);
+  }
 
-    active_subscribers += 1;
-    if (row.plan === 'starter') {
-      plan_pro += 1;
-      mrr += PRO_PRICE_USD;
-    } else if (row.plan === 'professional' || row.plan === 'clinic') {
-      plan_max += 1;
-      mrr += MAX_PRICE_USD;
-    }
+  for (const row of manualRows ?? []) {
+    const email = (row.psychologist_email as string | null)?.trim().toLowerCase() ?? '';
+    if (!email || countedEmails.has(email)) continue;
+    addPaidSubscriber(row.plan as ManualPaymentPlan, email);
   }
 
   const churned_30d = ((churnCandidates ?? []) as ChurnedPsychologistRow[]).filter((row) =>
@@ -261,7 +284,6 @@ export async function syncKalyoMetrics(): Promise<{
   ).length;
 
   const today = format(new Date(), 'yyyy-MM-dd');
-  const botio = createAdminClient();
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
   const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
 

@@ -80,8 +80,10 @@ export function ExecutiveKpiDashboard({ data }: Props) {
   const landingUsers30d = data.landingDaily.reduce((s, r) => s + r.users, 0);
 
   const subs = data.stripeActiveSubscribers ?? 0;
-  const mrr = data.stripeMrr;
-  const arpu = subs > 0 && mrr != null ? mrr / subs : null;
+  const mrr = data.totalMrr ?? data.stripeMrr;
+  const stripeMrr = data.stripeMrr;
+  const manualMrr = data.manualMrr;
+  const arpu = subs > 0 && data.stripeMrr != null ? data.stripeMrr / subs : null;
   const costPerMsg =
     waAgg.total_sent > 0 ? waAgg.total_cost_usd / waAgg.total_sent : null;
 
@@ -231,7 +233,18 @@ export function ExecutiveKpiDashboard({ data }: Props) {
             <div>
               <KpiVividSectionTitle accent="emerald">Revenue</KpiVividSectionTitle>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                <KpiVividMetric label="MRR" value={fmtUsd(mrr)} icon={DollarSign} accent="emerald" spark={mrrChart.map((r) => r.mrr)} />
+                <KpiVividMetric
+                  label="MRR Total"
+                  value={fmtUsd(mrr)}
+                  icon={DollarSign}
+                  accent="emerald"
+                  spark={mrrChart.map((r) => r.mrr)}
+                  hint={
+                    stripeMrr != null || manualMrr != null
+                      ? `Stripe: ${fmtUsd(stripeMrr ?? 0)} | Manual: ${fmtUsd(manualMrr ?? 0)}`
+                      : undefined
+                  }
+                />
                 <KpiVividMetric
                   label="Suscriptores"
                   value={data.stripeActiveSubscribers != null ? fmtNum(subs) : '—'}

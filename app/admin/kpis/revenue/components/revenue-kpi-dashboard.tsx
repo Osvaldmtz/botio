@@ -32,9 +32,18 @@ type Props = {
   history: KalyoMetricRow[];
   stripeActiveSubscribers: number | null;
   stripeMrr: number | null;
+  manualMrr: number | null;
+  totalMrr: number | null;
 };
 
-export function RevenueKpiDashboard({ latest, history, stripeActiveSubscribers, stripeMrr }: Props) {
+export function RevenueKpiDashboard({
+  latest,
+  history,
+  stripeActiveSubscribers,
+  stripeMrr,
+  manualMrr,
+  totalMrr,
+}: Props) {
   return (
     <KpiVividPage
       title="Revenue KPIs"
@@ -42,6 +51,7 @@ export function RevenueKpiDashboard({ latest, history, stripeActiveSubscribers, 
       sources={[
         { id: 'kalyo', label: 'Kalyo', ok: latest != null || history.length > 0 },
         { id: 'stripe', label: 'Stripe', ok: stripeActiveSubscribers != null || stripeMrr != null },
+        { id: 'manual', label: 'Manual', ok: manualMrr != null },
       ]}
     >
       {({ range }) => (
@@ -51,6 +61,8 @@ export function RevenueKpiDashboard({ latest, history, stripeActiveSubscribers, 
           range={range}
           stripeActiveSubscribers={stripeActiveSubscribers}
           stripeMrr={stripeMrr}
+          manualMrr={manualMrr}
+          totalMrr={totalMrr}
         />
       )}
     </KpiVividPage>
@@ -63,12 +75,16 @@ function RevenueContent({
   range,
   stripeActiveSubscribers,
   stripeMrr,
+  manualMrr,
+  totalMrr,
 }: {
   latest: KalyoMetricRow | null;
   history: KalyoMetricRow[];
   range: ChartRange;
   stripeActiveSubscribers: number | null;
   stripeMrr: number | null;
+  manualMrr: number | null;
+  totalMrr: number | null;
 }) {
   const pro = latest?.plan_pro ?? 0;
   const max = latest?.plan_max ?? 0;
@@ -137,11 +153,12 @@ function RevenueContent({
     <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <KpiVividMetric
-          label="MRR"
-          value={stripeMrr != null ? `$${stripeMrr.toLocaleString()}` : '—'}
+          label="MRR Total"
+          value={totalMrr != null ? `$${totalMrr.toLocaleString()}` : '—'}
           icon={DollarSign}
           accent="emerald"
           spark={mrrChart.map((d) => d.mrr)}
+          hint={`Stripe: $${(stripeMrr ?? 0).toLocaleString()} | Manual: $${(manualMrr ?? 0).toLocaleString()}`}
         />
         <KpiVividMetric
           label="Suscriptores"

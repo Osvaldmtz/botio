@@ -15,6 +15,8 @@ export type OutcomeSource =
   | 'trial_enroll'
   | 'cron_30days'
   | 'admin_manual'
+  | 'manual_payment'
+  | 'kalyo_upgrade'
   | string;
 
 const OUTCOME_LABELS: Record<ConversationOutcome, string> = {

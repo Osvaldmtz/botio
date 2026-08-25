@@ -24,6 +24,7 @@ export function AdminHeader() {
   const isEmailing = pathname?.startsWith('/admin/emailing');
   const isKpis = pathname?.startsWith('/admin/kpis');
   const isTasks = pathname?.startsWith('/admin/tasks');
+  const isManualPayments = pathname?.startsWith('/admin/manual-payments');
   const isConversations =
     pathname?.startsWith('/admin/conversations') && !isPipeline;
 
@@ -100,6 +101,11 @@ export function AdminHeader() {
       label: 'KPIs',
       active: isKpis,
       icon: <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.5} />,
+    },
+    {
+      href: '/admin/manual-payments',
+      label: 'Pagos',
+      active: isManualPayments,
     },
   ];
 
