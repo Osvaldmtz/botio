@@ -1,3 +1,4 @@
+import { formatWhatsAppTempPasswordBlock } from '@/lib/kalyo-password';
 import {
   humanSupportTrialFooter,
   humanSupportWelcomeFooter,
@@ -33,7 +34,7 @@ export function buildTrialActivationSuccessMessage(params: {
 
   if (params.reactivated) {
     const passwordLine = params.tempPassword
-      ? `\n🔑 Contraseña temporal: ${params.tempPassword}\n(Puedes cambiarla después de entrar)\n`
+      ? `\n${formatWhatsAppTempPasswordBlock(params.tempPassword)}`
       : '\nSi olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n';
 
     return (
@@ -46,7 +47,7 @@ export function buildTrialActivationSuccessMessage(params: {
   }
 
   const passwordLine = params.tempPassword
-    ? `\n🔑 Contraseña temporal: ${params.tempPassword}\n(Puedes cambiarla después de entrar)\n`
+    ? `\n${formatWhatsAppTempPasswordBlock(params.tempPassword)}`
     : '\n';
 
   const maxFeatures =
@@ -83,7 +84,7 @@ export function buildImmediateWelcomeMessage(
   const planName = trialPlanLabel(options?.trialPlan ?? 'max');
   const credentials =
     options?.email && options?.tempPassword
-      ? `\n\nTus datos de acceso:\n📧 Email: ${options.email}\n🔑 Contraseña temporal: ${options.tempPassword}\n(Puedes cambiarla después de entrar)\n`
+      ? `\n\nTus datos de acceso:\n📧 Email: ${options.email}\n${formatWhatsAppTempPasswordBlock(options.tempPassword)}`
       : '';
 
   const maxBlock =
@@ -136,8 +137,10 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
       `🔐 *Acceso a tu cuenta:*\n` +
       `🌐 https://app.kalyo.io/login\n` +
       `📧 Email: ${input.email}\n` +
-      `🔑 Contraseña: ${input.tempPassword}\n\n` +
-      `(Te recomendamos cambiarla en Configuración cuando entres)\n\n` +
+      (input.tempPassword
+        ? formatWhatsAppTempPasswordBlock(input.tempPassword)
+        : `Si olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n`) +
+      `\n` +
       `📋 *Primeros pasos:*\n` +
       `1. Entra y crea tu primer paciente\n` +
       `2. Aplica una evaluación (PHQ-9 es buena para empezar)\n` +
@@ -154,7 +157,7 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
     `🌐 https://app.kalyo.io/login\n` +
     `📧 Email: ${input.email}\n` +
     (input.tempPassword
-      ? `🔑 Contraseña: ${input.tempPassword}\n\n(Te recomendamos cambiarla en Configuración cuando entres)\n\n`
+      ? `${formatWhatsAppTempPasswordBlock(input.tempPassword)}\n`
       : `\nSi olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n\n`) +
     `¿Dudas? Aquí estoy. 🚀` +
     humanSupportWelcomeFooter()

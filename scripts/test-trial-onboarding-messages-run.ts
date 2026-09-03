@@ -31,6 +31,7 @@ const day1 = formatDay1Welcome({
 assert(day1.includes('María Test'), 'day1 name');
 assert(day1.includes('maria@test.com'), 'day1 email');
 assert(day1.includes('Kalyo-2026-ABCD'), 'day1 password');
+assert(day1.includes('\nKalyo-2026-ABCD\n'), 'day1 password is on its own line');
 assert(day1.includes('7 días'), 'day1 trial length');
 assert(day1.includes('app.kalyo.io/login'), 'day1 login link');
 

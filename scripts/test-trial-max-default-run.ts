@@ -44,6 +44,7 @@ const activation = buildTrialActivationSuccessMessage({
 });
 assert(activation.includes('prueba gratis de Max'), 'activation message says Max');
 assert(activation.includes('Kalyo-2026-ABCD'), 'activation includes password');
+assert(activation.includes('\nKalyo-2026-ABCD\n'), 'activation password is on its own line');
 
 const directWelcome = buildDirectEnrollmentWelcomeMessage({
   fullName: 'Ana',

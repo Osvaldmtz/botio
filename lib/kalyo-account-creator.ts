@@ -1,11 +1,10 @@
 import { getKalyoClient } from '@/lib/kalyo-supabase';
+import { generateKalyoPassword } from '@/lib/kalyo-password';
 import {
   KALYO_TRIAL_MS,
   resolveTrialDbPlan,
   type TrialPlanChoice,
 } from '@/lib/kalyo-trial-plans';
-
-const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export type CreateAccountResult =
   | {
@@ -27,14 +26,7 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-export function generateKalyoPassword(): string {
-  const year = new Date().getFullYear();
-  let suffix = '';
-  for (let i = 0; i < 4; i++) {
-    suffix += PASSWORD_CHARS[Math.floor(Math.random() * PASSWORD_CHARS.length)];
-  }
-  return `Kalyo-${year}-${suffix}`;
-}
+export { generateKalyoPassword } from '@/lib/kalyo-password';
 
 function hasActiveTrial(trialEndsAt: string | null, planExpiresAt: string | null): boolean {
   const now = Date.now();

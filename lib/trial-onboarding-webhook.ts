@@ -3,6 +3,7 @@ import { isAmbassadorConversation, isAmbassadorFlowsEnabled } from '@/lib/ambass
 import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { renderName } from '@/lib/render-name';
 import { buildImmediateWelcomeMessage } from '@/lib/kalyo-trial-messages';
+import { formatWhatsAppTempPasswordBlock } from '@/lib/kalyo-password';
 import { KALYO_TRIAL_MS, type TrialPlanChoice } from '@/lib/kalyo-trial-plans';
 import { isTeamMember } from '@/lib/team-members';
 import { markTrialActivatedByContact, findConversationIdsByEmail } from '@/lib/conversation-outcome';
@@ -89,8 +90,8 @@ function buildCredentialsFollowUp(email: string, tempPassword: string): string {
   return (
     `Tus datos de acceso a Kalyo:\n` +
     `📧 Email: ${email}\n` +
-    `🔑 Contraseña temporal: ${tempPassword}\n` +
-    `Entra en app.kalyo.io/login — puedes cambiar la contraseña después.`
+    formatWhatsAppTempPasswordBlock(tempPassword) +
+    `Entra en app.kalyo.io/login.`
   );
 }
 

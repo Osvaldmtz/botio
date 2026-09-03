@@ -1,3 +1,4 @@
+import { formatWhatsAppTempPasswordBlock } from '@/lib/kalyo-password';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatDay8Survey } from '@/lib/trial-onboarding-day8-survey';
@@ -40,7 +41,7 @@ export function formatDay1Welcome(ctx: TrialOnboardingMessageContext): string {
   const endDate = formatTrialEndDateLabel(ctx.trialEndsAt);
   const email = ctx.email?.trim() || ctx.trial_user_email;
   const passwordLine = ctx.tempPassword
-    ? `🔑 ${ctx.tempPassword}\n`
+    ? formatWhatsAppTempPasswordBlock(ctx.tempPassword)
     : '🔑 (revisa el mensaje anterior o usa "Olvidé mi contraseña")\n';
 
   return (
