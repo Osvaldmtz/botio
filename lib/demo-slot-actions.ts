@@ -156,6 +156,7 @@ export async function executeConfirmDemoSlot(params: {
         resolvedEmail,
         pending.customer_timezone ?? pending.display_timezone,
         pending.customer_city_label ?? pending.display_label,
+        result.meetLink,
       ),
     };
   } catch (err) {

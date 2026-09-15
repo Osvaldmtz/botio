@@ -1,5 +1,4 @@
 import 'server-only';
-import { randomUUID } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { toGoogleHostDateTime } from '@/lib/calendar-slots';
 import {
@@ -7,6 +6,7 @@ import {
   DEMO_HOST_NAME,
   DEMO_TIMEZONE,
   getCalendarClient,
+  getDemoMeetLink,
 } from '@/lib/google-calendar';
 
 const DEFAULT_DURATION_MINUTES = 30;
@@ -29,9 +29,11 @@ export type DemoBookingCalendarResult = {
   skipped?: boolean;
 };
 
-function buildDescription(input: DemoBookingCalendarInput): string {
+function buildDescription(input: DemoBookingCalendarInput, meetLink: string): string {
   const lines = [
     `Demo de ${DEFAULT_DURATION_MINUTES} minutos con ${input.name}`,
+    '',
+    `Meet: ${meetLink}`,
     '',
     `Email: ${input.email}`,
     `WhatsApp: ${input.whatsapp}`,
@@ -74,18 +76,18 @@ export async function createDemoBookingCalendarEvent(
   }
 
   const endAt = new Date(scheduledAt.getTime() + DEFAULT_DURATION_MINUTES * 60_000);
+  const meetLink = getDemoMeetLink();
 
   try {
     const calendar = await getCalendarClient();
-    const requestId = randomUUID();
 
     const event = await calendar.events.insert({
       calendarId: 'primary',
-      conferenceDataVersion: 1,
       sendUpdates: 'all',
       requestBody: {
         summary: `Demo Kalyo — ${input.name}`,
-        description: buildDescription(input),
+        description: buildDescription(input, meetLink),
+        location: meetLink,
         start: {
           dateTime: toGoogleHostDateTime(scheduledAt),
           timeZone: DEMO_TIMEZONE,
@@ -98,12 +100,6 @@ export async function createDemoBookingCalendarEvent(
           { email: DEMO_HOST_EMAIL, displayName: DEMO_HOST_NAME },
           { email: input.email, displayName: input.name },
         ],
-        conferenceData: {
-          createRequest: {
-            requestId,
-            conferenceSolutionKey: { type: 'hangoutsMeet' },
-          },
-        },
         reminders: {
           useDefault: false,
           overrides: [
@@ -119,18 +115,11 @@ export async function createDemoBookingCalendarEvent(
       return { ok: false, error: 'Google Calendar did not return event id' };
     }
 
-    const meetLink =
-      event.data.hangoutLink ??
-      event.data.conferenceData?.entryPoints?.find((e) => e.entryPointType === 'video')?.uri ??
-      null;
-
     const updatePayload: Record<string, string | null> = {
       google_event_id: eventId,
       google_meet_link: meetLink,
+      meet_link: meetLink,
     };
-    if (meetLink) {
-      updatePayload.meet_link = meetLink;
-    }
 
     const { error: updateError } = await supabase
       .from('demo_bookings')
@@ -142,7 +131,7 @@ export async function createDemoBookingCalendarEvent(
     }
 
     console.log(
-      `[demo-booking-calendar] event created | booking_id=${input.bookingId} | event_id=${eventId}`,
+      `[demo-booking-calendar] event created | booking_id=${input.bookingId} | event_id=${eventId} | meet=${meetLink}`,
     );
 
     return { ok: true, eventId, meetLink };

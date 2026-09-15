@@ -1,5 +1,4 @@
 import 'server-only';
-import { randomUUID } from 'node:crypto';
 import { google, type calendar_v3 } from 'googleapis';
 import { formatInTimeZone } from 'date-fns-tz';
 import { es } from 'date-fns/locale';
@@ -26,6 +25,14 @@ export const DEMO_TIMEZONE = HOST_TIMEZONE;
 export const DEMO_HOST_EMAIL = process.env.DEMO_HOST_EMAIL ?? 'osvamtz@gmail.com';
 export const DEMO_HOST_NAME = process.env.DEMO_HOST_NAME ?? 'Osvaldo Martínez';
 export const DEMO_HOST_TEAM_LABEL = 'Osvaldo del equipo de Kalyo';
+
+/** Fixed Meet room for all Kalyo demos (no per-event conferenceData). */
+export const DEFAULT_DEMO_MEET_LINK = 'https://meet.google.com/pgd-dxmb-sfk';
+
+export function getDemoMeetLink(): string {
+  const fromEnv = process.env.KALYO_DEMO_MEET_LINK?.trim();
+  return fromEnv || DEFAULT_DEMO_MEET_LINK;
+}
 
 export {
   formatSlotForES,
@@ -76,7 +83,7 @@ export type CreateDemoEventParams = {
 
 export type CreateDemoEventResult = {
   eventId: string;
-  meetLink: string | null;
+  meetLink: string;
   demoId: string;
 };
 
@@ -877,10 +884,13 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
   const calendar = await getCalendarClient();
   const scheduledAt = params.scheduledAt;
   const endAt = new Date(scheduledAt.getTime() + durationMinutes * 60_000);
+  const meetLink = getDemoMeetLink();
 
   const signals = params.botContext.signals?.join(', ') ?? '—';
   const description = [
     `Demo de ${durationMinutes} minutos con ${params.customerName}`,
+    '',
+    `Meet: ${meetLink}`,
     '',
     `Email: ${params.customerEmail}`,
     `Teléfono: ${params.customerPhone ?? '—'}`,
@@ -892,14 +902,13 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
     `Conversation ID: ${params.botContext.conversationId}`,
   ].join('\n');
 
-  const requestId = randomUUID();
   const event = await calendar.events.insert({
     calendarId: 'primary',
-    conferenceDataVersion: 1,
     sendUpdates: 'all',
     requestBody: {
       summary: `Demo Kalyo — ${params.customerName}`,
       description,
+      location: meetLink,
       start: {
         dateTime: toGoogleHostDateTime(scheduledAt),
         timeZone: DEMO_TIMEZONE,
@@ -912,12 +921,6 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
         { email: DEMO_HOST_EMAIL, displayName: DEMO_HOST_NAME },
         { email: params.customerEmail, displayName: params.customerName },
       ],
-      conferenceData: {
-        createRequest: {
-          requestId,
-          conferenceSolutionKey: { type: 'hangoutsMeet' },
-        },
-      },
       reminders: {
         useDefault: false,
         overrides: [
@@ -931,12 +934,7 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
   const eventId = event.data.id;
   if (!eventId) throw new Error('Google Calendar did not return event id');
 
-  const meetLink =
-    event.data.hangoutLink ??
-    event.data.conferenceData?.entryPoints?.find((e) => e.entryPointType === 'video')?.uri ??
-    null;
-
-  console.log(`[calendar] event created | event_id=${eventId} | meet=${meetLink ?? '—'}`);
+  console.log(`[calendar] event created | event_id=${eventId} | meet=${meetLink}`);
 
   const supabase = createAdminClient();
   const { data: demoRow, error } = await supabase
@@ -1008,6 +1006,7 @@ export function formatDemoConfirmationMessage(
   customerEmail: string,
   displayTimezone: string,
   displayLabel: string,
+  meetLink: string = getDemoMeetLink(),
 ): string {
   const dateLabel = formatInTimeZone(scheduledAt, displayTimezone, 'EEEE d MMM', { locale: es });
   const capitalizedDate = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
@@ -1018,7 +1017,7 @@ export function formatDemoConfirmationMessage(
     `📅 ${capitalizedDate}\n` +
     `⏰ ${timeLabel} ${displayLabel}\n` +
     `👤 Con ${DEMO_HOST_TEAM_LABEL}\n` +
-    '🎥 Te llegará Google Meet link por email\n' +
+    `🎥 Meet: ${meetLink}\n` +
     `📨 Invitación enviada a ${customerEmail}\n\n` +
     'Te llegará un recordatorio 1 hora antes. ¿Algo más en lo que te pueda ayudar?'
   );
