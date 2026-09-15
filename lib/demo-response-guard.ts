@@ -1,6 +1,10 @@
 import 'server-only';
 
-export { applyDemoConfirmationGuard, looksLikeDemoConfirmation } from '@/lib/demo-flow-parsing';
+export {
+  applyDemoConfirmationGuard,
+  applyDemoTimezoneToolGuard,
+  looksLikeDemoConfirmation,
+} from '@/lib/demo-flow-parsing';
 
 export async function notifyDemoFlowWarning(conversationId: string): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;

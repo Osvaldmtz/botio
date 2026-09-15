@@ -101,3 +101,44 @@ export function applyDemoConfirmationGuard(params: {
     guarded: true,
   };
 }
+
+const DEMO_TZ_TOOL_NAMES = [
+  'check_specific_time',
+  'schedule_demo',
+  'confirm_demo_slot',
+] as const;
+
+function extractDemoToolBotMessage(
+  toolResults: Record<string, unknown>,
+  toolName: string,
+): string | null {
+  const raw = toolResults[toolName];
+  if (!raw || typeof raw !== 'object') return null;
+  const msg = (raw as Record<string, unknown>).bot_message;
+  return typeof msg === 'string' && msg.trim() ? msg.trim() : null;
+}
+
+/**
+ * Force calendar tool bot_message as the user reply so Claude cannot rewrite
+ * hours with wrong arithmetic (e.g. 14:00 Bogotá → 09:00 CDMX).
+ */
+export function applyDemoTimezoneToolGuard(params: {
+  replyText: string;
+  toolsCalled: string[];
+  toolResults: Record<string, unknown>;
+  conversationId: string;
+}): { replyText: string; guarded: boolean } {
+  for (const toolName of DEMO_TZ_TOOL_NAMES) {
+    if (!params.toolsCalled.includes(toolName)) continue;
+    const botMessage = extractDemoToolBotMessage(params.toolResults, toolName);
+    if (!botMessage) continue;
+    if (botMessage === params.replyText.trim()) {
+      return { replyText: params.replyText, guarded: false };
+    }
+    console.log(
+      `[demo-tz-guard] using ${toolName} bot_message verbatim | conv=${params.conversationId}`,
+    );
+    return { replyText: botMessage, guarded: true };
+  }
+  return { replyText: params.replyText, guarded: false };
+}

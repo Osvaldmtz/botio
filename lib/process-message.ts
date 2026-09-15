@@ -38,6 +38,7 @@ import {
 } from '@/lib/demo-flow-interceptor';
 import {
   applyDemoConfirmationGuard,
+  applyDemoTimezoneToolGuard,
   notifyDemoFlowWarning,
 } from '@/lib/demo-response-guard';
 import { applyAdminTrialActivationGuard } from '@/lib/trial-activation-guard';
@@ -1213,6 +1214,16 @@ export async function processIncomingMessage(
   if (guardResult.guarded) {
     await notifyDemoFlowWarning(conversation.id);
     replyText = guardResult.replyText;
+  }
+
+  const demoTzGuard = applyDemoTimezoneToolGuard({
+    replyText,
+    toolsCalled,
+    toolResults,
+    conversationId: conversation.id,
+  });
+  if (demoTzGuard.guarded) {
+    replyText = demoTzGuard.replyText;
   }
 
   const trialGuard = applyAdminTrialActivationGuard({
