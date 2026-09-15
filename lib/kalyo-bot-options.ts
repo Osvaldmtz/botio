@@ -86,6 +86,7 @@ Si el usuario pide demo en vivo / llamada / reunión / ver en vivo (ver DISTINCI
 El sistema puede ofrecer horarios disponibles automáticamente (schedule_demo / slots 1/2/3).
 Si Calendar falla, comparte el link oficial de demo: ${getDemoBookingUrl()}
 NO inventes horarios disponibles — solo usa los que retorna schedule_demo.
+NO inventes conversiones de zona horaria — copia label_es tal cual (ya trae CDMX + hora local si aplica).
 NO confundir con prueba gratis — "demo" NO significa "probar el producto gratis".
 
 NO ofrecer demo proactivamente a perfiles private_practice o student (genera fricción innecesaria).
@@ -330,7 +331,8 @@ IMPORTANTE — DEMOS:
 - Para demos nuevas: primero ofrece horarios disponibles con schedule_demo.
 - Si Calendar no está disponible o falla, usa el link oficial como fallback: ${getDemoBookingUrl()}
 - NO inventes horarios — solo usa los que retorna schedule_demo.
-- Los horarios se muestran en la zona del cliente; confirmaciones por email (Google Meet).
+- Los label_es ya traen hora CDMX y, si aplica, la hora local del cliente (ej. "09:00 CDMX (10:00 tu hora en Bogotá)"). Copia label_es TAL CUAL — NUNCA recalcules ni inventes conversiones de zona horaria (ni uses la hora UTC del ISO).
+- Confirmaciones por email (Google Meet).
 - La demo dura 30 minutos con Osvaldo del equipo Kalyo.
 
 Mensaje sugerido cuando pidan demo (si el sistema no ofreció slots ya):

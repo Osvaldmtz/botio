@@ -7,9 +7,31 @@ import {
 
 export const HOST_TIMEZONE = process.env.DEMO_HOST_TIMEZONE ?? 'America/Bogota';
 
+/** Product-facing primary timezone for demo slot labels (copy says CDMX). */
+export const DEMO_DISPLAY_TIMEZONE =
+  process.env.DEMO_DISPLAY_TIMEZONE ?? 'America/Mexico_City';
+export const DEMO_DISPLAY_LABEL = process.env.DEMO_DISPLAY_LABEL ?? 'CDMX';
+
 const WORK_DAYS = new Set([1, 2, 3, 4, 5, 6]);
 const WORK_START_HOUR = 9;
 const WORK_END_HOUR = 20;
+
+function stripHoraPrefix(label?: string): string {
+  return (label ?? '').replace(/^hora\s+/i, '').trim();
+}
+
+function localClock(instant: Date, timezone: string): string {
+  return formatInTimeZone(instant, timezone, 'HH:mm');
+}
+
+function sameLocalClock(instant: Date, a: string, b: string): boolean {
+  return localClock(instant, a) === localClock(instant, b);
+}
+
+function cityLabelFromTimezone(timezone: string): string {
+  const leaf = timezone.split('/').pop() ?? timezone;
+  return leaf.replace(/_/g, ' ');
+}
 
 export type HostTzParts = {
   year: number;
@@ -106,14 +128,50 @@ export function isWithinOverlapBusinessHours(
   );
 }
 
+/**
+ * Demo slot label: always primary time in America/Mexico_City (CDMX),
+ * plus customer local time when that clock differs (e.g. Bogotá = CDMX+1h).
+ * Uses date-fns-tz — never fixed offsets — so DST/IANA rules stay correct.
+ */
 export function formatSlotForES(
   slotStart: Date,
-  displayTimezone: string = 'America/Bogota',
-  displayLabel: string = 'hora Bogotá',
+  customerTimezone?: string,
+  customerLabel?: string,
 ): string {
-  const label = formatInTimeZone(slotStart, displayTimezone, 'EEEE d MMM, HH:mm', { locale: es });
-  const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
-  return `${capitalized} ${displayLabel}`;
+  const datePart = formatInTimeZone(slotStart, DEMO_DISPLAY_TIMEZONE, 'EEEE d MMM, HH:mm', {
+    locale: es,
+  });
+  const capitalized = datePart.charAt(0).toUpperCase() + datePart.slice(1);
+  const primary = `${capitalized} ${DEMO_DISPLAY_LABEL}`;
+
+  const custTz = customerTimezone?.trim();
+  if (!custTz || sameLocalClock(slotStart, custTz, DEMO_DISPLAY_TIMEZONE)) {
+    return primary;
+  }
+
+  const customerTime = localClock(slotStart, custTz);
+  const city =
+    stripHoraPrefix(customerLabel) || cityLabelFromTimezone(custTz);
+  return `${primary} (${customerTime} tu hora en ${city})`;
+}
+
+/** Time line for confirmations: "09:00 CDMX (10:00 tu hora en Bogotá)". */
+export function formatSlotTimeDual(
+  slotStart: Date,
+  customerTimezone?: string,
+  customerLabel?: string,
+): string {
+  const cdmxTime = localClock(slotStart, DEMO_DISPLAY_TIMEZONE);
+  const primary = `${cdmxTime} ${DEMO_DISPLAY_LABEL}`;
+
+  const custTz = customerTimezone?.trim();
+  if (!custTz || sameLocalClock(slotStart, custTz, DEMO_DISPLAY_TIMEZONE)) {
+    return primary;
+  }
+
+  const customerTime = localClock(slotStart, custTz);
+  const city = stripHoraPrefix(customerLabel) || cityLabelFromTimezone(custTz);
+  return `${primary} (${customerTime} tu hora en ${city})`;
 }
 
 function addDaysHost(base: Date, days: number): Date {

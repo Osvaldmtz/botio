@@ -2,6 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { formatInTimeZone } from 'date-fns-tz';
 import { es } from 'date-fns/locale';
 import { cityToTimezone } from '@/lib/city-to-timezone';
+import {
+  DEMO_DISPLAY_TIMEZONE,
+  formatSlotTimeDual,
+} from '@/lib/calendar-slots';
 const DEMO_HOST_TEAM_LABEL = 'Osvaldo del equipo de Kalyo';
 import {
   getCustomerTimezone,
@@ -68,10 +72,11 @@ export function formatDemoDateTime(
   timezoneLabel: string,
 ): { dateLabel: string; timeLabel: string; timezoneLabel: string } {
   const date = new Date(scheduledAt);
-  const rawDate = formatInTimeZone(date, timezone, 'EEEE d MMM', { locale: es });
+  const rawDate = formatInTimeZone(date, DEMO_DISPLAY_TIMEZONE, 'EEEE d MMM', { locale: es });
   const dateLabel = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
-  const timeLabel = formatInTimeZone(date, timezone, 'HH:mm', { locale: es });
-  return { dateLabel, timeLabel, timezoneLabel };
+  // Full dual clock in timeLabel (e.g. "09:00 CDMX (10:00 tu hora en Bogotá)")
+  const timeLabel = formatSlotTimeDual(date, timezone, timezoneLabel);
+  return { dateLabel, timeLabel, timezoneLabel: '' };
 }
 
 /** 12h time for Twilio HSM templates (e.g. "10:00 a.m."). */
@@ -86,7 +91,7 @@ export function formatReminder24h(
   demo: DemoReminderRow,
   display: DemoDisplayTimezone,
 ): string {
-  const { dateLabel, timeLabel, timezoneLabel } = formatDemoDateTime(
+  const { dateLabel, timeLabel } = formatDemoDateTime(
     demo.scheduled_at,
     display.timezone,
     display.label,
@@ -97,7 +102,7 @@ export function formatReminder24h(
   return (
     `👋 ${greeting} te recuerdo tu demo Kalyo mañana:\n\n` +
     `📅 ${dateLabel}\n` +
-    `⏰ ${timeLabel} ${timezoneLabel}\n` +
+    `⏰ ${timeLabel}\n` +
     `👤 Con ${DEMO_HOST_TEAM_LABEL}\n` +
     `🎥 Te llegó el link de Google Meet por email\n\n` +
     `¿Sigues en pie? Responde:\n` +
@@ -152,7 +157,7 @@ export function formatReminder1h(
   demo: DemoReminderRow,
   display: DemoDisplayTimezone,
 ): string {
-  const { timeLabel, timezoneLabel } = formatDemoDateTime(
+  const { timeLabel } = formatDemoDateTime(
     demo.scheduled_at,
     display.timezone,
     display.label,
@@ -166,7 +171,7 @@ export function formatReminder1h(
 
   return (
     `⏰ Tu demo Kalyo es ${opener}\n\n` +
-    `📅 Hoy a las ${timeLabel} ${timezoneLabel}\n` +
+    `📅 Hoy a las ${timeLabel}\n` +
     `🎥 Únete aquí: ${meetLink}\n\n` +
     `¡Nos vemos pronto! Si necesitas algo:\n` +
     `1️⃣ Confirmo, ahí nos vemos\n` +
@@ -179,7 +184,7 @@ export function formatReminderConfirmed(
   demo: DemoReminderRow,
   display: DemoDisplayTimezone,
 ): string {
-  const { dateLabel, timeLabel, timezoneLabel } = formatDemoDateTime(
+  const { dateLabel, timeLabel } = formatDemoDateTime(
     demo.scheduled_at,
     display.timezone,
     display.label,
@@ -188,6 +193,6 @@ export function formatReminderConfirmed(
   const opener = name ? `¡Perfecto, ${name}!` : '¡Perfecto!';
 
   return (
-    `✅ ${opener} Te esperamos en tu demo el ${dateLabel} a las ${timeLabel} ${timezoneLabel}. Nos vemos pronto 👋`
+    `✅ ${opener} Te esperamos en tu demo el ${dateLabel} a las ${timeLabel}. Nos vemos pronto 👋`
   );
 }

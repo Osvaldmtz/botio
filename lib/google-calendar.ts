@@ -6,6 +6,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   buildCalendarSlot,
   customerLocalToUtcDate,
+  DEMO_DISPLAY_TIMEZONE,
+  formatSlotTimeDual,
   generateHostCandidateSlots,
   getHostTzParts,
   hostLocalToDate,
@@ -36,6 +38,7 @@ export function getDemoMeetLink(): string {
 
 export {
   formatSlotForES,
+  formatSlotTimeDual,
   generateHostCandidateSlots,
   getHostTzParts,
   hostLocalToDate,
@@ -1008,14 +1011,16 @@ export function formatDemoConfirmationMessage(
   displayLabel: string,
   meetLink: string = getDemoMeetLink(),
 ): string {
-  const dateLabel = formatInTimeZone(scheduledAt, displayTimezone, 'EEEE d MMM', { locale: es });
+  const dateLabel = formatInTimeZone(scheduledAt, DEMO_DISPLAY_TIMEZONE, 'EEEE d MMM', {
+    locale: es,
+  });
   const capitalizedDate = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
-  const timeLabel = formatInTimeZone(scheduledAt, displayTimezone, 'HH:mm', { locale: es });
+  const timeLabel = formatSlotTimeDual(scheduledAt, displayTimezone, displayLabel);
 
   return (
     '✅ ¡Demo agendada!\n\n' +
     `📅 ${capitalizedDate}\n` +
-    `⏰ ${timeLabel} ${displayLabel}\n` +
+    `⏰ ${timeLabel}\n` +
     `👤 Con ${DEMO_HOST_TEAM_LABEL}\n` +
     `🎥 Meet: ${meetLink}\n` +
     `📨 Invitación enviada a ${customerEmail}\n\n` +
