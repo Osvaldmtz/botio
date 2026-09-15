@@ -136,8 +136,10 @@ export function buildReminder24hContentVariables(
 export function buildReminder1hContentVariables(
   demo: DemoReminderRow,
 ): Record<string, string> | null {
-  const meetLink = demo.google_meet_link?.trim();
-  if (!meetLink) return null;
+  const meetLink =
+    demo.google_meet_link?.trim() ||
+    process.env.KALYO_DEMO_MEET_LINK?.trim() ||
+    'https://meet.google.com/pgd-dxmb-sfk';
 
   const name = renderName(demo.customer_name);
   return {
@@ -157,12 +159,15 @@ export function formatReminder1h(
   );
   const name = renderName(demo.customer_name);
   const opener = name ? `en 1 hora, ${name}:` : 'en 1 hora:';
-  const emailSearch = name || 'Demo Kalyo';
+  const meetLink =
+    demo.google_meet_link?.trim() ||
+    process.env.KALYO_DEMO_MEET_LINK?.trim() ||
+    'https://meet.google.com/pgd-dxmb-sfk';
 
   return (
     `⏰ Tu demo Kalyo es ${opener}\n\n` +
     `📅 Hoy a las ${timeLabel} ${timezoneLabel}\n` +
-    `🎥 Link Google Meet en tu email (busca '${emailSearch}' o 'Demo Kalyo')\n\n` +
+    `🎥 Únete aquí: ${meetLink}\n\n` +
     `¡Nos vemos pronto! Si necesitas algo:\n` +
     `1️⃣ Confirmo, ahí nos vemos\n` +
     `2️⃣ Reagendar\n` +

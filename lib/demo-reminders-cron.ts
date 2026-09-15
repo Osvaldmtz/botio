@@ -98,16 +98,26 @@ async function sendReminder(params: {
   }
 
   const display = await resolveDemoDisplayTimezone(params.supabase, params.demo);
+  const demoForSend: DemoReminderRow =
+    params.type === '1h'
+      ? {
+          ...params.demo,
+          google_meet_link:
+            params.demo.google_meet_link?.trim() ||
+            process.env.KALYO_DEMO_MEET_LINK?.trim() ||
+            'https://meet.google.com/pgd-dxmb-sfk',
+        }
+      : params.demo;
   const body =
     params.type === '24h'
-      ? formatReminder24h(params.demo, display)
-      : formatReminder1h(params.demo, display);
+      ? formatReminder24h(demoForSend, display)
+      : formatReminder1h(demoForSend, display);
   const contentSid =
     params.type === '24h' ? DEMO_REMINDER_24H_TEMPLATE_SID : DEMO_REMINDER_1H_TEMPLATE_SID;
   const contentVariables =
     params.type === '24h'
-      ? buildReminder24hContentVariables(params.demo, display)
-      : buildReminder1hContentVariables(params.demo);
+      ? buildReminder24hContentVariables(demoForSend, display)
+      : buildReminder1hContentVariables(demoForSend);
 
   if (!contentVariables) {
     console.error(
@@ -164,7 +174,7 @@ async function sendReminder(params: {
 
   await notifyDemoReminderEvent(
     params.type === '24h' ? 'reminder_24h_sent' : 'reminder_1h_sent',
-    params.demo,
+    demoForSend,
     {},
     { supabase: params.supabase, sendTelegram: params.sendTelegram },
   );
