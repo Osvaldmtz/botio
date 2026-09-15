@@ -279,12 +279,18 @@ async function main(): Promise<void> {
       );
 
       const meetLink =
-        event.data.hangoutLink ??
+        demoRow!.google_meet_link?.trim() ||
+        event.data.location?.trim() ||
+        event.data.hangoutLink ||
         event.data.conferenceData?.entryPoints?.find((e) => e.entryPointType === 'video')
-          ?.uri ??
-        demoRow!.google_meet_link ??
+          ?.uri ||
         null;
       assert(Boolean(meetLink), 'PASO 6', 'Evento sin Google Meet link');
+      assert(
+        /meet\.google\.com/i.test(meetLink!),
+        'PASO 6',
+        `Meet link inesperado: ${meetLink}`,
+      );
 
       console.log(
         `✅ Evento creado: ${event.data.summary ?? '(sin título)'} | ${startIso} | Meet: ${meetLink}`,
