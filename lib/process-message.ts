@@ -525,6 +525,82 @@ export async function processIncomingMessage(
           }
         : null;
 
+    // PRIORIDAD MÁXIMA: pending_demo_slots (1/2/3 / email) antes que encuesta día 8,
+    // ambassador, purchase, objection, trial onboarding o demo reminders.
+    if (pending && shouldInterceptDemoConfirm(pending, messageBody)) {
+      const intercept = await handleDemoConfirmInterception({
+        supabase,
+        conversationId: conversation.id,
+        messageBody,
+        senderFrom: conversation.customer_phone,
+        botId: bot.id,
+        creds: kalyoCreds,
+        pending,
+      });
+
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: intercept.replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: intercept.source,
+          tools_called: intercept.toolsCalled,
+          tool_results: { confirm_demo_slot: intercept.toolResult },
+        },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      console.log(
+        `[process-message] channel=${channel} | source=${intercept.source} | conv=${conversation.id}`,
+      );
+
+      return {
+        replyText: intercept.replyText,
+        storedReply: intercept.replyText,
+        conversationId: conversation.id,
+        source: intercept.source,
+      };
+    }
+
+    if (pending && shouldInterceptDemoTimeCheck(pending, messageBody)) {
+      const intercept = await handleDemoTimeCheckInterception({
+        supabase,
+        conversationId: conversation.id,
+        messageBody,
+        senderFrom: conversation.customer_phone,
+        pending,
+      });
+
+      if (intercept) {
+        const assistantNow = new Date().toISOString();
+        await supabase.from('messages').insert({
+          conversation_id: conversation.id,
+          role: 'assistant',
+          content: intercept.replyText,
+          source: 'text',
+          source_type: 'claude',
+          metadata: {
+            source: intercept.source,
+            tools_called: intercept.toolsCalled,
+            tool_results: { check_specific_time: intercept.toolResult },
+          },
+        });
+        await touchConversation(supabase, conversation.id, assistantNow);
+        console.log(
+          `[process-message] channel=${channel} | source=${intercept.source} | conv=${conversation.id}`,
+        );
+
+        return {
+          replyText: intercept.replyText,
+          storedReply: intercept.replyText,
+          conversationId: conversation.id,
+          source: intercept.source,
+        };
+      }
+    }
+
     await trackObjectionOutcome(supabase, conversation.id, messageBody);
 
     if (isAmbassadorFlowsEnabled()) {
@@ -740,80 +816,6 @@ export async function processIncomingMessage(
         conversationId: conversation.id,
         source: intercept.source,
       };
-    }
-
-    if (pending && shouldInterceptDemoConfirm(pending, messageBody)) {
-      const intercept = await handleDemoConfirmInterception({
-        supabase,
-        conversationId: conversation.id,
-        messageBody,
-        senderFrom: conversation.customer_phone,
-        botId: bot.id,
-        creds: kalyoCreds,
-        pending,
-      });
-
-      const assistantNow = new Date().toISOString();
-      await supabase.from('messages').insert({
-        conversation_id: conversation.id,
-        role: 'assistant',
-        content: intercept.replyText,
-        source: 'text',
-        source_type: 'claude',
-        metadata: {
-          source: intercept.source,
-          tools_called: intercept.toolsCalled,
-          tool_results: { confirm_demo_slot: intercept.toolResult },
-        },
-      });
-      await touchConversation(supabase, conversation.id, assistantNow);
-      console.log(
-        `[process-message] channel=${channel} | source=${intercept.source} | conv=${conversation.id}`,
-      );
-
-      return {
-        replyText: intercept.replyText,
-        storedReply: intercept.replyText,
-        conversationId: conversation.id,
-        source: intercept.source,
-      };
-    }
-
-    if (pending && shouldInterceptDemoTimeCheck(pending, messageBody)) {
-      const intercept = await handleDemoTimeCheckInterception({
-        supabase,
-        conversationId: conversation.id,
-        messageBody,
-        senderFrom: conversation.customer_phone,
-        pending,
-      });
-
-      if (intercept) {
-        const assistantNow = new Date().toISOString();
-        await supabase.from('messages').insert({
-          conversation_id: conversation.id,
-          role: 'assistant',
-          content: intercept.replyText,
-          source: 'text',
-          source_type: 'claude',
-          metadata: {
-            source: intercept.source,
-            tools_called: intercept.toolsCalled,
-            tool_results: { check_specific_time: intercept.toolResult },
-          },
-        });
-        await touchConversation(supabase, conversation.id, assistantNow);
-        console.log(
-          `[process-message] channel=${channel} | source=${intercept.source} | conv=${conversation.id}`,
-        );
-
-        return {
-          replyText: intercept.replyText,
-          storedReply: intercept.replyText,
-          conversationId: conversation.id,
-          source: intercept.source,
-        };
-      }
     }
   }
 
