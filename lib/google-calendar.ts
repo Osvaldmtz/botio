@@ -7,6 +7,7 @@ import {
   buildCalendarSlot,
   customerLocalToUtcDate,
   DEMO_DISPLAY_TIMEZONE,
+  formatSlotForCustomerRequest,
   formatSlotTimeDual,
   generateHostCandidateSlots,
   getHostTzParts,
@@ -38,6 +39,7 @@ export function getDemoMeetLink(): string {
 
 export {
   formatSlotForES,
+  formatSlotForCustomerRequest,
   formatSlotTimeDual,
   generateHostCandidateSlots,
   getHostTzParts,
@@ -45,6 +47,7 @@ export {
   isWithinHostBusinessHours,
   parseRelativeDate,
   parseTimeFromText,
+  normalizeRequestedTime,
 } from '@/lib/calendar-slots';
 
 const SCOPES = [
@@ -854,11 +857,14 @@ export async function checkSpecificTime(
     };
   }
 
-  const slot = buildCalendarSlot(slotStart, durationMinutes, params.customerPhone, tz, label);
+  const built = buildCalendarSlot(slotStart, durationMinutes, params.customerPhone, tz, label);
+  // User asked in their local clock — label customer-first with CDMX via date-fns-tz.
+  const requestLabel = formatSlotForCustomerRequest(slotStart, tz, label);
+  const slot = { ...built, label_es: requestLabel };
   return {
     status: 'available',
     slot,
-    bot_message: `¡Sí! ${slot.label_es} está disponible. ¿Confirmamos?`,
+    bot_message: `¡Sí! ${requestLabel} está disponible. ¿Confirmamos?`,
   };
 }
 

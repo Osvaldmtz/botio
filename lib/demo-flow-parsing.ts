@@ -10,7 +10,7 @@ const SLOT_PATTERNS: Record<1 | 2 | 3, RegExp[]> = {
 const CUSTOM_CONFIRM_RE = /^(s[ií]|confirmo|confirmar|dale|ok|de acuerdo|perfecto)$/i;
 
 export const TIME_REQUEST_RE =
-  /(?:a\s+las\s+)?\d{1,2}[:.]\d{2}(?:\s*(?:am|pm))?|\d{1,2}\s*(?:am|pm)|(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|manana|mañana)/i;
+  /(?:a\s+las\s+)?\d{1,2}[:.]\d{2}(?:\s*(?:am|pm))?|(?:a\s+)?las\s+\d{1,2}(?:\s*(?:horas?|hrs?|h))?(?:\s*(?:am|pm))?|\d{1,2}\s*(?:horas?|hrs?|am|pm)|(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|manana|mañana)/i;
 
 export const HALLUCINATION_PATTERNS = [
   /demo\s+(agendada|confirmada|reservada)/i,

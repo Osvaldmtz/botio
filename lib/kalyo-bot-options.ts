@@ -86,7 +86,8 @@ Si el usuario pide demo en vivo / llamada / reunión / ver en vivo (ver DISTINCI
 El sistema puede ofrecer horarios disponibles automáticamente (schedule_demo / slots 1/2/3).
 Si Calendar falla, comparte el link oficial de demo: ${getDemoBookingUrl()}
 NO inventes horarios disponibles — solo usa los que retorna schedule_demo.
-NO inventes conversiones de zona horaria — copia label_es tal cual (ya trae CDMX + hora local si aplica).
+NO inventes conversiones de zona horaria — copia label_es / bot_message tal cual (ya traen CDMX + hora local vía date-fns-tz).
+NUNCA hagas conversión manual de horas (no restes 5/6 al reloj local). Usa check_specific_time.
 NO confundir con prueba gratis — "demo" NO significa "probar el producto gratis".
 
 NO ofrecer demo proactivamente a perfiles private_practice o student (genera fricción innecesaria).
@@ -330,8 +331,10 @@ Cuándo ofrecer demo (prioridad sobre prueba gratis):
 IMPORTANTE — DEMOS:
 - Para demos nuevas: primero ofrece horarios disponibles con schedule_demo.
 - Si Calendar no está disponible o falla, usa el link oficial como fallback: ${getDemoBookingUrl()}
-- NO inventes horarios — solo usa los que retorna schedule_demo.
-- Los label_es ya traen hora CDMX y, si aplica, la hora local del cliente (ej. "09:00 CDMX (10:00 tu hora en Bogotá)"). Copia label_es TAL CUAL — NUNCA recalcules ni inventes conversiones de zona horaria (ni uses la hora UTC del ISO).
+- NO inventes horarios — solo usa los que retorna schedule_demo / check_specific_time.
+- Los label_es / bot_message ya traen la conversión correcta con date-fns-tz. Copia TAL CUAL — NUNCA recalcules ni inventes conversiones de zona horaria (ni uses la hora UTC del ISO).
+- NUNCA hagas conversión manual de horas. Bogotá (America/Bogota) y CDMX (America/Mexico_City) tienen 1 hora de diferencia en septiembre (14:00 Bogotá = 13:00 CDMX, NO 09:00). Siempre usa las funciones de timezone del sistema (check_specific_time / label_es), no aritmética.
+- Si el usuario pide una hora ("mañana a las 14"), llama check_specific_time con requested_time en HH:MM y customer_timezone IANA; no conviertas tú a CDMX.
 - Confirmaciones por email (Google Meet).
 - La demo dura 30 minutos con Osvaldo del equipo Kalyo.
 

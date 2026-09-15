@@ -1,6 +1,7 @@
 import { fromZonedTime } from 'date-fns-tz';
 import {
   customerLocalToUtcDate,
+  formatSlotForCustomerRequest,
   formatSlotForES,
   formatSlotTimeDual,
   generateHostCandidateSlots,
@@ -9,6 +10,7 @@ import {
   hostLocalToDate,
   isWithinHostBusinessHours,
   isWithinOverlapBusinessHours,
+  normalizeRequestedTime,
   parseRelativeDate,
   parseTimeFromText,
 } from '../lib/calendar-slots';
@@ -81,6 +83,19 @@ console.log(`✓ ${candidates.length} host slots validated (9–20h Bogotá)`);
 const mondayDate = parseRelativeDate('el lunes', new Date('2026-06-07T15:00:00Z'));
 assert(mondayDate !== null, 'parseRelativeDate failed for el lunes');
 assert(parseTimeFromText('a las 12:30') === '12:30', 'parseTimeFromText failed');
+assert(parseTimeFromText('mañana miércoles a las 14 horas') === '14:00', 'a las 14 horas');
+assert(parseTimeFromText('a las 14') === '14:00', 'a las 14');
+assert(parseTimeFromText('14 horas') === '14:00', '14 horas');
+assert(normalizeRequestedTime('14') === '14:00', 'bare 14');
+assert(normalizeRequestedTime('2 pm') === '14:00', '2 pm');
+
+// Custom request: 14:00 Bogotá → 13:00 CDMX (NOT 09:00)
+const bogotaFourteen = customerLocalToUtcDate('2026-09-16', '14:00', 'America/Bogota');
+assert(bogotaFourteen.toISOString() === '2026-09-16T19:00:00.000Z', '14 Bogotá → 19:00Z');
+const customLabel = formatSlotForCustomerRequest(bogotaFourteen, 'America/Bogota', 'Bogotá');
+assert(customLabel.includes('14:00 Bogotá'), `Expected 14:00 Bogotá, got: ${customLabel}`);
+assert(customLabel.includes('13:00 CDMX'), `Expected 13:00 CDMX, got: ${customLabel}`);
+assert(!customLabel.includes('09:00'), `Must not show 09:00 CDMX: ${customLabel}`);
 
 const mxSlot = customerLocalToUtcDate(mondayDate!, '12:30', 'America/Mexico_City');
 const hostHour = getHostTzParts(mxSlot).hour;
@@ -91,6 +106,7 @@ assert(
 );
 
 console.log('✓ parseRelativeDate + customer timezone conversion OK');
+console.log('✓ custom request 14:00 Bogotá → 13:00 CDMX OK');
 
 // --- Regression: CDMX ↔ Bogotá is 1h, never +5 from UTC hour ---
 const cdmxNine = fromZonedTime('2026-09-16T09:00:00', 'America/Mexico_City');

@@ -174,6 +174,31 @@ export function formatSlotTimeDual(
   return `${primary} (${customerTime} tu hora en ${city})`;
 }
 
+/**
+ * Label when the user asked for a local time ("mañana a las 14"):
+ * customer clock first, CDMX second via date-fns-tz (never manual offsets).
+ * e.g. 14:00 Bogotá → "Miércoles 16 sep, 14:00 Bogotá (13:00 CDMX)"
+ */
+export function formatSlotForCustomerRequest(
+  slotStart: Date,
+  customerTimezone: string,
+  customerLabel?: string,
+): string {
+  const datePart = formatInTimeZone(slotStart, customerTimezone, 'EEEE d MMM, HH:mm', {
+    locale: es,
+  });
+  const capitalized = datePart.charAt(0).toUpperCase() + datePart.slice(1);
+  const city =
+    stripHoraPrefix(customerLabel) || cityLabelFromTimezone(customerTimezone);
+
+  if (sameLocalClock(slotStart, customerTimezone, DEMO_DISPLAY_TIMEZONE)) {
+    return `${capitalized} ${DEMO_DISPLAY_LABEL}`;
+  }
+
+  const cdmxTime = localClock(slotStart, DEMO_DISPLAY_TIMEZONE);
+  return `${capitalized} ${city} (${cdmxTime} ${DEMO_DISPLAY_LABEL})`;
+}
+
 function addDaysHost(base: Date, days: number): Date {
   const p = getHostTzParts(base);
   const d = hostLocalToDate(p.year, p.month, p.day, 12, 0);
@@ -238,12 +263,13 @@ export function customerLocalToUtcDate(
   timeStr: string,
   customerTimezone: string,
 ): Date {
-  const [hourStr, minuteStr] = timeStr.split(':');
-  const hour = parseInt(hourStr, 10);
-  const minute = parseInt(minuteStr ?? '0', 10);
-  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+  const normalized = normalizeRequestedTime(timeStr);
+  if (!normalized) {
     throw new Error(`Invalid time format: ${timeStr}`);
   }
+  const [hourStr, minuteStr] = normalized.split(':');
+  const hour = parseInt(hourStr, 10);
+  const minute = parseInt(minuteStr ?? '0', 10);
   const localIso = `${dateStr}T${pad2(hour)}:${pad2(minute)}:00`;
   return fromZonedTime(localIso, customerTimezone);
 }
@@ -325,23 +351,78 @@ export function parseRelativeDate(text: string, currentDate = new Date()): strin
   return null;
 }
 
-/** Extract HH:MM (24h) from strings like "12:30", "a las 12:30", "2:30 pm". */
+/** Extract HH:MM (24h) from "12:30", "a las 14", "14 horas", "2 pm". */
 export function parseTimeFromText(text: string): string | null {
   const normalized = text
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
-  const match = normalized.match(/(\d{1,2})[:.](\d{2})\s*(am|pm)?/);
-  if (!match) return null;
+  const withMinutes = normalized.match(/(\d{1,2})[:.](\d{2})\s*(am|pm)?/);
+  if (withMinutes) {
+    let hour = parseInt(withMinutes[1], 10);
+    const minute = parseInt(withMinutes[2], 10);
+    const ampm = withMinutes[3];
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    if (hour > 23 || minute > 59) return null;
+    return `${pad2(hour)}:${pad2(minute)}`;
+  }
 
-  let hour = parseInt(match[1], 10);
-  const minute = parseInt(match[2], 10);
-  const ampm = match[3];
-  if (ampm === 'pm' && hour < 12) hour += 12;
-  if (ampm === 'am' && hour === 12) hour = 0;
+  // "a las 14", "a las 14 horas", "las 14h"
+  const aLas = normalized.match(
+    /(?:a\s+)?las\s+(\d{1,2})\s*(?:horas?|hrs?|h)?(?:\s*(am|pm))?/,
+  );
+  if (aLas) {
+    let hour = parseInt(aLas[1], 10);
+    const ampm = aLas[2];
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    if (hour > 23) return null;
+    return `${pad2(hour)}:00`;
+  }
 
-  return `${pad2(hour)}:${pad2(minute)}`;
+  // "14 horas", "14 hrs", "2 pm"
+  const hourWord = normalized.match(/(\d{1,2})\s*(?:horas?|hrs?)\b(?:\s*(am|pm))?/);
+  if (hourWord) {
+    let hour = parseInt(hourWord[1], 10);
+    const ampm = hourWord[2];
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    if (hour > 23) return null;
+    return `${pad2(hour)}:00`;
+  }
+
+  const ampmOnly = normalized.match(/\b(\d{1,2})\s*(am|pm)\b/);
+  if (ampmOnly) {
+    let hour = parseInt(ampmOnly[1], 10);
+    const ampm = ampmOnly[2];
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    if (hour > 23) return null;
+    return `${pad2(hour)}:00`;
+  }
+
+  return null;
+}
+
+/**
+ * Normalize tool/LLM time inputs ("14", "14:00", "2 pm") → HH:MM.
+ * Never does timezone math — only string → clock.
+ */
+export function normalizeRequestedTime(timeStr: string): string | null {
+  const trimmed = timeStr.trim();
+  if (!trimmed) return null;
+
+  const fromText = parseTimeFromText(trimmed) ?? parseTimeFromText(`a las ${trimmed}`);
+  if (fromText) return fromText;
+
+  if (/^\d{1,2}$/.test(trimmed)) {
+    const hour = parseInt(trimmed, 10);
+    if (hour >= 0 && hour <= 23) return `${pad2(hour)}:00`;
+  }
+
+  return null;
 }
 
 export function buildCalendarSlot(
