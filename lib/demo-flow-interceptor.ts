@@ -64,7 +64,14 @@ export async function handleDemoConfirmInterception(params: {
   creds: KalyoTwilioCreds;
   pending: PendingDemoSlots;
 }): Promise<DemoInterceptResult> {
-  const slotChoice = parseSlotChoice(params.messageBody, params.pending);
+  const trimmed = params.messageBody.trim();
+  const emailChoice =
+    params.pending.custom && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) ? trimmed : null;
+
+  const slotChoice = emailChoice
+    ? ('custom' as const)
+    : parseSlotChoice(params.messageBody, params.pending);
+
   if (!slotChoice) {
     throw new Error('handleDemoConfirmInterception called without valid slot choice');
   }
@@ -73,7 +80,7 @@ export async function handleDemoConfirmInterception(params: {
     supabase: params.supabase,
     conversationId: params.conversationId,
     slotNumber: slotChoice,
-    customerEmail: params.pending.customer_email,
+    customerEmail: emailChoice ?? params.pending.customer_email,
     customerName: params.pending.customer_name,
     senderFrom: params.senderFrom,
     botId: params.botId,

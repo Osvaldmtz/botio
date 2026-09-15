@@ -8,12 +8,13 @@ import { detectDemoIntent } from '../lib/demo-intent-detector';
 import { buildDemoSchedulingMessage, getDemoBookingUrl } from '../lib/demo-booking-messages';
 import { detectAmbassadorIntent, isLikelyClientPsychologist } from '../lib/intent-detector';
 import { matchesAmbassadorFaqSignal } from '../lib/embajador-faqs';
-import {
-  KALYO_TOTAL_EVALUATIONS,
-  buildPricingSummary,
-  buildProSummary,
-  buildStarterSummary,
-} from '../lib/kalyo-pricing-data';
+  import {
+    KALYO_EVALUATIONS_LABEL,
+    KALYO_TOTAL_EVALUATIONS,
+    buildPricingSummary,
+    buildProSummary,
+    buildStarterSummary,
+  } from '../lib/kalyo-pricing-data';
 import {
   clearDebounceLocksForTests,
   processWithDebounce,
@@ -62,7 +63,7 @@ async function main(): Promise<void> {
   assert(demoMsg.includes(getDemoBookingUrl()), 'demo message includes DEMO_URL');
   assert(!demoMsg.includes('calendly.com'), 'demo message must not use old Calendly URL');
   assert(demoMsg.includes('fundador de Kalyo'), 'demo message mentions Osvaldo as founder');
-  assert(demoMsg.includes('100+'), 'demo message mentions 100+ evaluaciones');
+  assert(demoMsg.includes('más de 200'), 'demo message mentions 200+ tests');
   assert(demoMsg.includes('zona horaria de CDMX'), 'demo message states CDMX timezone');
   console.log('✓ Fix #1 — Demo intent + official demo URL message');
 
@@ -105,11 +106,12 @@ async function main(): Promise<void> {
   const pricing = buildPricingSummary();
   assert(pricing.includes('$29 USD/mes'), 'pricing: Pro price');
   assert(pricing.includes('2 pacientes'), 'pricing: Starter patients');
-  assert(pricing.includes(`${KALYO_TOTAL_EVALUATIONS}+`), 'pricing: 100+ evaluaciones');
+  assert(pricing.toLowerCase().includes(KALYO_EVALUATIONS_LABEL), 'pricing: más de 200 tests');
+  assert(pricing.includes(String(KALYO_TOTAL_EVALUATIONS)), 'pricing: 200 evaluaciones');
   assert(!pricing.includes('91'), 'pricing: no 91');
   const pro = buildProSummary();
   assert(pro.includes('$29 USD/mes'), 'pro summary price');
-  assert(pro.includes('100+'), 'pro summary 100+');
+  assert(pro.includes('más de 200'), 'pro summary 200+');
   const starter = buildStarterSummary();
   assert(starter.includes('2 pacientes'), 'starter: 2 pacientes');
   assert(starter.includes('20 evaluaciones'), 'starter: 20 evaluaciones');

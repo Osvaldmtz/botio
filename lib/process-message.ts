@@ -53,11 +53,27 @@ import { detectDemoIntent } from '@/lib/demo-intent-detector';
 import {
   buildDemoSchedulingMessage,
   notifyDemoLinkSent,
+  notifyDemoSlotsOffered,
 } from '@/lib/demo-handler';
+import { savePendingDemoSlots } from '@/lib/demo-conversation';
+import {
+  formatSlotsForBot,
+  getAvailableSlots,
+} from '@/lib/google-calendar';
+import {
+  getCustomerTimezone,
+  getCustomerTimezoneLabel,
+} from '@/lib/timezone-from-phone';
 import {
   buildKalyoOfficialPricingPrompt,
   buildPricingSummary,
 } from '@/lib/kalyo-pricing-data';
+import { getUsdFxRates } from '@/lib/fx-rates';
+import {
+  buildLocalCurrencyFxPrompt,
+  isLocalCurrencyQuestion,
+} from '@/lib/fx-pricing-prompt';
+import { getCountryFromPhone } from '@/lib/lead-enrichment';
 import {
   handleAmbassadorMessage,
   loadAmbassadorState,
@@ -103,6 +119,7 @@ export type ProcessMessageSource =
   | 'ambassador_handler'
   | 'purchase_intent_handler'
   | 'demo_scheduling_calendly'
+  | 'demo_scheduling_slots'
   | 'congreso_handler'
   | 'ab-test-variant-f-turn2';
 
@@ -391,16 +408,70 @@ export async function processIncomingMessage(
       };
     }
 
-    // Demo Calendly — before ambassador/Claude. Explicit demo request is a client signal;
-    // must not be blocked by a stale is_ambassador flag on the conversation.
+    // Demo scheduling — offer Google Calendar slots; fall back to kalyo.io/demo link.
+    // Explicit demo request is a client signal; must not be blocked by a stale is_ambassador flag.
     if (detectDemoIntent(messageBody)) {
       console.log(
         `[process-message] DEMO INTENT detected | conv=${conversation.id} | msg="${messageBody.slice(0, 80)}"`,
       );
       const customerName = readCustomerName(conversation, metadata);
-      const replyText = buildDemoSchedulingMessage({ customerName });
-
+      const customerEmail =
+        (typeof metadata.customer_email === 'string' && metadata.customer_email.trim()) ||
+        (typeof metadata.email === 'string' && metadata.email.trim()) ||
+        '';
+      const customerTimezone = getCustomerTimezone(conversation.customer_phone);
+      const customerLabel = getCustomerTimezoneLabel(conversation.customer_phone);
       const assistantNow = new Date().toISOString();
+
+      let replyText: string | null = null;
+      let source: 'demo_scheduling_slots' | 'demo_scheduling_calendly' =
+        'demo_scheduling_calendly';
+      let slotsOffered: string[] = [];
+
+      try {
+        const startDate = new Date(Date.now() + 12 * 60 * 60 * 1000);
+        const endDate = new Date(startDate.getTime() + 2 * 24 * 60 * 60 * 1000);
+        const { slots, overlap_limited } = await getAvailableSlots({
+          startDate,
+          endDate,
+          durationMinutes: 30,
+          customerPhone: conversation.customer_phone,
+          customerTimezone,
+          customerLabel,
+        });
+
+        if (slots.length > 0) {
+          await savePendingDemoSlots(supabase, conversation.id, {
+            slots,
+            customer_email: customerEmail,
+            customer_name: customerName?.trim() || 'Lead WhatsApp',
+            customer_phone: conversation.customer_phone,
+            customer_timezone: customerTimezone,
+            customer_city_label: customerLabel,
+            display_timezone: customerTimezone,
+            display_label: customerLabel,
+            offered_at: assistantNow,
+          });
+
+          const greeting = customerName?.trim() ? `, ${customerName.trim()}` : '';
+          replyText =
+            `¡Perfecto${greeting}! 🎯 Te ofrezco horarios para una demo de 30 min con Osvaldo, fundador de Kalyo.\n\n` +
+            formatSlotsForBot(slots, { overlap_limited });
+          source = 'demo_scheduling_slots';
+          slotsOffered = slots.map((s) => s.label_es);
+        }
+      } catch (err) {
+        console.error(
+          `[process-message] demo slots failed | conv=${conversation.id}`,
+          err,
+        );
+      }
+
+      if (!replyText) {
+        replyText = buildDemoSchedulingMessage({ customerName });
+        source = 'demo_scheduling_calendly';
+      }
+
       await supabase.from('messages').insert({
         conversation_id: conversation.id,
         role: 'assistant',
@@ -408,28 +479,39 @@ export async function processIncomingMessage(
         source: 'text',
         source_type: 'claude',
         metadata: {
-          source: 'demo_scheduling_calendly',
-          demo_link_sent: true,
+          source,
+          demo_link_sent: source === 'demo_scheduling_calendly',
+          demo_slots_offered: source === 'demo_scheduling_slots',
           sent_at: assistantNow,
         },
       });
       await touchConversation(supabase, conversation.id, assistantNow);
 
-      await notifyDemoLinkSent({
-        customerName,
-        phone: conversation.customer_phone,
-        conversationId: conversation.id,
-      });
+      if (source === 'demo_scheduling_slots') {
+        await notifyDemoSlotsOffered({
+          customerName,
+          phone: conversation.customer_phone,
+          conversationId: conversation.id,
+          slotLabels: slotsOffered,
+        });
+      } else {
+        await notifyDemoLinkSent({
+          customerName,
+          phone: conversation.customer_phone,
+          conversationId: conversation.id,
+          reason: 'LINK DEMO ENVIADO (sin slots disponibles)',
+        });
+      }
 
       console.log(
-        `[process-message] channel=${channel} | source=demo_scheduling_calendly | conv=${conversation.id}`,
+        `[process-message] channel=${channel} | source=${source} | conv=${conversation.id}`,
       );
 
       return {
         replyText,
         storedReply: replyText,
         conversationId: conversation.id,
-        source: 'demo_scheduling_calendly',
+        source,
       };
     }
 
@@ -1057,6 +1139,19 @@ export async function processIncomingMessage(
 
   if (isKalyoBotId(bot.id) && isPricingQuestion(messageBody)) {
     systemPrompt += `\n\n${buildPricingSummary()}\n\n${buildKalyoOfficialPricingPrompt()}`;
+  }
+
+  if (isKalyoBotId(bot.id) && isLocalCurrencyQuestion(messageBody)) {
+    try {
+      const fx = await getUsdFxRates();
+      const { country } = getCountryFromPhone(conversation.customer_phone);
+      systemPrompt += `\n\n${buildLocalCurrencyFxPrompt(fx, {
+        country,
+        messageBody,
+      })}`;
+    } catch (fxErr) {
+      console.error('[process-message] FX rates for local currency failed', fxErr);
+    }
   }
 
   const escalationDetected = detectHumanEscalation(messageBody);

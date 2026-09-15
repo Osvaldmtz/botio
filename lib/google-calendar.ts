@@ -42,7 +42,7 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
 ];
 
-const DEFAULT_DURATION_MINUTES = 15;
+const DEFAULT_DURATION_MINUTES = 30;
 
 export type CalendarSlot = {
   start: string;
@@ -115,36 +115,87 @@ export function getGoogleAuthUrl(state: string): string {
 
 export async function exchangeCodeForTokens(code: string): Promise<{
   accessToken: string;
-  refreshToken: string;
+  refreshToken: string | null;
   expiresAt: Date;
   scopes: string[];
 }> {
   const oauth2 = getOAuthClient();
   const { tokens } = await oauth2.getToken(code);
-  if (!tokens.access_token || !tokens.refresh_token) {
-    throw new Error('Google OAuth did not return access_token or refresh_token');
+  if (!tokens.access_token) {
+    throw new Error('Google OAuth did not return access_token');
   }
   const expiresAt = new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000);
   return {
     accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
+    refreshToken: tokens.refresh_token ?? null,
     expiresAt,
     scopes: tokens.scope?.split(' ') ?? SCOPES,
   };
 }
 
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const OAUTH_STATE_CACHE_PREFIX = 'google_calendar_oauth_state:';
+
+export async function saveGoogleCalendarOAuthState(state: string): Promise<void> {
+  const supabase = createAdminClient();
+  const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString();
+  const { error } = await supabase.from('meta_cache').upsert(
+    {
+      cache_key: `${OAUTH_STATE_CACHE_PREFIX}${state}`,
+      payload: { created_at: new Date().toISOString() },
+      cached_at: new Date().toISOString(),
+      expires_at: expiresAt,
+    },
+    { onConflict: 'cache_key' },
+  );
+  if (error) throw new Error(`Failed to save OAuth state: ${error.message}`);
+}
+
+export async function consumeGoogleCalendarOAuthState(state: string): Promise<boolean> {
+  const supabase = createAdminClient();
+  const cacheKey = `${OAUTH_STATE_CACHE_PREFIX}${state}`;
+  const { data, error } = await supabase
+    .from('meta_cache')
+    .select('expires_at')
+    .eq('cache_key', cacheKey)
+    .maybeSingle();
+
+  if (error || !data?.expires_at) return false;
+  if (new Date(data.expires_at).getTime() <= Date.now()) return false;
+
+  await supabase.from('meta_cache').delete().eq('cache_key', cacheKey);
+  return true;
+}
+
 export async function persistCalendarCredentials(input: {
   hostEmail: string;
   accessToken: string;
-  refreshToken: string;
+  refreshToken: string | null;
   expiresAt: Date;
   scopes: string[];
 }): Promise<void> {
   const supabase = createAdminClient();
+
+  let refreshToken = input.refreshToken?.trim() ?? '';
+  if (!refreshToken) {
+    const { data: existing } = await supabase
+      .from('calendar_credentials')
+      .select('refresh_token')
+      .eq('host_email', input.hostEmail)
+      .maybeSingle();
+    refreshToken = existing?.refresh_token?.trim() ?? '';
+  }
+
+  if (!refreshToken) {
+    throw new Error(
+      'Google no devolvió refresh_token. Revoca el acceso en myaccount.google.com/permissions y vuelve a conectar.',
+    );
+  }
+
   const row = {
     host_email: input.hostEmail,
     access_token: input.accessToken,
-    refresh_token: input.refreshToken,
+    refresh_token: refreshToken,
     token_expires_at: input.expiresAt.toISOString(),
     scopes: input.scopes,
     updated_at: new Date().toISOString(),
@@ -156,24 +207,106 @@ export async function persistCalendarCredentials(input: {
   if (error) throw new Error(`Failed to persist calendar credentials: ${error.message}`);
 }
 
-export async function getCalendarConnectionStatus(): Promise<{
+export type CalendarConnectionStatus = {
   connected: boolean;
   hostEmail: string;
-  expiresAt: string | null;
+  /** Access token expiry — refreshes automatically; not the connection lifetime. */
+  accessTokenExpiresAt: string | null;
+  authorizedAt: string | null;
+  hasRefreshToken: boolean;
+  healthy: boolean;
+  healthError: string | null;
+};
+
+async function probeCalendarRefresh(row: CalendarCredentialsRow): Promise<{
+  healthy: boolean;
+  error: string | null;
+  accessTokenExpiresAt?: string;
 }> {
+  if (!row.refresh_token?.trim()) {
+    return { healthy: false, error: 'missing_refresh_token' };
+  }
+
+  const oauth2 = getOAuthClient();
+  oauth2.setCredentials({ refresh_token: row.refresh_token });
+
+  try {
+    const { credentials } = await oauth2.refreshAccessToken();
+    if (!credentials.access_token) {
+      return { healthy: false, error: 'refresh_returned_no_access_token' };
+    }
+
+    const expiresAt = new Date(credentials.expiry_date ?? Date.now() + 3600 * 1000);
+    const supabase = createAdminClient();
+    await supabase
+      .from('calendar_credentials')
+      .update({
+        access_token: credentials.access_token,
+        token_expires_at: expiresAt.toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', row.id);
+
+    return { healthy: true, error: null, accessTokenExpiresAt: expiresAt.toISOString() };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/invalid_grant|Token has been expired or revoked/i.test(message)) {
+      return { healthy: false, error: 'refresh_token_revoked' };
+    }
+    return { healthy: false, error: message };
+  }
+}
+
+export async function getCalendarConnectionStatus(options?: {
+  probe?: boolean;
+}): Promise<CalendarConnectionStatus> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('calendar_credentials')
-    .select('host_email, token_expires_at')
+    .select('host_email, token_expires_at, refresh_token, updated_at')
     .eq('host_email', DEMO_HOST_EMAIL)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
 
+  if (!data) {
+    return {
+      connected: false,
+      hostEmail: DEMO_HOST_EMAIL,
+      accessTokenExpiresAt: null,
+      authorizedAt: null,
+      hasRefreshToken: false,
+      healthy: false,
+      healthError: 'not_connected',
+    };
+  }
+
+  const hasRefreshToken = Boolean(data.refresh_token?.trim());
+  let accessTokenExpiresAt = data.token_expires_at ?? null;
+  let healthy = hasRefreshToken;
+  let healthError: string | null = hasRefreshToken ? null : 'missing_refresh_token';
+
+  const accessExpired =
+    !accessTokenExpiresAt || new Date(accessTokenExpiresAt).getTime() <= Date.now() + 60_000;
+
+  if (options?.probe !== false && hasRefreshToken && accessExpired) {
+    const fullRow = await loadCredentials();
+    const probe = await probeCalendarRefresh(fullRow);
+    healthy = probe.healthy;
+    healthError = probe.error;
+    if (probe.accessTokenExpiresAt) {
+      accessTokenExpiresAt = probe.accessTokenExpiresAt;
+    }
+  }
+
   return {
-    connected: Boolean(data),
+    connected: true,
     hostEmail: DEMO_HOST_EMAIL,
-    expiresAt: data?.token_expires_at ?? null,
+    accessTokenExpiresAt,
+    authorizedAt: data.updated_at ?? null,
+    hasRefreshToken,
+    healthy,
+    healthError,
   };
 }
 
@@ -199,25 +332,35 @@ async function refreshAccessToken(
   oauth2: ReturnType<typeof getOAuthClient>,
 ): Promise<string> {
   oauth2.setCredentials({ refresh_token: row.refresh_token });
-  const { credentials } = await oauth2.refreshAccessToken();
-  if (!credentials.access_token) {
-    throw new Error('Failed to refresh Google Calendar access token');
+  try {
+    const { credentials } = await oauth2.refreshAccessToken();
+    if (!credentials.access_token) {
+      throw new Error('Failed to refresh Google Calendar access token');
+    }
+
+    const expiresAt = new Date(credentials.expiry_date ?? Date.now() + 3600 * 1000);
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from('calendar_credentials')
+      .update({
+        access_token: credentials.access_token,
+        token_expires_at: expiresAt.toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', row.id);
+
+    if (error) throw new Error(error.message);
+    console.log(`[calendar] credentials refreshed for ${row.host_email}`);
+    return credentials.access_token;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/invalid_grant|Token has been expired or revoked/i.test(message)) {
+      throw new Error(
+        'Google Calendar refresh token expired or revoked. Reconnect at /admin/calendar-settings.',
+      );
+    }
+    throw err;
   }
-
-  const expiresAt = new Date(credentials.expiry_date ?? Date.now() + 3600 * 1000);
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from('calendar_credentials')
-    .update({
-      access_token: credentials.access_token,
-      token_expires_at: expiresAt.toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', row.id);
-
-  if (error) throw new Error(error.message);
-  console.log(`[calendar] credentials refreshed for ${row.host_email}`);
-  return credentials.access_token;
 }
 
 export async function getCalendarClient(): Promise<calendar_v3.Calendar> {
@@ -410,8 +553,6 @@ function applyOverlapFilter(
 export async function getAvailableSlots(
   params: GetAvailableSlotsParams = {},
 ): Promise<AvailableSlotsResult> {
-  // DEPRECATED: 13 jun 2026 — reemplazado por link oficial de demo (DEMO_URL / KALYO_DEMO_BOOKING_URL).
-  // Mantener temporalmente para demos en curso que ya tienen pending slots.
   const durationMinutes = params.durationMinutes ?? DEFAULT_DURATION_MINUTES;
   const now = new Date();
   const earliest = new Date(now.getTime() + CALENDAR_MIN_ADVANCE_HOURS * 60 * 60 * 1000);

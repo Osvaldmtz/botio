@@ -4,6 +4,7 @@ import {
   checkSpecificTime,
   createDemoEvent,
   formatDemoConfirmationMessage,
+  isValidEmail,
 } from '@/lib/google-calendar';
 import {
   clearPendingDemoSlots,
@@ -78,6 +79,24 @@ export async function executeConfirmDemoSlot(params: {
     }
   }
 
+  const resolvedEmail = (email || pending.customer_email || '').trim();
+  const resolvedName = (name || pending.customer_name || '').trim() || 'Lead WhatsApp';
+
+  if (!isValidEmail(resolvedEmail)) {
+    await savePendingDemoSlots(supabase, conversationId, {
+      ...pending,
+      custom: slot,
+      customer_name: resolvedName,
+      customer_phone: senderFrom,
+    });
+    return {
+      status: 'need_email',
+      bot_message:
+        `Perfecto — dejo pendiente: ${slot.label_es}.\n\n` +
+        '¿Me das tu email para enviarte la invitación de Google Meet?',
+    };
+  }
+
   const { data: conv } = await supabase
     .from('conversations')
     .select('pipeline_stage, lead_score, lead_intent, lead_signals, bot_id')
@@ -87,8 +106,8 @@ export async function executeConfirmDemoSlot(params: {
   try {
     const scheduledAt = new Date(slot.start);
     const result = await createDemoEvent({
-      customerEmail: email || pending.customer_email,
-      customerName: name || pending.customer_name,
+      customerEmail: resolvedEmail,
+      customerName: resolvedName,
       customerPhone: senderFrom,
       scheduledAt,
       botContext: {
@@ -110,8 +129,8 @@ export async function executeConfirmDemoSlot(params: {
     if (creds) {
       await notifySalesTeam(
         {
-          name: name || pending.customer_name,
-          email: email || pending.customer_email,
+          name: resolvedName,
+          email: resolvedEmail,
           phone: senderFrom,
           whatsapp_number: senderFrom,
           reason: 'demo_scheduled',
@@ -134,7 +153,7 @@ export async function executeConfirmDemoSlot(params: {
       meet_link: result.meetLink,
       bot_message: formatDemoConfirmationMessage(
         scheduledAt,
-        email || pending.customer_email,
+        resolvedEmail,
         pending.customer_timezone ?? pending.display_timezone,
         pending.customer_city_label ?? pending.display_label,
       ),

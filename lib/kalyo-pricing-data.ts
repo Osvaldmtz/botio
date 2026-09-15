@@ -1,5 +1,6 @@
-/** Official count from kalyo.io / app.kalyo.io/pricing (91+ tests clínicos validados). */
-export const KALYO_TOTAL_EVALUATIONS = 91;
+/** Official catalog size — más de 200 tests psicométricos estandarizados. */
+export const KALYO_TOTAL_EVALUATIONS = 200;
+export const KALYO_EVALUATIONS_LABEL = 'más de 200 tests psicométricos estandarizados';
 export const KALYO_TAGLINE = 'Menos papeleo, más pacientes.';
 
 export const STARTER_EVALUATION_SAMPLES = ['PHQ-9', 'GAD-7', 'BDI'] as const;
@@ -40,7 +41,7 @@ export const KALYO_PRICING = {
     features: [
       'Pacientes ilimitados',
       'Evaluaciones ilimitadas',
-      '91+ tests clínicos validados',
+      'Más de 200 tests psicométricos estandarizados',
       'Plantillas ilimitadas',
       'Kaly Voice (asistente de voz)',
       'Reportes IA avanzados',
@@ -152,7 +153,7 @@ export function buildProSummary(): string {
   return (
     `💎 Plan Pro — $${p.price_monthly} USD/mes:\n\n` +
     `✓ Pacientes y evaluaciones ilimitadas\n` +
-    `✓ 91+ tests clínicos validados\n` +
+    `✓ Más de 200 tests psicométricos estandarizados\n` +
     `✓ Kaly Voice (asistente de voz)\n` +
     `✓ Reportes IA avanzados + Copilot terapéutico\n` +
     `✓ Resumen mensual IA y Daily Brief\n` +
@@ -196,7 +197,7 @@ export function buildStandardPricePresentation(): string {
   const maxBullets = m.highlight_features.map((f) => `• ${f}`).join('\n');
   const proBullets = [
     'Pacientes y evaluaciones ilimitadas',
-    '91+ tests clínicos validados',
+    'Más de 200 tests psicométricos estandarizados',
     'Kaly Voice + reportes IA avanzados',
     'Copilot terapéutico y soporte prioritario',
   ]
@@ -231,7 +232,7 @@ export function buildKalyoOfficialPricingPrompt(): string {
 
 PLANES DE KALYO:
 - Starter (Gratis): ${s.max_patients} pacientes activos, ${s.max_evaluations_per_month} evaluaciones/mes, 3 pruebas básicas (${starterList}), reportes básicos, PDF con marca de agua
-- Pro ($${p.price_monthly} USD/mes): pacientes ilimitados, evaluaciones ilimitadas, 91+ tests, Kaly Voice, reportes IA avanzados, copilot, resumen mensual IA, Daily Brief, soporte prioritario
+- Pro ($${p.price_monthly} USD/mes): pacientes ilimitados, evaluaciones ilimitadas, ${KALYO_EVALUATIONS_LABEL}, Kaly Voice, reportes IA avanzados, copilot, resumen mensual IA, Daily Brief, soporte prioritario
 - Max ($${m.price_monthly} USD/mes) — RECOMENDADO: todo Pro + agenda, videollamadas Daily.co, grabación/transcripción (20/mes), SOAP+IA, portal paciente, finanzas, facturación SAT, recordatorios WhatsApp
 - Ultra ($${u.price_monthly} USD/mes): todo Max + Sofía WhatsApp 24/7, agendamiento automático, inbox supervisión, número WhatsApp Business propio, cobro con tarjeta
 
@@ -274,9 +275,10 @@ LINKS DE PAGO OFICIALES (default: sin cupón):
 REGLAS ESTRICTAS:
 1. NUNCA inventes números de pacientes, evaluaciones o precios.
 2. SIEMPRE usa los números exactos arriba.
-3. Si dudas sobre evaluaciones, di "91+ tests clínicos validados" (nunca 100, 90, ni otro número).
-4. Tagline oficial: "${KALYO_TAGLINE}"
-5. Kaly Voice está en Pro; agenda/videollamadas/transcripción están en Max.
-6. NUNCA crees descuentos nuevos. El único válido es ${d.code}
-7. Si no sabes un dato, di "déjame preguntar al equipo" antes de inventarlo`;
+3. Si dudas sobre evaluaciones, di "${KALYO_EVALUATIONS_LABEL}" (nunca 91, 100, ni otro número).
+4. Si preguntan por un test específico (Seña, BRIEF-2, WISC, MMPI, etc.): confirma que el catálogo tiene ${KALYO_EVALUATIONS_LABEL} (PHQ-9, GAD-7, PCL-5, Beck, Hamilton, AUDIT, CAGE, SCL-90, STAI, BDI y muchos más). No inventes si un instrumento puntual está o no. Ofrece conectar con el equipo o activar la prueba gratis para verlo en la plataforma.
+5. Tagline oficial: "${KALYO_TAGLINE}"
+6. Kaly Voice está en Pro; agenda/videollamadas/transcripción están en Max.
+7. NUNCA crees descuentos nuevos. El único válido es ${d.code}
+8. Si no sabes un dato, di "déjame preguntar al equipo" antes de inventarlo`;
 }

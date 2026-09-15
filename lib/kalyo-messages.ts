@@ -66,7 +66,7 @@ export function shouldAttachQuickReplies(input: {
 export function mapQuickReplySelection(text: string): string | null {
   const normalized = text.trim().toLowerCase();
   if (/^1$|evaluaci[oó]n/i.test(normalized)) {
-    return 'El usuario eligió Evaluaciones — explícale las evaluaciones clínicas de Kalyo. NO incluyas quick replies al final.';
+    return 'El usuario eligió Evaluaciones — explícale que Kalyo incluye más de 200 tests psicométricos estandarizados (PHQ-9, GAD-7, PCL-5, Beck, Hamilton y muchos más), cada uno con reporte PDF e interpretación por IA. Si pregunta por un test puntual, no inventes si está o no: ofrece conectar con el equipo o la prueba gratis. NO incluyas quick replies al final.';
   }
   if (/^2$|precio|plan/i.test(normalized)) {
     return 'El usuario eligió Precios — presenta Max primero como recomendado, luego Pro como alternativa más básica. Usa datos oficiales de planes. NO incluyas quick replies al final.';

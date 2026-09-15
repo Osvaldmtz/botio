@@ -21,7 +21,7 @@ export const PROFILE_FLOWS: Record<Exclude<ProfileType, 'unknown'>, ProfileFlowC
     key_messages: [
       'Max recomendado: agenda + videollamadas + transcripción',
       'reportes IA ahorran horas por paciente',
-      '91+ evaluaciones validadas (PHQ-9, Beck, etc.)',
+      'más de 200 tests psicométricos estandarizados (PHQ-9, Beck, etc.)',
     ],
     objection_handling: {
       precio:

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import {
   DEMO_HOST_EMAIL,
+  consumeGoogleCalendarOAuthState,
   exchangeCodeForTokens,
   persistCalendarCredentials,
 } from '@/lib/google-calendar';
@@ -27,7 +28,15 @@ export async function GET(request: Request) {
   const savedState = cookies().get(STATE_COOKIE)?.value;
   cookies().set({ name: STATE_COOKIE, value: '', maxAge: 0, path: '/' });
 
-  if (!code || !state || !savedState || state !== savedState) {
+  let stateValid = false;
+  if (state) {
+    stateValid = await consumeGoogleCalendarOAuthState(state);
+    if (!stateValid && savedState && state === savedState) {
+      stateValid = true;
+    }
+  }
+
+  if (!code || !stateValid) {
     return NextResponse.redirect(`${settingsUrl}?error=invalid_oauth_state`);
   }
 

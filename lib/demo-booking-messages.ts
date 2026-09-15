@@ -16,7 +16,7 @@ export function buildDemoSchedulingMessage(opts: {
 📅 ${DEMO_URL}
 
 En 30 minutos verás:
-✓ Las 100+ evaluaciones validadas con IA
+✓ Más de 200 tests psicométricos estandarizados con IA
 ✓ El asistente de voz Kaly en acción
 ✓ Cómo funciona la agenda y Kalyo Meet
 ✓ Reportes automáticos con interpretación IA

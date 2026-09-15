@@ -1,4 +1,4 @@
-import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
+import { KALYO_EVALUATIONS_LABEL, KALYO_PRICING } from '@/lib/kalyo-pricing-data';
 import { getPaymentLink } from '@/lib/kalyo-payment-links';
 import type { ObjectionType } from '@/lib/objection-detector';
 import {
@@ -89,7 +89,7 @@ export function formatObjectionResponse(
       return (
         `${prefixWithName('Interesante', name)} ¿qué usas hoy? Kalyo se diferencia en 3 cosas clave:\n\n` +
         `🚀 Plan Max: agenda + videollamadas + transcripción + portal del paciente\n` +
-        `📊 91+ tests con reportes IA avanzados (sin escribir reportes a mano)\n` +
+        `📊 ${KALYO_EVALUATIONS_LABEL} con reportes IA avanzados (sin escribir reportes a mano)\n` +
         `🇲🇽 Hecho en LATAM para psicólogos LATAM (DSM-5, español)\n\n` +
         `Max ($${KALYO_PRICING.max.price_monthly}/mes) es el recomendado. Pro ($${KALYO_PRICING.pro.price_monthly}/mes) si buscas algo más básico.\n\n` +
         `¿Te interesa probar Max 7 días gratis primero?`

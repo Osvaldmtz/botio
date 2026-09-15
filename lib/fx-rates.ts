@@ -1,10 +1,10 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-/** Fallback rates when live APIs are unavailable (approx mid-2026). */
-export const FALLBACK_MXN_PER_USD = 17.5;
+/** Fallback rates when live APIs are unavailable (approx Sep 2026). */
+export const FALLBACK_MXN_PER_USD = 17.0;
 /** TRM aproximada; el fallback real debe estar cerca del valor oficial vigente. */
-export const FALLBACK_COP_PER_USD = 3200;
+export const FALLBACK_COP_PER_USD = 3100;
 
 const FX_CACHE_KEY = 'fx_rates_usd_v2';
 const FX_CACHE_TTL_MS = 24 * 60 * 60 * 1000;

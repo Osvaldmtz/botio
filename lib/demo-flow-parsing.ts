@@ -58,8 +58,14 @@ export function shouldInterceptDemoConfirm(
   pending: PendingDemoSlots | null,
   messageBody: string,
 ): boolean {
-  if (!pending?.slots?.length) return false;
+  if (!pending) return false;
+  if (pending.custom && looksLikeEmail(messageBody)) return true;
+  if (!pending.slots?.length) return false;
   return parseSlotChoice(messageBody, pending) !== null;
+}
+
+function looksLikeEmail(text: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text.trim());
 }
 
 export function shouldInterceptDemoTimeCheck(

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { randomBytes } from 'node:crypto';
 import { isAdmin } from '@/lib/admin-auth';
-import { getGoogleAuthUrl } from '@/lib/google-calendar';
+import { getGoogleAuthUrl, saveGoogleCalendarOAuthState } from '@/lib/google-calendar';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +15,9 @@ export async function GET() {
   }
 
   const state = randomBytes(16).toString('hex');
+  await saveGoogleCalendarOAuthState(state);
+
+  // Cookie fallback for same-origin flows; primary validation uses meta_cache (cross-domain safe).
   cookies().set({
     name: STATE_COOKIE,
     value: state,
