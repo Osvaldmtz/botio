@@ -6,8 +6,7 @@ export type RecommendedPlan = 'starter' | 'starter_free';
 export type ProfileFlowConfig = {
   recommended_plan: RecommendedPlan;
   offer_trial: boolean;
-  /** true = active offer; 'passive' = mention as secondary option with link, no forced slots */
-  offer_demo: boolean | 'passive';
+  offer_demo: boolean;
   offer_volume_discount: boolean;
   key_messages: string[];
   objection_handling: Record<string, string>;
@@ -17,7 +16,7 @@ export const PROFILE_FLOWS: Record<Exclude<ProfileType, 'unknown'>, ProfileFlowC
   private_practice: {
     recommended_plan: 'starter',
     offer_trial: true,
-    offer_demo: 'passive',
+    offer_demo: false,
     offer_volume_discount: false,
     key_messages: [
       'Max recomendado: agenda + videollamadas + transcripción',
@@ -26,7 +25,7 @@ export const PROFILE_FLOWS: Record<Exclude<ProfileType, 'unknown'>, ProfileFlowC
     ],
     objection_handling: {
       precio:
-        'El plan Max ($39/mes) suele pagarse solo con 1-2 pacientes extra al mes. Pro ($29/mes) si busca algo más básico. Si prefiere verlo en vivo antes: https://kalyo.io/demo',
+        'El plan Max ($39/mes) suele pagarse solo con 1-2 pacientes extra al mes. Pro ($29/mes) si busca algo más básico.',
       tiempo: 'La configuración toma menos de 10 minutos; puedes importar pacientes después.',
     },
   },
@@ -91,13 +90,7 @@ PUNTOS CLAVE A MENCIONAR (cuando sean relevantes, no forzados):
 ${flow.key_messages.map((m) => `- ${m}`).join('\n')}
 PLAN RECOMENDADO: ${flow.recommended_plan === 'starter_free' ? 'Starter gratis' : 'Max ($39) — Pro ($29) como alternativa más básica'}
 OFRECER TRIAL PRO: ${flow.offer_trial ? 'sí' : 'no'}
-OFRECER DEMO: ${
-    flow.offer_demo === true
-      ? 'sí (activa — puedes ofrecer slots o link)'
-      : flow.offer_demo === 'passive'
-        ? 'pasiva — menciona demo online como opción secundaria con https://kalyo.io/demo; NO forzar slots ni pedir email'
-        : 'no'
-  }
+OFRECER DEMO: ${flow.offer_demo ? 'sí' : 'no'}
 OFRECER DESCUENTO VOLUMEN: ${flow.offer_volume_discount ? 'sí' : 'no'}
 MANEJO DE OBJECIONES (usar solo si el usuario las plantea):
 ${objections}

@@ -11,7 +11,7 @@ export function buildDemoSchedulingMessage(opts: {
 }): string {
   const greeting = opts.customerName?.trim() ? `, ${opts.customerName.trim()}` : '';
 
-  return `¡Perfecto${greeting}! 🎯 Te agendo una demo online personalizada.
+  return `¡Perfecto${greeting}! 🎯 Te agendo una demo personalizada con Osvaldo, fundador de Kalyo.
 
 📅 ${DEMO_URL}
 

@@ -456,7 +456,7 @@ export async function processIncomingMessage(
 
           const greeting = customerName?.trim() ? `, ${customerName.trim()}` : '';
           replyText =
-            `¡Perfecto${greeting}! 🎯 Te ofrezco horarios para una demo online de 30 min.\n\n` +
+            `¡Perfecto${greeting}! 🎯 Te ofrezco horarios para una demo de 30 min con Osvaldo, fundador de Kalyo.\n\n` +
             formatSlotsForBot(slots, { overlap_limited });
           source = 'demo_scheduling_slots';
           slotsOffered = slots.map((s) => s.label_es);

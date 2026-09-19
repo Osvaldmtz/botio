@@ -27,7 +27,7 @@ import {
 export const DEMO_TIMEZONE = HOST_TIMEZONE;
 export const DEMO_HOST_EMAIL = process.env.DEMO_HOST_EMAIL ?? 'osvamtz@gmail.com';
 export const DEMO_HOST_NAME = process.env.DEMO_HOST_NAME ?? 'Osvaldo Martínez';
-export const DEMO_HOST_TEAM_LABEL = 'el equipo de Kalyo';
+export const DEMO_HOST_TEAM_LABEL = 'Osvaldo del equipo de Kalyo';
 
 /** Fixed Meet room for all Kalyo demos (no per-event conferenceData). */
 export const DEFAULT_DEMO_MEET_LINK = 'https://meet.google.com/pgd-dxmb-sfk';
