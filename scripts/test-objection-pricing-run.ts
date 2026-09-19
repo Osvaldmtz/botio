@@ -28,6 +28,7 @@ assert(thirdPrice.includes(maxCoupon), 'third response offers PRIMER50 as last r
 assert(!thirdPrice.includes('Osvaldo'), 'third response does not handoff yet');
 
 const fourthPrice = formatObjectionResponse('price', { isRepeat: true, priceObjectionCount: 4 });
-assert(fourthPrice.includes('Osvaldo'), 'fourth price objection escalates to handoff');
+assert(fourthPrice.includes('nuestro equipo'), 'fourth price objection escalates to handoff');
+assert(!fourthPrice.includes('Osvaldo'), 'fourth handoff must not use personal names');
 
 console.log('✓ All objection flow formatting tests passed');

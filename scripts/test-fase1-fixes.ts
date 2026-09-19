@@ -62,8 +62,10 @@ async function main(): Promise<void> {
   assert(demoMsg.includes('https://kalyo.io/demo'), 'demo message includes official demo URL');
   assert(demoMsg.includes(getDemoBookingUrl()), 'demo message includes DEMO_URL');
   assert(!demoMsg.includes('calendly.com'), 'demo message must not use old Calendly URL');
-  assert(demoMsg.includes('fundador de Kalyo'), 'demo message mentions Osvaldo as founder');
-  assert(demoMsg.includes('más de 200'), 'demo message mentions 200+ tests');
+  assert(demoMsg.includes('nuestro equipo'), 'demo message mentions nuestro equipo (no personal names)');
+  assert(!demoMsg.includes('Osvaldo'), 'demo message must not mention personal names');
+  assert(!demoMsg.includes('fundador'), 'demo message must not say fundador');
+  assert(/m[aá]s de 200/i.test(demoMsg), 'demo message mentions 200+ tests');
   assert(demoMsg.includes('zona horaria de CDMX'), 'demo message states CDMX timezone');
   console.log('✓ Fix #1 — Demo intent + official demo URL message');
 

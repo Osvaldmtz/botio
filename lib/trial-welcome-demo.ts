@@ -29,14 +29,13 @@ export function formatTrialWelcomeDemoBlock(
 }
 
 /**
- * Follow-up sent right after welcome + credentials.
+ * Follow-up sent right after welcome + credentials (automatic second WhatsApp).
  * Yes → demo slots / kalyo.io/demo via detectDemoIntent path.
  */
 export function buildTrialDemoFollowUpOfferMessage(): string {
   return (
-    `¿Te gustaría agendar una demo de 20 minutos para que te mostremos todo lo que puedes hacer con Kalyo? ` +
-    `Te ayudamos a configurar tu cuenta y resolver dudas en vivo. 📅\n\n` +
-    `Responde:\n` +
+    `¿Te gustaría agendar una demo de 20 minutos con nuestro equipo? ` +
+    `Te mostramos todo en vivo y te ayudamos con el setup inicial. 📅\n\n` +
     `1️⃣ Sí, quiero una demo\n` +
     `2️⃣ No por ahora, exploraré solo`
   );
@@ -175,4 +174,40 @@ export async function setTrialDemoOfferPending(
     .eq('id', conversationId);
 
   if (error) throw new Error(error.message);
+}
+
+/** True when a WhatsApp self-serve trial tool just succeeded. */
+export function trialActivationSucceededForDemoFollowUp(
+  toolsCalled: string[],
+  toolResults: Record<string, unknown>,
+): boolean {
+  const tools = ['create_account_and_activate_trial', 'activate_pro_trial'] as const;
+  for (const name of tools) {
+    if (!toolsCalled.includes(name)) continue;
+    const raw = toolResults[name];
+    if (!raw || typeof raw !== 'object') continue;
+    if ((raw as Record<string, unknown>).status === 'success') return true;
+  }
+  return false;
+}
+
+/**
+ * Persist demo offer + pending flag (Twilio send happens after credentials reply).
+ */
+export async function persistTrialDemoFollowUpOffer(params: {
+  supabase: SupabaseClient;
+  conversationId: string;
+  body?: string;
+}): Promise<string> {
+  const body = params.body ?? buildTrialDemoFollowUpOfferMessage();
+  await params.supabase.from('messages').insert({
+    conversation_id: params.conversationId,
+    role: 'assistant',
+    content: body,
+    source: 'text',
+    source_type: 'claude',
+    metadata: { source: 'trial_demo_followup_offer' },
+  });
+  await setTrialDemoOfferPending(params.supabase, params.conversationId, true);
+  return body;
 }

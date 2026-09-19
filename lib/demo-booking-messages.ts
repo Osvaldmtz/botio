@@ -2,6 +2,9 @@
 export const DEMO_URL =
   process.env.KALYO_DEMO_BOOKING_URL ?? 'https://kalyo.io/demo';
 
+/** User-facing host label — never a personal name. */
+export const DEMO_HOST_TEAM_LABEL = 'nuestro equipo';
+
 export function getDemoBookingUrl(): string {
   return DEMO_URL;
 }
@@ -11,7 +14,7 @@ export function buildDemoSchedulingMessage(opts: {
 }): string {
   const greeting = opts.customerName?.trim() ? `, ${opts.customerName.trim()}` : '';
 
-  return `¡Perfecto${greeting}! 🎯 Te agendo una demo personalizada con Osvaldo, fundador de Kalyo.
+  return `¡Perfecto${greeting}! 🎯 Te agendo una demo personalizada con nuestro equipo.
 
 📅 ${DEMO_URL}
 

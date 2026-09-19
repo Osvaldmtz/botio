@@ -140,7 +140,8 @@ async function runTests(): Promise<void> {
     metadata: { name: 'María Test', email: testEmail },
   });
 
-  assert(fourth != null && fourth.replyText.includes('Osvaldo'), 'fourth insistence mentions handoff');
+  assert(fourth != null && fourth.replyText.includes('nuestro equipo'), 'fourth insistence mentions handoff');
+  assert(fourth != null && !fourth.replyText.includes('Osvaldo'), 'fourth must not use personal names');
   assert(fourth != null && fourth.replyText.includes('email'), 'fourth insistence asks for email');
 
   const { count } = await supabase

@@ -58,11 +58,14 @@ import {
 } from '@/lib/demo-handler';
 import { savePendingDemoSlots } from '@/lib/demo-conversation';
 import {
+  buildTrialDemoFollowUpOfferMessage,
   buildTrialDemoOfferDeclineAck,
   detectTrialDemoOfferAccept,
   detectTrialDemoOfferDecline,
   isTrialDemoOfferPending,
+  persistTrialDemoFollowUpOffer,
   setTrialDemoOfferPending,
+  trialActivationSucceededForDemoFollowUp,
 } from '@/lib/trial-welcome-demo';
 import {
   formatSlotsForBot,
@@ -155,6 +158,8 @@ export type ProcessIncomingMessageResult = {
   quickReplies?: QuickReplyButton[];
   closed?: boolean;
   rateLimited?: boolean;
+  /** Extra WhatsApp messages to send after the main reply (e.g. post-trial demo offer). */
+  followUpMessages?: string[];
 };
 
 type BotRow = {
@@ -504,7 +509,7 @@ export async function processIncomingMessage(
 
           const greeting = customerName?.trim() ? `, ${customerName.trim()}` : '';
           replyText =
-            `¡Perfecto${greeting}! 🎯 Te ofrezco horarios para una demo de 30 min con Osvaldo, fundador de Kalyo.\n\n` +
+            `¡Perfecto${greeting}! 🎯 Te ofrezco horarios para una demo de 30 min con nuestro equipo.\n\n` +
             formatSlotsForBot(slots, { overlap_limited });
           source = 'demo_scheduling_slots';
           slotsOffered = slots.map((s) => s.label_es);
@@ -1378,11 +1383,48 @@ export async function processIncomingMessage(
 
   console.log(`[process-message] channel=${channel} | source=${source} | conv=${conversation.id}`);
 
+  let followUpMessages: string[] | undefined;
+  if (
+    isKalyoBotId(bot.id) &&
+    channel === 'whatsapp' &&
+    trialActivationSucceededForDemoFollowUp(toolsCalled, toolResults)
+  ) {
+    try {
+      const followUp = await persistTrialDemoFollowUpOffer({
+        supabase,
+        conversationId: conversation.id,
+        body: buildTrialDemoFollowUpOfferMessage(),
+      });
+      followUpMessages = [followUp];
+      // Credentials already delivered in this turn — skip day-1 welcome retry cron.
+      try {
+        const { data: enrollment } = await supabase
+          .from('trial_onboarding_messages')
+          .select('id')
+          .eq('conversation_id', conversation.id)
+          .is('day_1_sent_at', null)
+          .maybeSingle();
+        if (enrollment?.id) {
+          const { markDay1WelcomeSent } = await import('@/lib/trial-onboarding-cron');
+          await markDay1WelcomeSent(supabase, enrollment.id as string);
+        }
+      } catch (day1Err) {
+        console.error('[process-message] mark day_1 after trial activation failed', day1Err);
+      }
+      console.log(
+        `[process-message] queued trial demo follow-up | conv=${conversation.id}`,
+      );
+    } catch (followErr) {
+      console.error('[process-message] trial demo follow-up persist failed', followErr);
+    }
+  }
+
   return {
     replyText: storedReply,
     storedReply,
     conversationId: conversation.id,
     source,
     quickReplies: useQuickReplies ? [...QUICK_REPLY_OPTIONS] : undefined,
+    followUpMessages,
   };
 }

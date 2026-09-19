@@ -64,8 +64,8 @@ export function formatObjectionResponse(
 
     const opener = nameThenVerb(name, 'entiendo');
     return (
-      `${opener}. Te pongo en contacto con Osvaldo del equipo para que vea cómo ajustarte algo más conveniente.\n\n` +
-      `Solo necesito tu email para que te escriba directamente.`
+      `${opener}. Te pongo en contacto con nuestro equipo para que vea cómo ajustarte algo más conveniente.\n\n` +
+      `Solo necesito tu email para que te escriban directamente.`
     );
   }
 

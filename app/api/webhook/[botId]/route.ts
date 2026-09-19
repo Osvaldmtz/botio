@@ -275,6 +275,22 @@ export async function POST(request: Request, { params }: Params) {
         quickReplies: result.quickReplies,
       });
 
+      const followUps = result.followUpMessages?.filter((m) => m.trim()) ?? [];
+      for (const followUp of followUps) {
+        await new Promise((r) => setTimeout(r, 1500));
+        try {
+          await sendWhatsApp({
+            accountSid: bot.twilio_account_sid,
+            authToken: bot.twilio_auth_token,
+            from: bot.twilio_whatsapp_number,
+            to: from,
+            body: followUp,
+          });
+        } catch (followErr) {
+          console.error('[webhook] Twilio follow-up send failed', followErr);
+        }
+      }
+
       if (result.conversationId && isKalyoBotId(bot.id)) {
         void scheduleGhostReactivationIfEligible(
           supabase,

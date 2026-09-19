@@ -67,6 +67,8 @@ assert(!welcome.includes('Sí, quiero una demo'), 'welcome must NOT include demo
 
 const followUp = buildTrialDemoFollowUpOfferMessage();
 assert(followUp.includes('demo de 20 minutos'), 'follow-up must mention 20 min demo');
+assert(followUp.includes('nuestro equipo'), 'follow-up must say nuestro equipo');
+assert(!followUp.includes('Osvaldo'), 'follow-up must not name people');
 assert(followUp.includes('Sí, quiero una demo'), 'follow-up must include accept option');
 assert(followUp.includes('No por ahora, exploraré solo'), 'follow-up must include decline option');
 

@@ -41,7 +41,7 @@ export function buildTrialActivationSuccessMessage(params: {
       `${greeting} Tu prueba gratis de ${planName} está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${params.email}.${passwordLine}\n` +
       `Tu prueba gratis de ${planName} por 7 días empezó hoy. Termina el ${trialDate}.\n\n` +
       (plan === 'max' ? `Incluye:\n${buildTrialMaxFeaturesBlock()}\n\n` : '') +
-      `¿Te ayudo con el setup inicial?` +
+      `Cualquier duda, escríbeme.` +
       humanSupportTrialFooter()
     );
   }
@@ -56,7 +56,7 @@ export function buildTrialActivationSuccessMessage(params: {
   return (
     `${greeting} Tu cuenta está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${params.email}.${passwordLine}` +
     `Tu prueba gratis de ${planName} por 7 días empezó hoy. Termina el ${trialDate}.${maxFeatures}\n` +
-    `¿Te ayudo con el setup inicial?` +
+    `Cualquier duda, escríbeme.` +
     humanSupportTrialFooter()
   );
 }
