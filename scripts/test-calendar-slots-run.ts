@@ -23,23 +23,18 @@ process.env.TZ = 'UTC';
 
 console.log('Running calendar slot tests (server TZ=%s)', process.env.TZ);
 
-// 16:30 Bogotá = 15:30 CDMX (always UTC-5 vs UTC-6)
+// 16:30 Bogotá = 15:30 CDMX (always UTC-5 vs UTC-6) — labels are customer-local primary
 const bogotaSlot = hostLocalToDate(2026, 6, 8, 16, 30);
-const bogotaLabel = formatSlotForES(bogotaSlot, 'America/Bogota', 'hora Bogotá');
-assert(bogotaLabel.includes('15:30'), `Expected 15:30 CDMX primary, got: ${bogotaLabel}`);
-assert(bogotaLabel.includes('CDMX'), `Expected CDMX label, got: ${bogotaLabel}`);
-assert(
-  bogotaLabel.includes('16:30 tu hora en Bogotá'),
-  `Expected dual Bogotá 16:30, got: ${bogotaLabel}`,
-);
+const bogotaLabel = formatSlotForES(bogotaSlot, 'America/Bogota', 'Bogotá');
+assert(bogotaLabel.includes('16:30'), `Expected 16:30 Bogotá local, got: ${bogotaLabel}`);
+assert(bogotaLabel.includes('(Bogotá)'), `Expected (Bogotá) label, got: ${bogotaLabel}`);
+assert(!bogotaLabel.includes('CDMX'), `CO label must not say CDMX: ${bogotaLabel}`);
 assert(!bogotaLabel.includes('21:30'), `UTC leak in label: ${bogotaLabel}`);
 
-const cdmxLabel = formatSlotForES(bogotaSlot, 'America/Mexico_City', 'hora CDMX');
-assert(cdmxLabel.includes('15:30'), `Expected 15:30 CDMX, got: ${cdmxLabel}`);
-assert(
-  !cdmxLabel.includes('tu hora'),
-  `Same-zone should not dual-label: ${cdmxLabel}`,
-);
+const cdmxLabel = formatSlotForES(bogotaSlot, 'America/Mexico_City', 'CDMX');
+assert(cdmxLabel.includes('15:30'), `Expected 15:30 CDMX local, got: ${cdmxLabel}`);
+assert(cdmxLabel.includes('(CDMX)'), `Expected (CDMX), got: ${cdmxLabel}`);
+assert(!cdmxLabel.includes('Bogotá'), `MX must not say Bogotá: ${cdmxLabel}`);
 
 const start = new Date();
 const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -62,20 +57,12 @@ assert(hostParts.hour === 14, `Expected 14:00 host hour, got ${hostParts.hour}`)
 
 const fromLocal = fromZonedTime('2026-06-09T14:00:00', 'America/Bogota');
 assert(
-  formatSlotForES(fromLocal, 'America/Bogota', 'hora Bogotá').includes('13:00 CDMX'),
-  '14:00 Bogotá should show as 13:00 CDMX',
+  formatSlotForES(fromLocal, 'America/Bogota', 'Bogotá').includes('14:00 (Bogotá)'),
+  '14:00 Bogotá local label',
 );
 assert(
-  formatSlotForES(fromLocal, 'America/Bogota', 'Bogotá').includes('14:00 tu hora en Bogotá'),
-  'dual Bogotá clock failed',
-);
-assert(
-  formatSlotForES(fromLocal, 'America/Mexico_City', 'hora CDMX').includes('13:00'),
-  '13:00 CDMX formatting failed',
-);
-assert(
-  !formatSlotForES(fromLocal, 'America/Mexico_City', 'hora CDMX').includes('tu hora'),
-  'CDMX customer should not dual-label',
+  formatSlotForES(fromLocal, 'America/Mexico_City', 'CDMX').includes('13:00 (CDMX)'),
+  '13:00 CDMX local for same instant',
 );
 
 console.log(`✓ ${candidates.length} host slots validated (9–20h Bogotá)`);
@@ -101,48 +88,40 @@ const mxSlot = customerLocalToUtcDate(mondayDate!, '12:30', 'America/Mexico_City
 const hostHour = getHostTzParts(mxSlot).hour;
 assert(hostHour === 13, `Expected 13:30 Bogota host hour, got ${hostHour}:30`);
 assert(
-  formatSlotForES(mxSlot, 'America/Mexico_City', 'hora CDMX').includes('12:30'),
+  formatSlotForES(mxSlot, 'America/Mexico_City', 'CDMX').includes('12:30'),
   'MX display should show 12:30',
 );
 
 console.log('✓ parseRelativeDate + customer timezone conversion OK');
 console.log('✓ custom request 14:00 Bogotá → 13:00 CDMX OK');
 
-// --- Regression: CDMX ↔ Bogotá is 1h, never +5 from UTC hour ---
+// --- Regression: labels are customer-local; CDMX↔Bogotá is 1h via date-fns-tz ---
 const cdmxNine = fromZonedTime('2026-09-16T09:00:00', 'America/Mexico_City');
-const bogotaDual = formatSlotForES(cdmxNine, 'America/Bogota', 'Bogotá');
-assert(bogotaDual.includes('09:00 CDMX'), `Expected 09:00 CDMX, got: ${bogotaDual}`);
+const bogotaLocal = formatSlotForES(cdmxNine, 'America/Bogota', 'Bogotá');
+assert(bogotaLocal.includes('10:00 (Bogotá)'), `Expected 10:00 Bogotá, got: ${bogotaLocal}`);
+assert(!bogotaLocal.includes('14:00'), `Must not leak UTC hour as Bogotá: ${bogotaLocal}`);
 assert(
-  bogotaDual.includes('10:00 tu hora en Bogotá'),
-  `Expected 10:00 Bogotá (NOT 14:00), got: ${bogotaDual}`,
+  formatSlotTimeDual(cdmxNine, 'America/Bogota', 'Bogotá') === '10:00 (Bogotá)',
+  'formatSlotTimeDual Bogotá',
 );
-assert(!bogotaDual.includes('14:00'), `Must not leak UTC hour as Bogotá: ${bogotaDual}`);
 assert(
-  formatSlotTimeDual(cdmxNine, 'America/Bogota', 'Bogotá') ===
-    '09:00 CDMX (10:00 tu hora en Bogotá)',
-  'formatSlotTimeDual CDMX→Bogotá mismatch',
+  formatSlotTimeDual(cdmxNine, 'America/Mexico_City', 'CDMX') === '09:00 (CDMX)',
+  'formatSlotTimeDual CDMX',
 );
 
-// Monterrey ≈ CDMX (same clock) → no dual
+// Monterrey ≈ CDMX (same clock)
 const monterreyLabel = formatSlotForES(cdmxNine, 'America/Monterrey', 'Monterrey');
-assert(monterreyLabel.includes('09:00 CDMX'), `Monterrey primary: ${monterreyLabel}`);
-assert(!monterreyLabel.includes('tu hora'), `Monterrey should not dual: ${monterreyLabel}`);
+assert(monterreyLabel.includes('09:00 (Monterrey)'), `Monterrey local: ${monterreyLabel}`);
 
 // Lima = Bogotá (UTC-5)
 const limaLabel = formatSlotForES(cdmxNine, 'America/Lima', 'Lima');
-assert(
-  limaLabel.includes('10:00 tu hora en Lima'),
-  `Expected Lima 10:00, got: ${limaLabel}`,
-);
+assert(limaLabel.includes('10:00 (Lima)'), `Expected Lima 10:00, got: ${limaLabel}`);
 
 // New York in September (EDT = UTC-4) → CDMX+2h
 const nyLabel = formatSlotForES(cdmxNine, 'America/New_York', 'Nueva York');
-assert(
-  nyLabel.includes('11:00 tu hora en Nueva York'),
-  `Expected NY 11:00 in Sep, got: ${nyLabel}`,
-);
+assert(nyLabel.includes('11:00 (Nueva York)'), `Expected NY 11:00 in Sep, got: ${nyLabel}`);
 
-console.log('✓ CDMX dual conversions (Bogotá/Lima/Monterrey/NY) OK');
+console.log('✓ Customer-local labels (Bogotá/Lima/Monterrey/NY) OK');
 
 function assertCustomerHourRange(
   timezone: string,

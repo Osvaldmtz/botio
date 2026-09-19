@@ -1,16 +1,28 @@
 import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { es } from 'date-fns/locale';
 import {
+  DEFAULT_CUSTOMER_TIMEZONE,
   getCustomerTimezone,
   getCustomerTimezoneLabel,
 } from '@/lib/timezone-from-phone';
 
 export const HOST_TIMEZONE = process.env.DEMO_HOST_TIMEZONE ?? 'America/Bogota';
 
-/** Product-facing primary timezone for demo slot labels (copy says CDMX). */
+/** Product-facing reference timezone (CDMX) — used when comparing clocks / dual request labels. */
 export const DEMO_DISPLAY_TIMEZONE =
   process.env.DEMO_DISPLAY_TIMEZONE ?? 'America/Mexico_City';
 export const DEMO_DISPLAY_LABEL = process.env.DEMO_DISPLAY_LABEL ?? 'CDMX';
+
+const LABEL_BY_TIMEZONE: Record<string, string> = {
+  'America/Mexico_City': 'CDMX',
+  'America/Bogota': 'Bogotá',
+  'America/Lima': 'Lima',
+  'America/Caracas': 'Caracas',
+  'America/Guayaquil': 'Guayaquil',
+  'America/Argentina/Buenos_Aires': 'Buenos Aires',
+  'America/Santiago': 'Santiago',
+  'America/Monterrey': 'Monterrey',
+};
 
 const WORK_DAYS = new Set([1, 2, 3, 4, 5, 6]);
 const WORK_START_HOUR = 9;
@@ -129,49 +141,45 @@ export function isWithinOverlapBusinessHours(
 }
 
 /**
- * Demo slot label: always primary time in America/Mexico_City (CDMX),
- * plus customer local time when that clock differs (e.g. Bogotá = CDMX+1h).
+ * Demo slot label in the customer's local timezone (primary).
  * Uses date-fns-tz — never fixed offsets — so DST/IANA rules stay correct.
+ * Sofía must copy label_es / bot_message verbatim (no manual hour math).
+ *
+ * Examples:
+ *   Mexicano → "Martes 8 jun, 10:00 (CDMX)"
+ *   Colombiano → "Martes 8 jun, 10:00 (Bogotá)"
  */
 export function formatSlotForES(
   slotStart: Date,
   customerTimezone?: string,
   customerLabel?: string,
 ): string {
-  const datePart = formatInTimeZone(slotStart, DEMO_DISPLAY_TIMEZONE, 'EEEE d MMM, HH:mm', {
+  const tz = customerTimezone?.trim() || DEFAULT_CUSTOMER_TIMEZONE;
+  const city =
+    stripHoraPrefix(customerLabel) ||
+    LABEL_BY_TIMEZONE[tz] ||
+    cityLabelFromTimezone(tz);
+
+  const datePart = formatInTimeZone(slotStart, tz, 'EEEE d MMM, HH:mm', {
     locale: es,
   });
   const capitalized = datePart.charAt(0).toUpperCase() + datePart.slice(1);
-  const primary = `${capitalized} ${DEMO_DISPLAY_LABEL}`;
-
-  const custTz = customerTimezone?.trim();
-  if (!custTz || sameLocalClock(slotStart, custTz, DEMO_DISPLAY_TIMEZONE)) {
-    return primary;
-  }
-
-  const customerTime = localClock(slotStart, custTz);
-  const city =
-    stripHoraPrefix(customerLabel) || cityLabelFromTimezone(custTz);
-  return `${primary} (${customerTime} tu hora en ${city})`;
+  return `${capitalized} (${city})`;
 }
 
-/** Time line for confirmations: "09:00 CDMX (10:00 tu hora en Bogotá)". */
+/** Time line for confirmations in customer local clock: "10:00 (Bogotá)". */
 export function formatSlotTimeDual(
   slotStart: Date,
   customerTimezone?: string,
   customerLabel?: string,
 ): string {
-  const cdmxTime = localClock(slotStart, DEMO_DISPLAY_TIMEZONE);
-  const primary = `${cdmxTime} ${DEMO_DISPLAY_LABEL}`;
-
-  const custTz = customerTimezone?.trim();
-  if (!custTz || sameLocalClock(slotStart, custTz, DEMO_DISPLAY_TIMEZONE)) {
-    return primary;
-  }
-
-  const customerTime = localClock(slotStart, custTz);
-  const city = stripHoraPrefix(customerLabel) || cityLabelFromTimezone(custTz);
-  return `${primary} (${customerTime} tu hora en ${city})`;
+  const tz = customerTimezone?.trim() || DEFAULT_CUSTOMER_TIMEZONE;
+  const city =
+    stripHoraPrefix(customerLabel) ||
+    LABEL_BY_TIMEZONE[tz] ||
+    cityLabelFromTimezone(tz);
+  const localTime = localClock(slotStart, tz);
+  return `${localTime} (${city})`;
 }
 
 /**
@@ -249,8 +257,7 @@ export function formatSlotLabelsForPhone(
 ): { label_es: string; display_timezone: string; display_label: string } {
   const displayTimezone = displayTimezoneOverride ?? getCustomerTimezone(customerPhone);
   const displayLabel =
-    displayLabelOverride ??
-    `hora ${getCustomerTimezoneLabel(customerPhone)}`;
+    stripHoraPrefix(displayLabelOverride) || getCustomerTimezoneLabel(customerPhone);
   return {
     label_es: formatSlotForES(slotStart, displayTimezone, displayLabel),
     display_timezone: displayTimezone,

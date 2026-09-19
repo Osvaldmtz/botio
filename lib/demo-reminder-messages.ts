@@ -3,7 +3,6 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { es } from 'date-fns/locale';
 import { cityToTimezone } from '@/lib/city-to-timezone';
 import {
-  DEMO_DISPLAY_TIMEZONE,
   formatSlotTimeDual,
 } from '@/lib/calendar-slots';
 import { DEMO_HOST_TEAM_LABEL } from '@/lib/demo-booking-messages';
@@ -72,10 +71,10 @@ export function formatDemoDateTime(
   timezoneLabel: string,
 ): { dateLabel: string; timeLabel: string; timezoneLabel: string } {
   const date = new Date(scheduledAt);
-  const rawDate = formatInTimeZone(date, DEMO_DISPLAY_TIMEZONE, 'EEEE d MMM', { locale: es });
+  const tz = timezone?.trim() || 'America/Bogota';
+  const rawDate = formatInTimeZone(date, tz, 'EEEE d MMM', { locale: es });
   const dateLabel = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
-  // Full dual clock in timeLabel (e.g. "09:00 CDMX (10:00 tu hora en Bogotá)")
-  const timeLabel = formatSlotTimeDual(date, timezone, timezoneLabel);
+  const timeLabel = formatSlotTimeDual(date, tz, timezoneLabel);
   return { dateLabel, timeLabel, timezoneLabel: '' };
 }
 

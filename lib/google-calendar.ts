@@ -6,7 +6,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   buildCalendarSlot,
   customerLocalToUtcDate,
-  DEMO_DISPLAY_TIMEZONE,
   formatSlotForCustomerRequest,
   formatSlotTimeDual,
   generateHostCandidateSlots,
@@ -666,8 +665,7 @@ async function findAlternativesNear(
   customerLabel?: string,
 ): Promise<CalendarSlot[]> {
   const tz = customerTimezone ?? getCustomerTimezone(customerPhone);
-  const label =
-    customerLabel ?? `hora ${getCustomerTimezoneLabel(customerPhone)}`;
+  const label = customerLabel ?? getCustomerTimezoneLabel(customerPhone);
 
   const now = new Date();
   const earliest = new Date(now.getTime() + CALENDAR_MIN_ADVANCE_HOURS * 60 * 60 * 1000);
@@ -1018,11 +1016,12 @@ export function formatDemoConfirmationMessage(
   displayLabel: string,
   meetLink: string = getDemoMeetLink(),
 ): string {
-  const dateLabel = formatInTimeZone(scheduledAt, DEMO_DISPLAY_TIMEZONE, 'EEEE d MMM', {
+  const tz = displayTimezone?.trim() || 'America/Bogota';
+  const dateLabel = formatInTimeZone(scheduledAt, tz, 'EEEE d MMM', {
     locale: es,
   });
   const capitalizedDate = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
-  const timeLabel = formatSlotTimeDual(scheduledAt, displayTimezone, displayLabel);
+  const timeLabel = formatSlotTimeDual(scheduledAt, tz, displayLabel);
 
   return (
     '✅ ¡Demo agendada!\n\n' +
