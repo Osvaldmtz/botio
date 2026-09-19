@@ -7,8 +7,8 @@ import { markDay1WelcomeSent } from '@/lib/trial-onboarding-cron';
 import { notifyTrialEnrolled } from '@/lib/trial-onboarding-notifications';
 import { buildDirectEnrollmentWelcomeMessage } from '@/lib/kalyo-trial-messages';
 import {
-  fetchTrialWelcomeDemoSlots,
-  saveTrialWelcomePendingDemoSlots,
+  buildTrialDemoFollowUpOfferMessage,
+  setTrialDemoOfferPending,
 } from '@/lib/trial-welcome-demo';
 
 export { buildDirectEnrollmentWelcomeMessage };
@@ -438,8 +438,6 @@ export async function enrollTrialDirect(
     enrollmentId = inserted.id as string;
   }
 
-  const demoSlots = await fetchTrialWelcomeDemoSlots({ customerPhone: phone });
-
   const welcomeBody = buildDirectEnrollmentWelcomeMessage({
     fullName: input.fullName,
     email,
@@ -447,26 +445,13 @@ export async function enrollTrialDirect(
     isNewAccount: input.isNewAccount,
     tempPassword: input.tempPassword,
     trialPlan: input.trialPlan ?? 'max',
-    demoSlots,
   });
 
-  if (demoSlots.length > 0) {
-    try {
-      await saveTrialWelcomePendingDemoSlots({
-        supabase,
-        conversationId,
-        slots: demoSlots,
-        customerEmail: email,
-        customerName: input.fullName,
-        customerPhone: phone,
-      });
-    } catch (pendingErr) {
-      console.error('[trial-enroll-direct] save pending demo slots failed', pendingErr);
-    }
-  }
+  const demoFollowUpBody = buildTrialDemoFollowUpOfferMessage();
 
   let welcomeSid = '';
   let welcomeStatus = 'skipped';
+  let demoFollowUpSid = '';
 
   if (!options?.skipWhatsApp) {
     const creds = await loadKalyoTwilioCreds(supabase);
@@ -502,6 +487,21 @@ export async function enrollTrialDirect(
     welcomeSid = sendResult.sid;
     welcomeStatus = sendResult.status;
 
+    const followUpResult = await sendDirectEnrollmentWelcome({
+      to: phone,
+      body: demoFollowUpBody,
+      creds,
+      twilio: options?.twilio,
+    });
+    if (followUpResult.ok) {
+      demoFollowUpSid = followUpResult.sid;
+    } else {
+      console.error(
+        '[trial-enroll-direct] demo follow-up failed',
+        followUpResult.error,
+      );
+    }
+
     await supabase
       .from('trial_onboarding_messages')
       .update({
@@ -521,9 +521,29 @@ export async function enrollTrialDirect(
       source: 'enrollment_direct',
       twilio_sid: welcomeSid || null,
       is_new_account: input.isNewAccount,
-      demo_slots_offered: demoSlots.length > 0,
     },
   });
+
+  await supabase.from('messages').insert({
+    conversation_id: conversationId,
+    role: 'assistant',
+    content: demoFollowUpBody,
+    source: 'text',
+    source_type: 'system',
+    metadata: {
+      source: 'trial_demo_followup_offer',
+      twilio_sid: demoFollowUpSid || null,
+    },
+  });
+
+  try {
+    await setTrialDemoOfferPending(supabase, conversationId, true);
+  } catch (pendingErr) {
+    console.error(
+      '[trial-enroll-direct] set trial_demo_offer_pending failed',
+      pendingErr,
+    );
+  }
 
   if (welcomeStatus === 'sent' || options?.skipWhatsApp) {
     await markDay1WelcomeSent(supabase, enrollmentId);

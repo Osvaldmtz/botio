@@ -1,5 +1,5 @@
 /**
- * Tests: trial welcome with optional demo slots.
+ * Tests: trial welcome demo follow-up offer (sí/no) after credentials.
  * Run: npx tsx scripts/test-trial-welcome-demo-run.ts
  */
 import { createRequire } from 'node:module';
@@ -40,98 +40,66 @@ loadEnvFile(join(process.cwd(), '.env.vercel.prod'));
 import { formatDay1Welcome } from '../lib/trial-onboarding-messages';
 import { buildDirectEnrollmentWelcomeMessage } from '../lib/kalyo-trial-messages';
 import {
-  fetchTrialWelcomeDemoSlots,
-  formatTrialWelcomeDemoBlock,
+  buildTrialDemoFollowUpOfferMessage,
+  buildTrialDemoOfferDeclineAck,
+  detectTrialDemoOfferAccept,
+  detectTrialDemoOfferDecline,
+  isTrialDemoOfferPending,
 } from '../lib/trial-welcome-demo';
-import { parseSlotChoice } from '../lib/demo-flow-parsing';
+import { detectDemoIntent } from '../lib/demo-intent-detector';
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
 }
 
-const fakeSlots = [
-  {
-    start: '2026-09-22T15:00:00.000Z',
-    end: '2026-09-22T15:30:00.000Z',
-    label_es: 'Lunes 22 sep, 09:00 CDMX',
-    display_timezone: 'America/Mexico_City',
-    display_label: 'CDMX',
-  },
-  {
-    start: '2026-09-22T16:00:00.000Z',
-    end: '2026-09-22T16:30:00.000Z',
-    label_es: 'Lunes 22 sep, 10:00 CDMX',
-    display_timezone: 'America/Mexico_City',
-    display_label: 'CDMX',
-  },
-  {
-    start: '2026-09-22T17:00:00.000Z',
-    end: '2026-09-22T17:30:00.000Z',
-    label_es: 'Lunes 22 sep, 11:00 CDMX',
-    display_timezone: 'America/Mexico_City',
-    display_label: 'CDMX',
-  },
-];
-
-const without = formatDay1Welcome({
+const welcome = formatDay1Welcome({
   trial_user_name: 'Ana',
   trial_user_email: 'ana@example.com',
   trialEndsAt: '2026-09-26T00:00:00.000Z',
   email: 'ana@example.com',
-  tempPassword: 'Temp1234!',
+  tempPassword: 'TempPass123!',
 });
-assert(without.includes('Primer paso'), 'fallback keeps primer paso');
-assert(!without.includes('Tengo estos horarios'), 'no slots → no demo block');
-assert(!/\bOsvaldo\b/i.test(without), 'no Osvaldo');
 
-const withSlots = formatDay1Welcome({
-  trial_user_name: 'Ana',
-  trial_user_email: 'ana@example.com',
-  trialEndsAt: '2026-09-26T00:00:00.000Z',
+assert(welcome.includes('ana@example.com'), 'welcome must include email');
+assert(welcome.includes('TempPass123!'), 'welcome must include password');
+assert(!welcome.includes('Responde 1, 2 o 3'), 'welcome must NOT embed calendar slots');
+assert(!welcome.includes('Sí, quiero una demo'), 'welcome must NOT include demo follow-up');
+
+const followUp = buildTrialDemoFollowUpOfferMessage();
+assert(followUp.includes('demo de 20 minutos'), 'follow-up must mention 20 min demo');
+assert(followUp.includes('Sí, quiero una demo'), 'follow-up must include accept option');
+assert(followUp.includes('No por ahora, exploraré solo'), 'follow-up must include decline option');
+
+assert(detectTrialDemoOfferAccept('Sí, quiero una demo'), 'accept: full phrase');
+assert(detectTrialDemoOfferAccept('1'), 'accept: 1');
+assert(detectTrialDemoOfferAccept('sí'), 'accept: sí');
+assert(detectTrialDemoOfferAccept('quiero una demo'), 'accept: quiero una demo');
+assert(detectDemoIntent('Sí, quiero una demo'), 'detectDemoIntent should match accept phrase');
+
+assert(detectTrialDemoOfferDecline('No por ahora, exploraré solo'), 'decline: full phrase');
+assert(detectTrialDemoOfferDecline('2'), 'decline: 2');
+assert(detectTrialDemoOfferDecline('no'), 'decline: no');
+assert(!detectTrialDemoOfferAccept('No por ahora'), 'accept must not match decline');
+assert(!detectTrialDemoOfferDecline('Sí, quiero una demo'), 'decline must not match accept');
+
+assert(
+  isTrialDemoOfferPending({ trial_demo_offer_pending: true }),
+  'pending flag true',
+);
+assert(!isTrialDemoOfferPending({}), 'pending flag absent');
+
+const declineAck = buildTrialDemoOfferDeclineAck();
+assert(declineAck.includes('Explora'), 'decline ack content');
+
+const direct = buildDirectEnrollmentWelcomeMessage({
+  fullName: 'Ana Pérez',
   email: 'ana@example.com',
-  tempPassword: 'Temp1234!',
-  demoSlots: fakeSlots,
-});
-assert(withSlots.includes('Para que aproveches al máximo'), 'demo intro');
-assert(withSlots.includes('1. Lunes 22 sep, 09:00 CDMX'), 'slot 1');
-assert(withSlots.includes('2. Lunes 22 sep, 10:00 CDMX'), 'slot 2');
-assert(withSlots.includes('3. Lunes 22 sep, 11:00 CDMX'), 'slot 3');
-assert(withSlots.includes('Responde 1, 2 o 3'), '1/2/3 CTA');
-assert(withSlots.includes('app.kalyo.io'), 'explore alone CTA');
-assert(!withSlots.includes('Primer paso'), 'primer paso replaced when slots present');
-assert(!/\bOsvaldo\b/i.test(withSlots), 'no Osvaldo in slotted welcome');
-
-const reactivated = buildDirectEnrollmentWelcomeMessage({
-  fullName: 'Luis',
-  email: 'luis@example.com',
   trialEndsAt: '2026-09-26T00:00:00.000Z',
-  isNewAccount: false,
-  demoSlots: fakeSlots,
+  isNewAccount: true,
+  tempPassword: 'TempPass123!',
+  trialPlan: 'max',
 });
-assert(reactivated.includes('Reactivamos'), 'reactivated path');
-assert(reactivated.includes('Tengo estos horarios'), 'reactivated also gets demo');
+assert(!direct.includes('Sí, quiero una demo'), 'direct welcome without demo CTA');
+assert(direct.includes('app.kalyo.io/login'), 'direct welcome has login');
 
-assert(parseSlotChoice('2') === 2, 'choice 2 parses');
-
-const block = formatTrialWelcomeDemoBlock([]);
-assert(block === '', 'empty slots → empty block');
-
-console.log('--- example welcome with slots ---\n');
-console.log(withSlots);
-console.log('\n--- live Calendar fetch ---');
-
-async function main(): Promise<void> {
-  const live = await fetchTrialWelcomeDemoSlots({ customerPhone: '+525511112222' });
-  console.log(`live slots: ${live.length}`);
-  if (live.length > 0) {
-    console.log(formatTrialWelcomeDemoBlock(live));
-  } else {
-    console.log('(no slots / calendar soft-fail — welcome would omit demo offer)');
-  }
-  console.log('\n✓ trial welcome demo tests passed');
-}
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+console.log('OK: trial welcome demo follow-up tests passed');

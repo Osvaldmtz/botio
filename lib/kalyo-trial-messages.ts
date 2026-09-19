@@ -9,24 +9,9 @@ import {
   type TrialPlanChoice,
 } from '@/lib/kalyo-trial-plans';
 import { formatDay1Welcome, formatTrialEndDateLabel } from '@/lib/trial-onboarding-messages';
-import { formatTrialWelcomeDemoBlock } from '@/lib/trial-welcome-demo';
 
 function formatTrialEndDate(iso: string): string {
   return formatTrialEndDateLabel(iso);
-}
-
-type DemoSlotLabel = { label_es: string };
-
-function withDemoOffer(base: string, demoSlots?: DemoSlotLabel[]): string {
-  const block = formatTrialWelcomeDemoBlock(demoSlots ?? []);
-  if (!block) return base;
-
-  // Insert before closing "¿Dudas?" / support footer when present.
-  const doubtsIdx = base.indexOf('¿Dudas?');
-  if (doubtsIdx >= 0) {
-    return `${base.slice(0, doubtsIdx).trimEnd()}\n\n${block}\n\n${base.slice(doubtsIdx)}`;
-  }
-  return `${base.trimEnd()}\n\n${block}`;
 }
 
 export function buildTrialMaxFeaturesBlock(): string {
@@ -83,7 +68,6 @@ export function buildImmediateWelcomeMessage(
     tempPassword?: string;
     trialPlan?: TrialPlanChoice;
     trialEndsAt?: string;
-    demoSlots?: DemoSlotLabel[];
   },
 ): string {
   if (options?.trialEndsAt && options.email) {
@@ -93,7 +77,6 @@ export function buildImmediateWelcomeMessage(
       trialEndsAt: options.trialEndsAt,
       email: options.email,
       tempPassword: options.tempPassword,
-      demoSlots: options.demoSlots,
     });
   }
 
@@ -109,7 +92,7 @@ export function buildImmediateWelcomeMessage(
       ? `\nIncluye:\n${buildTrialMaxFeaturesBlock()}\n`
       : '';
 
-  const base =
+  return (
     `¡Hola ${display}! 👋 Soy Sofía, asistente de Kalyo.\n\n` +
     `Tu prueba gratis de ${planName} por 7 días está activa. Aquí estaré para resolverte dudas o ayudarte durante este tiempo.` +
     maxBlock +
@@ -119,9 +102,8 @@ export function buildImmediateWelcomeMessage(
     `2️⃣ Crea tu primer paciente\n` +
     `3️⃣ Aplica una evaluación con IA\n\n` +
     `Cualquier duda, escríbeme. ¡Bienvenido/a! 🎉` +
-    humanSupportWelcomeFooter();
-
-  return withDemoOffer(base, options?.demoSlots);
+    humanSupportWelcomeFooter()
+  );
 }
 
 export function buildDirectEnrollmentWelcomeMessage(input: {
@@ -131,7 +113,6 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
   isNewAccount: boolean;
   tempPassword?: string;
   trialPlan?: TrialPlanChoice;
-  demoSlots?: DemoSlotLabel[];
 }): string {
   const name = input.fullName?.trim() || 'Doctor/a';
   const endDate = formatTrialEndDate(input.trialEndsAt);
@@ -146,12 +127,11 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
       trialEndsAt: input.trialEndsAt,
       email: input.email,
       tempPassword: input.tempPassword,
-      demoSlots: input.demoSlots,
     });
   }
 
   if (input.isNewAccount) {
-    const base =
+    return (
       `¡Hola ${name}! 👋 Soy Sofía de Kalyo.\n\n` +
       `Tu prueba gratis de ${planName} por 7 días está activa. Vence el ${endDate}.${maxBlock}\n` +
       `🔐 *Acceso a tu cuenta:*\n` +
@@ -166,11 +146,11 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
       `2. Aplica una evaluación (PHQ-9 es buena para empezar)\n` +
       `3. Prueba Kaly voz — dile "agenda cita mañana 3pm"\n\n` +
       `¿Dudas? Aquí estoy. 🚀` +
-      humanSupportWelcomeFooter();
-    return withDemoOffer(base, input.demoSlots);
+      humanSupportWelcomeFooter()
+    );
   }
 
-  const base =
+  return (
     `¡Hola ${name}! 👋 Soy Sofía de Kalyo.\n\n` +
     `Reactivamos tu prueba gratis de ${planName} por 7 días más. Vence el ${endDate}.${maxBlock}\n` +
     `🔐 *Acceso a tu cuenta:*\n` +
@@ -180,8 +160,8 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
       ? `${formatWhatsAppTempPasswordBlock(input.tempPassword)}\n`
       : `\nSi olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n\n`) +
     `¿Dudas? Aquí estoy. 🚀` +
-    humanSupportWelcomeFooter();
-  return withDemoOffer(base, input.demoSlots);
+    humanSupportWelcomeFooter()
+  );
 }
 
 export function buildAdminOperatorTrialConfirmation(params: {

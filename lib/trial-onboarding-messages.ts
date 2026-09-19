@@ -6,7 +6,6 @@ import { getPaymentLink } from '@/lib/kalyo-payment-links';
 import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
 import { humanSupportDay15Footer, humanSupportWelcomeFooter } from '@/lib/kalyo-support-contact';
 import { renderName } from '@/lib/render-name';
-import { formatTrialWelcomeDemoBlock } from '@/lib/trial-welcome-demo';
 
 export type TrialOnboardingUser = {
   trial_user_name?: string | null;
@@ -17,8 +16,6 @@ export type TrialOnboardingMessageContext = TrialOnboardingUser & {
   trialEndsAt: string;
   email?: string;
   tempPassword?: string;
-  /** Optional demo slots for welcome CTA (1–3). */
-  demoSlots?: Array<{ label_es: string }>;
 };
 
 /** Narrative day numbers (legacy DB columns mapped in cron). */
@@ -47,26 +44,13 @@ export function formatDay1Welcome(ctx: TrialOnboardingMessageContext): string {
     ? formatWhatsAppTempPasswordBlock(ctx.tempPassword)
     : '🔑 (revisa el mensaje anterior o usa "Olvidé mi contraseña")\n';
 
-  const header =
+  return (
     `¡Hola ${name}! 👋 Soy Sofía.\n` +
     `Tu prueba gratis de Max por 7 días está activa. Vence el ${endDate}.\n\n` +
     `🔐 Acceso:\n` +
     `📧 ${email}\n` +
     passwordLine +
-    `🌐 https://app.kalyo.io/login\n\n`;
-
-  const demoSlots = ctx.demoSlots?.filter((s) => s.label_es?.trim()) ?? [];
-  if (demoSlots.length > 0) {
-    return (
-      header +
-      `${formatTrialWelcomeDemoBlock(demoSlots)}\n\n` +
-      `¿Dudas? Aquí estoy 🚀` +
-      humanSupportWelcomeFooter()
-    );
-  }
-
-  return (
-    header +
+    `🌐 https://app.kalyo.io/login\n\n` +
     `📋 Primer paso:\n` +
     `Entra y crea tu primer paciente.\n\n` +
     `¿Dudas? Aquí estoy 🚀` +

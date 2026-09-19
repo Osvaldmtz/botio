@@ -159,28 +159,46 @@ export async function sendWelcomeMessage(params: {
   tempPassword?: string;
   trialPlan?: TrialPlanChoice;
   trialEndsAt?: string;
-  demoSlots?: Array<{ label_es: string }>;
 }): Promise<WelcomeMessageResult> {
   const { to, name, creds } = params;
   const templateSid = params.templateSid ?? process.env.KALYO_WELCOME_TEMPLATE_SID;
   const twilio = params.twilio ?? defaultWelcomeTwilioFns();
   const displayName = renderName(name) || 'ahí';
 
-  let demoSlots = params.demoSlots;
-  if (demoSlots === undefined) {
-    const { fetchTrialWelcomeDemoSlots } = await import('@/lib/trial-welcome-demo');
-    demoSlots = await fetchTrialWelcomeDemoSlots({ customerPhone: to });
-  }
-
   const welcomeOptions = {
     email: params.email,
     tempPassword: params.tempPassword,
     trialPlan: params.trialPlan ?? 'max',
     trialEndsAt: params.trialEndsAt,
-    demoSlots,
   };
 
   const usePlainTextOnly = Boolean(params.email && params.tempPassword);
+
+  const sendDemoFollowUp = async (): Promise<{
+    demoFollowUpBody?: string;
+    demoFollowUpSid?: string;
+  }> => {
+    const { buildTrialDemoFollowUpOfferMessage } = await import(
+      '@/lib/trial-welcome-demo'
+    );
+    const demoFollowUpBody = buildTrialDemoFollowUpOfferMessage();
+    try {
+      await twilio.sleep(1500);
+      const followUp = await twilio.sendPlain({
+        accountSid: creds.accountSid,
+        authToken: creds.authToken,
+        from: creds.from,
+        to,
+        body: demoFollowUpBody,
+      });
+      console.log('[welcome-msg] demo follow-up sent', { sid: followUp.sid });
+      return { demoFollowUpBody, demoFollowUpSid: followUp.sid };
+    } catch (err) {
+      console.error('[welcome-msg] demo follow-up failed', err);
+      // Still return body so callers can persist / retry awareness
+      return { demoFollowUpBody };
+    }
+  };
 
   if (templateSid && !usePlainTextOnly) {
     try {
@@ -226,7 +244,13 @@ export async function sendWelcomeMessage(params: {
           }
         }
 
-        return { success: true, method: 'template', sid: result.sid, demoSlots };
+        const demoFollowUp = await sendDemoFollowUp();
+        return {
+          success: true,
+          method: 'template',
+          sid: result.sid,
+          ...demoFollowUp,
+        };
       }
     } catch (error) {
       if (isTemplateNotApprovedError(error)) {
@@ -268,7 +292,6 @@ export async function sendWelcomeMessage(params: {
         sid: result.sid,
         reason: 'undelivered_outside_window',
         textBody,
-        demoSlots,
       };
     }
 
@@ -280,16 +303,22 @@ export async function sendWelcomeMessage(params: {
         sid: result.sid,
         reason: 'failed',
         textBody,
-        demoSlots,
       };
     }
 
     console.log('[welcome-msg] plain text sent', {
       sid: result.sid,
       status: status.status,
-      demo_slots: demoSlots?.length ?? 0,
     });
-    return { success: true, method: 'plain_text', sid: result.sid, textBody, demoSlots };
+
+    const demoFollowUp = await sendDemoFollowUp();
+    return {
+      success: true,
+      method: 'plain_text',
+      sid: result.sid,
+      textBody,
+      ...demoFollowUp,
+    };
   } catch (error) {
     console.error('[welcome-msg] complete failure', error);
     return {
@@ -297,7 +326,6 @@ export async function sendWelcomeMessage(params: {
       method: 'none',
       error: error instanceof Error ? error.message : String(error),
       textBody,
-      demoSlots,
     };
   }
 }
@@ -661,7 +689,6 @@ export async function enrollTrialFromKalyoWebhook(
           tempPassword: input.tempPassword,
           trialPlan: input.trialPlan ?? 'max',
           trialEndsAt: endsAt,
-          demoSlots: welcomeResult.demoSlots,
         });
       await supabase.from('messages').insert({
         conversation_id: conversationId,
@@ -673,29 +700,32 @@ export async function enrollTrialFromKalyoWebhook(
           source: 'trial_onboarding_welcome',
           delivery_method: welcomeResult.method,
           twilio_sid: welcomeResult.sid ?? null,
-          demo_slots_offered: (welcomeResult.demoSlots?.length ?? 0) > 0,
         },
       });
-      if (welcomeResult.demoSlots && welcomeResult.demoSlots.length > 0) {
+
+      if (welcomeResult.demoFollowUpBody) {
+        await supabase.from('messages').insert({
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: welcomeResult.demoFollowUpBody,
+          source: 'text',
+          source_type: 'claude',
+          metadata: {
+            source: 'trial_demo_followup_offer',
+            twilio_sid: welcomeResult.demoFollowUpSid ?? null,
+          },
+        });
         try {
-          const { saveTrialWelcomePendingDemoSlots } = await import(
-            '@/lib/trial-welcome-demo'
-          );
-          await saveTrialWelcomePendingDemoSlots({
-            supabase,
-            conversationId,
-            slots: welcomeResult.demoSlots as import('@/lib/google-calendar').CalendarSlot[],
-            customerEmail: email,
-            customerName: name,
-            customerPhone: phone,
-          });
+          const { setTrialDemoOfferPending } = await import('@/lib/trial-welcome-demo');
+          await setTrialDemoOfferPending(supabase, conversationId, true);
         } catch (pendingErr) {
           console.error(
-            '[trial-onboarding-webhook] save pending demo slots failed',
+            '[trial-onboarding-webhook] set trial_demo_offer_pending failed',
             pendingErr,
           );
         }
       }
+
       await markDay1WelcomeSent(supabase, row.id);
     }
   }

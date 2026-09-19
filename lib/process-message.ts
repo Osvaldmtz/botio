@@ -58,6 +58,13 @@ import {
 } from '@/lib/demo-handler';
 import { savePendingDemoSlots } from '@/lib/demo-conversation';
 import {
+  buildTrialDemoOfferDeclineAck,
+  detectTrialDemoOfferAccept,
+  detectTrialDemoOfferDecline,
+  isTrialDemoOfferPending,
+  setTrialDemoOfferPending,
+} from '@/lib/trial-welcome-demo';
+import {
   formatSlotsForBot,
   getAvailableSlots,
 } from '@/lib/google-calendar';
@@ -409,12 +416,53 @@ export async function processIncomingMessage(
       };
     }
 
+    // Demo offer follow-up after trial welcome — decline ack (before scheduling).
+    const convMeta = (conversation.metadata ?? {}) as Record<string, unknown>;
+    const demoOfferPending = isTrialDemoOfferPending(convMeta);
+
+    if (demoOfferPending && detectTrialDemoOfferDecline(messageBody)) {
+      const replyText = buildTrialDemoOfferDeclineAck();
+      const assistantNow = new Date().toISOString();
+      try {
+        await setTrialDemoOfferPending(supabase, conversation.id, false);
+      } catch (err) {
+        console.error('[process-message] clear trial_demo_offer_pending failed', err);
+      }
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: { source: 'trial_demo_offer_declined' },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      return {
+        replyText,
+        storedReply: replyText,
+        conversationId: conversation.id,
+        source: 'trial_onboarding',
+      };
+    }
+
     // Demo scheduling — offer Google Calendar slots; fall back to kalyo.io/demo link.
     // Explicit demo request is a client signal; must not be blocked by a stale is_ambassador flag.
-    if (detectDemoIntent(messageBody)) {
+    // Also accept "sí" / "1" when the post-trial demo follow-up is pending.
+    const wantsDemo =
+      detectDemoIntent(messageBody) ||
+      (demoOfferPending && detectTrialDemoOfferAccept(messageBody));
+
+    if (wantsDemo) {
       console.log(
         `[process-message] DEMO INTENT detected | conv=${conversation.id} | msg="${messageBody.slice(0, 80)}"`,
       );
+      if (demoOfferPending) {
+        try {
+          await setTrialDemoOfferPending(supabase, conversation.id, false);
+        } catch (err) {
+          console.error('[process-message] clear trial_demo_offer_pending failed', err);
+        }
+      }
       const customerName = readCustomerName(conversation, metadata);
       const customerEmail =
         (typeof metadata.customer_email === 'string' && metadata.customer_email.trim()) ||

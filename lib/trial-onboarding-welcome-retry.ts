@@ -87,7 +87,6 @@ export async function retryWelcomeForRow(params: {
         email: params.row.trial_user_email,
         trialPlan: 'max',
         trialEndsAt: params.row.trial_ends_at,
-        demoSlots: result.demoSlots,
       });
     await params.supabase.from('messages').insert({
       conversation_id: params.row.conversation_id,
@@ -100,24 +99,34 @@ export async function retryWelcomeForRow(params: {
         delivery_method: result.method,
         twilio_sid: result.sid ?? null,
         welcome_retry: true,
-        demo_slots_offered: (result.demoSlots?.length ?? 0) > 0,
       },
     });
-    if (result.demoSlots && result.demoSlots.length > 0) {
+
+    if (result.demoFollowUpBody) {
+      await params.supabase.from('messages').insert({
+        conversation_id: params.row.conversation_id,
+        role: 'assistant',
+        content: result.demoFollowUpBody,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: 'trial_demo_followup_offer',
+          twilio_sid: result.demoFollowUpSid ?? null,
+          welcome_retry: true,
+        },
+      });
       try {
-        const { saveTrialWelcomePendingDemoSlots } = await import(
-          '@/lib/trial-welcome-demo'
+        const { setTrialDemoOfferPending } = await import('@/lib/trial-welcome-demo');
+        await setTrialDemoOfferPending(
+          params.supabase,
+          params.row.conversation_id,
+          true,
         );
-        await saveTrialWelcomePendingDemoSlots({
-          supabase: params.supabase,
-          conversationId: params.row.conversation_id,
-          slots: result.demoSlots as import('@/lib/google-calendar').CalendarSlot[],
-          customerEmail: params.row.trial_user_email,
-          customerName: name,
-          customerPhone: params.row.customer_phone,
-        });
       } catch (pendingErr) {
-        console.error('[trial-onboarding] welcome retry pending demo save failed', pendingErr);
+        console.error(
+          '[trial-onboarding] welcome retry set trial_demo_offer_pending failed',
+          pendingErr,
+        );
       }
     }
   }
