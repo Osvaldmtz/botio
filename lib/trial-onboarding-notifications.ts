@@ -6,6 +6,10 @@ export type WelcomeMessageResult = {
   sid?: string;
   reason?: string;
   error?: string;
+  /** Plain-text body actually sent (for DB insert parity). */
+  textBody?: string;
+  /** Demo slots included in welcome, if any. */
+  demoSlots?: Array<{ label_es: string; start?: string; end?: string; display_timezone?: string; display_label?: string }>;
 };
 
 function displayName(name: string | null | undefined, email: string): string {

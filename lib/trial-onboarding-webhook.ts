@@ -160,7 +160,7 @@ export async function sendWelcomeMessage(params: {
   trialPlan?: TrialPlanChoice;
   trialEndsAt?: string;
   demoSlots?: Array<{ label_es: string }>;
-}): Promise<WelcomeMessageResult & { textBody?: string; demoSlots?: Array<{ label_es: string }> }> {
+}): Promise<WelcomeMessageResult> {
   const { to, name, creds } = params;
   const templateSid = params.templateSid ?? process.env.KALYO_WELCOME_TEMPLATE_SID;
   const twilio = params.twilio ?? defaultWelcomeTwilioFns();
