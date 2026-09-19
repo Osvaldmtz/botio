@@ -36,6 +36,7 @@ export function formatObjectionResponse(
         `✓ Te ahorra horas en reportes y documentación\n` +
         `✓ Max incluye agenda, videollamadas y transcripción de sesiones\n\n` +
         `Prueba Max *7 días gratis* primero, sin tarjeta — incluye Kaly voz y Meet. Si te sirve, decides al final.\n\n` +
+        `Si prefieres verlo en vivo antes de probar: https://kalyo.io/demo\n\n` +
         `¿Te activo la prueba gratis? Solo necesito saber si ya tienes cuenta o es tu primera vez.`
       );
     }
@@ -64,8 +65,8 @@ export function formatObjectionResponse(
 
     const opener = nameThenVerb(name, 'entiendo');
     return (
-      `${opener}. Te pongo en contacto con Osvaldo del equipo para que vea cómo ajustarte algo más conveniente.\n\n` +
-      `Solo necesito tu email para que te escriba directamente.`
+      `${opener}. Te pongo en contacto con el equipo para que vea cómo ajustarte algo más conveniente.\n\n` +
+      `Solo necesito tu email para que te escriban directamente.`
     );
   }
 
@@ -123,7 +124,8 @@ export function formatObjectionResponse(
         `Por ejemplo:\n` +
         `- ¿Algo más simple (Pro) o consultorio completo (Max)?\n` +
         `- ¿Uso personal o equipo?\n` +
-        `- ¿Pacientes, evaluaciones, citas?`
+        `- ¿Pacientes, evaluaciones, citas?\n\n` +
+        `Si prefieres verlo en vivo antes de probar:\nhttps://kalyo.io/demo`
       );
     }
     return (

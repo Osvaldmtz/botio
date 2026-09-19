@@ -6,7 +6,7 @@ import {
   DEMO_DISPLAY_TIMEZONE,
   formatSlotTimeDual,
 } from '@/lib/calendar-slots';
-const DEMO_HOST_TEAM_LABEL = 'Osvaldo del equipo de Kalyo';
+const DEMO_HOST_TEAM_LABEL = 'el equipo de Kalyo';
 import {
   getCustomerTimezone,
   getCustomerTimezoneLabel,

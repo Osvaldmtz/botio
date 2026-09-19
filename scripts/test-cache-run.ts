@@ -49,6 +49,17 @@ const scenarios: Scenario[] = [
     expectPattern: 'quick_3',
   },
   {
+    name: 'quick_4',
+    message: '4',
+    history: [
+      { role: 'user', content: 'hola' },
+      { role: 'assistant', content: '¡Hola!' },
+      { role: 'user', content: '4' },
+    ],
+    expectHit: true,
+    expectPattern: 'quick_4',
+  },
+  {
     name: 'objection miss (routes to Sonnet separately)',
     message:
       'Tengo una objeción importante: el precio me parece muy caro comparado con la competencia',

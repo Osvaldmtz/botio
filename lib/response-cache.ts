@@ -19,7 +19,7 @@ const CACHE_PATTERNS: CachePattern[] = [
     name: 'saludo',
     regex: /^(hola|buenos dias|buenas tardes|que tal|hey|holi)$/,
     response:
-      '¡Hola! Soy Sofía de Kalyo 👋 Ayudamos a psicólogos a evaluar pacientes con más de 200 tests psicométricos estandarizados, todo desde el navegador. ¿Qué te gustaría saber primero: evaluaciones, precios, o cómo funciona la prueba gratis?\n\nResponde con una opción:\n1️⃣ Evaluaciones\n2️⃣ Precios\n3️⃣ Prueba gratis',
+      '¡Hola! Soy Sofía de Kalyo 👋 Ayudamos a psicólogos a evaluar pacientes con más de 200 tests psicométricos estandarizados, todo desde el navegador. ¿Qué te gustaría saber primero?\n\nResponde con una opción:\n1️⃣ Evaluaciones clínicas\n2️⃣ Precios\n3️⃣ Prueba gratis (rápido, sin tarjeta)\n4️⃣ Demo online (30 min)',
   },
   {
     name: 'precio_simple',
@@ -48,6 +48,12 @@ const CACHE_PATTERNS: CachePattern[] = [
     regex: /^(3|prueba gratis|trial)$/,
     response:
       '¡Excelente! Te activo la prueba gratis de Max por 7 días sin tarjeta de crédito — incluye agenda, Kalyo Meet, grabación y Kaly voz. ¿Ya tienes cuenta en Kalyo o es tu primera vez?',
+  },
+  {
+    name: 'quick_4',
+    regex: /^(4|demo|demo online|demo en vivo)$/,
+    response:
+      '¡Claro! Puedes ver una demo online de 30 min aquí:\nhttps://kalyo.io/demo\n\nSi prefieres, también te paso horarios disponibles por WhatsApp. ¿Te paso horarios o agendas directo en el link?',
   },
   {
     name: 'gracias',
