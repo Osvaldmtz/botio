@@ -81,11 +81,14 @@ export async function retryWelcomeForRow(params: {
   }
 
   if (params.row.conversation_id) {
-    const welcomeBody = buildImmediateWelcomeMessage(name, {
-      email: params.row.trial_user_email,
-      trialPlan: 'max',
-      trialEndsAt: params.row.trial_ends_at,
-    });
+    const welcomeBody =
+      result.textBody ??
+      buildImmediateWelcomeMessage(name, {
+        email: params.row.trial_user_email,
+        trialPlan: 'max',
+        trialEndsAt: params.row.trial_ends_at,
+        demoSlots: result.demoSlots,
+      });
     await params.supabase.from('messages').insert({
       conversation_id: params.row.conversation_id,
       role: 'assistant',
@@ -97,8 +100,26 @@ export async function retryWelcomeForRow(params: {
         delivery_method: result.method,
         twilio_sid: result.sid ?? null,
         welcome_retry: true,
+        demo_slots_offered: (result.demoSlots?.length ?? 0) > 0,
       },
     });
+    if (result.demoSlots && result.demoSlots.length > 0) {
+      try {
+        const { saveTrialWelcomePendingDemoSlots } = await import(
+          '@/lib/trial-welcome-demo'
+        );
+        await saveTrialWelcomePendingDemoSlots({
+          supabase: params.supabase,
+          conversationId: params.row.conversation_id,
+          slots: result.demoSlots as import('@/lib/google-calendar').CalendarSlot[],
+          customerEmail: params.row.trial_user_email,
+          customerName: name,
+          customerPhone: params.row.customer_phone,
+        });
+      } catch (pendingErr) {
+        console.error('[trial-onboarding] welcome retry pending demo save failed', pendingErr);
+      }
+    }
   }
 
   await params.supabase

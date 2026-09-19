@@ -6,6 +6,10 @@ import { markTrialActivatedByContact } from '@/lib/conversation-outcome';
 import { markDay1WelcomeSent } from '@/lib/trial-onboarding-cron';
 import { notifyTrialEnrolled } from '@/lib/trial-onboarding-notifications';
 import { buildDirectEnrollmentWelcomeMessage } from '@/lib/kalyo-trial-messages';
+import {
+  fetchTrialWelcomeDemoSlots,
+  saveTrialWelcomePendingDemoSlots,
+} from '@/lib/trial-welcome-demo';
 
 export { buildDirectEnrollmentWelcomeMessage };
 
@@ -434,6 +438,8 @@ export async function enrollTrialDirect(
     enrollmentId = inserted.id as string;
   }
 
+  const demoSlots = await fetchTrialWelcomeDemoSlots({ customerPhone: phone });
+
   const welcomeBody = buildDirectEnrollmentWelcomeMessage({
     fullName: input.fullName,
     email,
@@ -441,7 +447,23 @@ export async function enrollTrialDirect(
     isNewAccount: input.isNewAccount,
     tempPassword: input.tempPassword,
     trialPlan: input.trialPlan ?? 'max',
+    demoSlots,
   });
+
+  if (demoSlots.length > 0) {
+    try {
+      await saveTrialWelcomePendingDemoSlots({
+        supabase,
+        conversationId,
+        slots: demoSlots,
+        customerEmail: email,
+        customerName: input.fullName,
+        customerPhone: phone,
+      });
+    } catch (pendingErr) {
+      console.error('[trial-enroll-direct] save pending demo slots failed', pendingErr);
+    }
+  }
 
   let welcomeSid = '';
   let welcomeStatus = 'skipped';
@@ -499,6 +521,7 @@ export async function enrollTrialDirect(
       source: 'enrollment_direct',
       twilio_sid: welcomeSid || null,
       is_new_account: input.isNewAccount,
+      demo_slots_offered: demoSlots.length > 0,
     },
   });
 

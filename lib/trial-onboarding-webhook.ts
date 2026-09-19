@@ -159,16 +159,25 @@ export async function sendWelcomeMessage(params: {
   tempPassword?: string;
   trialPlan?: TrialPlanChoice;
   trialEndsAt?: string;
-}): Promise<WelcomeMessageResult> {
+  demoSlots?: Array<{ label_es: string }>;
+}): Promise<WelcomeMessageResult & { textBody?: string; demoSlots?: Array<{ label_es: string }> }> {
   const { to, name, creds } = params;
   const templateSid = params.templateSid ?? process.env.KALYO_WELCOME_TEMPLATE_SID;
   const twilio = params.twilio ?? defaultWelcomeTwilioFns();
   const displayName = renderName(name) || 'ahí';
+
+  let demoSlots = params.demoSlots;
+  if (demoSlots === undefined) {
+    const { fetchTrialWelcomeDemoSlots } = await import('@/lib/trial-welcome-demo');
+    demoSlots = await fetchTrialWelcomeDemoSlots({ customerPhone: to });
+  }
+
   const welcomeOptions = {
     email: params.email,
     tempPassword: params.tempPassword,
     trialPlan: params.trialPlan ?? 'max',
     trialEndsAt: params.trialEndsAt,
+    demoSlots,
   };
 
   const usePlainTextOnly = Boolean(params.email && params.tempPassword);
@@ -217,7 +226,7 @@ export async function sendWelcomeMessage(params: {
           }
         }
 
-        return { success: true, method: 'template', sid: result.sid };
+        return { success: true, method: 'template', sid: result.sid, demoSlots };
       }
     } catch (error) {
       if (isTemplateNotApprovedError(error)) {
@@ -258,6 +267,8 @@ export async function sendWelcomeMessage(params: {
         method: 'plain_text',
         sid: result.sid,
         reason: 'undelivered_outside_window',
+        textBody,
+        demoSlots,
       };
     }
 
@@ -268,20 +279,25 @@ export async function sendWelcomeMessage(params: {
         method: 'plain_text',
         sid: result.sid,
         reason: 'failed',
+        textBody,
+        demoSlots,
       };
     }
 
     console.log('[welcome-msg] plain text sent', {
       sid: result.sid,
       status: status.status,
+      demo_slots: demoSlots?.length ?? 0,
     });
-    return { success: true, method: 'plain_text', sid: result.sid };
+    return { success: true, method: 'plain_text', sid: result.sid, textBody, demoSlots };
   } catch (error) {
     console.error('[welcome-msg] complete failure', error);
     return {
       success: false,
       method: 'none',
       error: error instanceof Error ? error.message : String(error),
+      textBody,
+      demoSlots,
     };
   }
 }
@@ -638,12 +654,15 @@ export async function enrollTrialFromKalyoWebhook(
     }
 
     if (welcomeResult.success) {
-      const welcomeBody = buildImmediateWelcomeMessage(name, {
-        email,
-        tempPassword: input.tempPassword,
-        trialPlan: input.trialPlan ?? 'max',
-        trialEndsAt: endsAt,
-      });
+      const welcomeBody =
+        welcomeResult.textBody ??
+        buildImmediateWelcomeMessage(name, {
+          email,
+          tempPassword: input.tempPassword,
+          trialPlan: input.trialPlan ?? 'max',
+          trialEndsAt: endsAt,
+          demoSlots: welcomeResult.demoSlots,
+        });
       await supabase.from('messages').insert({
         conversation_id: conversationId,
         role: 'assistant',
@@ -654,8 +673,29 @@ export async function enrollTrialFromKalyoWebhook(
           source: 'trial_onboarding_welcome',
           delivery_method: welcomeResult.method,
           twilio_sid: welcomeResult.sid ?? null,
+          demo_slots_offered: (welcomeResult.demoSlots?.length ?? 0) > 0,
         },
       });
+      if (welcomeResult.demoSlots && welcomeResult.demoSlots.length > 0) {
+        try {
+          const { saveTrialWelcomePendingDemoSlots } = await import(
+            '@/lib/trial-welcome-demo'
+          );
+          await saveTrialWelcomePendingDemoSlots({
+            supabase,
+            conversationId,
+            slots: welcomeResult.demoSlots as import('@/lib/google-calendar').CalendarSlot[],
+            customerEmail: email,
+            customerName: name,
+            customerPhone: phone,
+          });
+        } catch (pendingErr) {
+          console.error(
+            '[trial-onboarding-webhook] save pending demo slots failed',
+            pendingErr,
+          );
+        }
+      }
       await markDay1WelcomeSent(supabase, row.id);
     }
   }
