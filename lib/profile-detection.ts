@@ -21,7 +21,7 @@ const PROFILE_PATTERNS: Array<{ profile: ProfileType; re: RegExp }> = [
   },
   {
     profile: 'private_practice',
-    re: /consulta privada|consultorio privado|trabajo solo|mis pacientes|mi pr[áa]ctica|atiendo|tengo \d+ pacientes/i,
+    re: /consulta privada|trabajo solo|mis pacientes|mi pr[áa]ctica|atiendo|tengo \d+ pacientes/i,
   },
   {
     profile: 'student',
