@@ -134,6 +134,26 @@ export async function createDemoBookingCalendarEvent(
       `[demo-booking-calendar] event created | booking_id=${input.bookingId} | event_id=${eventId} | meet=${meetLink}`,
     );
 
+    try {
+      const { notifyDemoConfirmed } = await import('@/lib/demo-confirmed-notify');
+      await notifyDemoConfirmed({
+        customerName: input.name,
+        customerEmail: input.email,
+        customerPhone: input.whatsapp,
+        scheduledAt,
+        meetLink,
+        source: 'landing_demo',
+        bookingId: input.bookingId,
+        country: input.country,
+        interest: input.interest,
+      });
+    } catch (err) {
+      console.error(
+        '[demo-booking-calendar] notify failed (non-fatal)',
+        err instanceof Error ? err.message : err,
+      );
+    }
+
     return { ok: true, eventId, meetLink };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

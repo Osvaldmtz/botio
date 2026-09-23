@@ -12,7 +12,6 @@ import {
   savePendingCustomSlot,
   savePendingDemoSlots,
 } from '@/lib/demo-conversation';
-import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { movePipelineStage } from '@/lib/pipeline-utils';
 import { normalizeStage, STAGE_RANK } from '@/lib/pipeline';
 import { recordOutcome } from '@/lib/ab-testing';
@@ -37,9 +36,10 @@ export async function executeConfirmDemoSlot(params: {
   customerName?: string;
   senderFrom: string;
   botId: string;
-  creds: KalyoTwilioCreds;
+  /** Kept for call-site compatibility; alerts now go via notifyDemoConfirmed. */
+  creds?: KalyoTwilioCreds;
 }): Promise<DemoToolResult> {
-  const { supabase, conversationId, slotNumber, senderFrom, botId, creds } = params;
+  const { supabase, conversationId, slotNumber, senderFrom, botId } = params;
   const email = params.customerEmail?.trim() ?? '';
   const name = params.customerName?.trim() ?? '';
 
@@ -126,21 +126,7 @@ export async function executeConfirmDemoSlot(params: {
       await movePipelineStage(supabase, conversationId, current, 'qualified', null, 'auto');
     }
 
-    if (creds) {
-      await notifySalesTeam(
-        {
-          name: resolvedName,
-          email: resolvedEmail,
-          phone: senderFrom,
-          whatsapp_number: senderFrom,
-          reason: 'demo_scheduled',
-          preferred_time: slot.label_es,
-          conversation_summary: `Demo agendada para ${slot.label_es}`,
-          conversationId,
-        },
-        creds,
-      );
-    }
+    // Telegram + email alerts fire inside createDemoEvent (notifyDemoConfirmed).
 
     await recordOutcome(supabase, conversationId, 'demo_scheduled', {
       demo_id: result.demoId,

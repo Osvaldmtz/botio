@@ -968,6 +968,24 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
     `[demo-scheduled] conv=${params.botContext.conversationId} demo_id=${demoRow.id} at=${scheduledAt.toISOString()}`,
   );
 
+  try {
+    const { notifyDemoConfirmed } = await import('@/lib/demo-confirmed-notify');
+    await notifyDemoConfirmed({
+      customerName: params.customerName,
+      customerEmail: params.customerEmail,
+      customerPhone: params.customerPhone,
+      scheduledAt,
+      meetLink,
+      source: 'whatsapp_bot',
+      conversationId: params.botContext.conversationId,
+    });
+  } catch (err) {
+    console.error(
+      '[demo-scheduled] notify failed (non-fatal)',
+      err instanceof Error ? err.message : err,
+    );
+  }
+
   return { eventId, meetLink, demoId: demoRow.id };
 }
 
