@@ -22,6 +22,10 @@ import {
   getCustomerTimezone,
   getCustomerTimezoneLabel,
 } from '@/lib/timezone-from-phone';
+import {
+  nameFromEmailLocalPart,
+  resolveDemoCustomerName,
+} from '@/lib/demo-customer-name';
 
 export const DEMO_TIMEZONE = HOST_TIMEZONE;
 export const DEMO_HOST_EMAIL = process.env.DEMO_HOST_EMAIL ?? 'osvamtz@gmail.com';
@@ -893,10 +897,14 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
   const scheduledAt = params.scheduledAt;
   const endAt = new Date(scheduledAt.getTime() + durationMinutes * 60_000);
   const meetLink = getDemoMeetLink();
+  const safeCustomerName = resolveDemoCustomerName({
+    formName: params.customerName,
+    emailLocalPart: nameFromEmailLocalPart(params.customerEmail),
+  });
 
   const signals = params.botContext.signals?.join(', ') ?? '—';
   const description = [
-    `Demo de ${durationMinutes} minutos con ${params.customerName}`,
+    `Demo de ${durationMinutes} minutos con ${safeCustomerName}`,
     '',
     `Meet: ${meetLink}`,
     '',
@@ -914,7 +922,7 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
     calendarId: 'primary',
     sendUpdates: 'all',
     requestBody: {
-      summary: `Demo Kalyo — ${params.customerName}`,
+      summary: `Demo Kalyo — ${safeCustomerName}`,
       description,
       location: meetLink,
       start: {
@@ -927,7 +935,7 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
       },
       attendees: [
         { email: DEMO_HOST_EMAIL, displayName: DEMO_HOST_NAME },
-        { email: params.customerEmail, displayName: params.customerName },
+        { email: params.customerEmail, displayName: safeCustomerName },
       ],
       reminders: {
         useDefault: false,
@@ -951,7 +959,7 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
       conversation_id: params.botContext.conversationId,
       bot_id: params.botContext.botId ?? null,
       customer_email: params.customerEmail,
-      customer_name: params.customerName,
+      customer_name: safeCustomerName,
       customer_phone: params.customerPhone ?? null,
       scheduled_at: scheduledAt.toISOString(),
       duration_minutes: durationMinutes,
@@ -971,7 +979,7 @@ export async function createDemoEvent(params: CreateDemoEventParams): Promise<Cr
   try {
     const { notifyDemoConfirmed } = await import('@/lib/demo-confirmed-notify');
     await notifyDemoConfirmed({
-      customerName: params.customerName,
+      customerName: safeCustomerName,
       customerEmail: params.customerEmail,
       customerPhone: params.customerPhone,
       scheduledAt,

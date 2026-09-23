@@ -10,7 +10,7 @@ import {
   getCustomerTimezone,
   getCustomerTimezoneLabel,
 } from '@/lib/timezone-from-phone';
-import { renderName } from '@/lib/render-name';
+import { DEMO_NAME_FALLBACK, demoGreetingName, holaDemo } from '@/lib/demo-customer-name';
 
 export type DemoReminderRow = {
   id: string;
@@ -95,8 +95,7 @@ export function formatReminder24h(
     display.timezone,
     display.label,
   );
-  const name = renderName(demo.customer_name);
-  const greeting = name ? `Hola ${name},` : 'Hola,';
+  const greeting = holaDemo(demo.customer_name);
 
   return (
     `👋 ${greeting} te recuerdo tu demo Kalyo mañana:\n\n` +
@@ -128,9 +127,9 @@ export function buildReminder24hContentVariables(
   const meetLink = demo.google_meet_link?.trim();
   if (!meetLink) return null;
 
-  const name = renderName(demo.customer_name);
+  const name = demoGreetingName(demo.customer_name);
   return {
-    '1': name || 'ahí',
+    '1': name || DEMO_NAME_FALLBACK,
     '2': formatDemoTime12h(demo.scheduled_at, display.timezone),
     '3': meetLink,
   };
@@ -145,9 +144,9 @@ export function buildReminder1hContentVariables(
     process.env.KALYO_DEMO_MEET_LINK?.trim() ||
     'https://meet.google.com/pgd-dxmb-sfk';
 
-  const name = renderName(demo.customer_name);
+  const name = demoGreetingName(demo.customer_name);
   return {
-    '1': name || 'ahí',
+    '1': name || DEMO_NAME_FALLBACK,
     '2': meetLink,
   };
 }
@@ -161,8 +160,11 @@ export function formatReminder1h(
     display.timezone,
     display.label,
   );
-  const name = renderName(demo.customer_name);
-  const opener = name ? `en 1 hora, ${name}:` : 'en 1 hora:';
+  const name = demoGreetingName(demo.customer_name);
+  const opener =
+    name === DEMO_NAME_FALLBACK
+      ? `en 1 hora, ${DEMO_NAME_FALLBACK}:`
+      : `en 1 hora, ${name}:`;
   const meetLink =
     demo.google_meet_link?.trim() ||
     process.env.KALYO_DEMO_MEET_LINK?.trim() ||
@@ -188,8 +190,9 @@ export function formatReminderConfirmed(
     display.timezone,
     display.label,
   );
-  const name = renderName(demo.customer_name);
-  const opener = name ? `¡Perfecto, ${name}!` : '¡Perfecto!';
+  const name = demoGreetingName(demo.customer_name);
+  const opener =
+    name === DEMO_NAME_FALLBACK ? '¡Perfecto!' : `¡Perfecto, ${name}!`;
 
   return (
     `✅ ${opener} Te esperamos en tu demo el ${dateLabel} a las ${timeLabel}. Nos vemos pronto 👋`

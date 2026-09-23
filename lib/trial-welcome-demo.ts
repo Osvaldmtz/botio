@@ -134,7 +134,7 @@ export async function saveTrialWelcomePendingDemoSlots(params: {
   await savePendingDemoSlots(params.supabase, params.conversationId, {
     slots: params.slots,
     customer_email: params.customerEmail.trim(),
-    customer_name: params.customerName.trim() || 'Lead WhatsApp',
+    customer_name: params.customerName.trim() || 'Doctor/a',
     customer_phone: phone,
     customer_timezone: timezone,
     customer_city_label: label,

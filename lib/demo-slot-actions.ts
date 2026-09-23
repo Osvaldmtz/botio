@@ -15,6 +15,12 @@ import {
 import { movePipelineStage } from '@/lib/pipeline-utils';
 import { normalizeStage, STAGE_RANK } from '@/lib/pipeline';
 import { recordOutcome } from '@/lib/ab-testing';
+import {
+  extractNameFromUserMessages,
+  nameFromEmailLocalPart,
+  readConversationDisplayName,
+  resolveDemoCustomerName,
+} from '@/lib/demo-customer-name';
 
 export type KalyoTwilioCreds = {
   accountSid: string;
@@ -80,7 +86,36 @@ export async function executeConfirmDemoSlot(params: {
   }
 
   const resolvedEmail = (email || pending.customer_email || '').trim();
-  const resolvedName = (name || pending.customer_name || '').trim() || 'Lead WhatsApp';
+
+  const { data: conv } = await supabase
+    .from('conversations')
+    .select('pipeline_stage, lead_score, lead_intent, lead_signals, bot_id, metadata')
+    .eq('id', conversationId)
+    .maybeSingle();
+
+  const metadata = (conv?.metadata as Record<string, unknown> | null) ?? {};
+  const conversationName = readConversationDisplayName(metadata);
+
+  let messageExtractedName: string | null = null;
+  const { data: recentMsgs } = await supabase
+    .from('messages')
+    .select('role, content')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false })
+    .limit(40);
+  if (recentMsgs?.length) {
+    messageExtractedName = extractNameFromUserMessages(
+      [...recentMsgs].reverse() as Array<{ role?: string; content?: string }>,
+    );
+  }
+
+  const resolvedName = resolveDemoCustomerName({
+    toolName: name,
+    pendingName: pending.customer_name,
+    conversationName,
+    messageExtractedName,
+    emailLocalPart: nameFromEmailLocalPart(resolvedEmail),
+  });
 
   if (!isValidEmail(resolvedEmail)) {
     await savePendingDemoSlots(supabase, conversationId, {
@@ -96,12 +131,6 @@ export async function executeConfirmDemoSlot(params: {
         '¿Me das tu email para enviarte la invitación de Google Meet?',
     };
   }
-
-  const { data: conv } = await supabase
-    .from('conversations')
-    .select('pipeline_stage, lead_score, lead_intent, lead_signals, bot_id')
-    .eq('id', conversationId)
-    .maybeSingle();
 
   try {
     const scheduledAt = new Date(slot.start);

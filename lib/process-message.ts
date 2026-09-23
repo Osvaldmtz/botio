@@ -58,6 +58,12 @@ import {
 } from '@/lib/demo-handler';
 import { savePendingDemoSlots } from '@/lib/demo-conversation';
 import {
+  extractNameFromUserMessages,
+  nameFromEmailLocalPart,
+  readConversationDisplayName,
+  resolveDemoCustomerName,
+} from '@/lib/demo-customer-name';
+import {
   buildTrialDemoFollowUpOfferMessage,
   buildTrialDemoOfferDeclineAck,
   detectTrialDemoOfferAccept,
@@ -189,13 +195,7 @@ function readCustomerName(
   conversation: ConversationRow,
   metadata: Record<string, unknown>,
 ): string | null {
-  const fromMeta =
-    (typeof metadata.customer_name === 'string' && metadata.customer_name) ||
-    (typeof metadata.name === 'string' && metadata.name) ||
-    null;
-  if (fromMeta) return fromMeta;
-  const row = conversation as Record<string, unknown>;
-  return typeof row.customer_name === 'string' ? row.customer_name : null;
+  return readConversationDisplayName(metadata, conversation as Record<string, unknown>);
 }
 
 function isPricingQuestion(messageBody: string): boolean {
@@ -477,6 +477,48 @@ export async function processIncomingMessage(
       const customerLabel = getCustomerTimezoneLabel(conversation.customer_phone);
       const assistantNow = new Date().toISOString();
 
+      let messageExtractedName: string | null = null;
+      try {
+        const { data: recentMsgs } = await supabase
+          .from('messages')
+          .select('role, content')
+          .eq('conversation_id', conversation.id)
+          .order('created_at', { ascending: false })
+          .limit(40);
+        if (recentMsgs?.length) {
+          messageExtractedName = extractNameFromUserMessages(
+            [...recentMsgs].reverse() as Array<{ role?: string; content?: string }>,
+          );
+        }
+      } catch (err) {
+        console.warn('[process-message] name extract failed', err);
+      }
+
+      const resolvedDemoName = resolveDemoCustomerName({
+        conversationName: customerName,
+        messageExtractedName,
+        emailLocalPart: nameFromEmailLocalPart(customerEmail),
+      });
+
+      // Persist usable name into metadata for future turns
+      if (
+        resolvedDemoName &&
+        resolvedDemoName !== 'Doctor/a' &&
+        !customerName
+      ) {
+        try {
+          await supabase
+            .from('conversations')
+            .update({
+              metadata: { ...metadata, customer_name: resolvedDemoName },
+            })
+            .eq('id', conversation.id);
+          metadata.customer_name = resolvedDemoName;
+        } catch (err) {
+          console.warn('[process-message] persist customer_name failed', err);
+        }
+      }
+
       let replyText: string | null = null;
       let source: 'demo_scheduling_slots' | 'demo_scheduling_calendly' =
         'demo_scheduling_calendly';
@@ -498,7 +540,7 @@ export async function processIncomingMessage(
           await savePendingDemoSlots(supabase, conversation.id, {
             slots,
             customer_email: customerEmail,
-            customer_name: customerName?.trim() || 'Lead WhatsApp',
+            customer_name: resolvedDemoName,
             customer_phone: conversation.customer_phone,
             customer_timezone: customerTimezone,
             customer_city_label: customerLabel,
@@ -507,7 +549,10 @@ export async function processIncomingMessage(
             offered_at: assistantNow,
           });
 
-          const greeting = customerName?.trim() ? `, ${customerName.trim()}` : '';
+          const greeting =
+            resolvedDemoName && resolvedDemoName !== 'Doctor/a'
+              ? `, ${resolvedDemoName.split(/\s+/)[0]}`
+              : '';
           replyText =
             `¡Perfecto${greeting}! 🎯 Te ofrezco horarios para una demo de 30 min con nuestro equipo.\n\n` +
             formatSlotsForBot(slots, { overlap_limited });
@@ -522,7 +567,7 @@ export async function processIncomingMessage(
       }
 
       if (!replyText) {
-        replyText = buildDemoSchedulingMessage({ customerName });
+        replyText = buildDemoSchedulingMessage({ customerName: resolvedDemoName });
         source = 'demo_scheduling_calendly';
       }
 
@@ -543,14 +588,14 @@ export async function processIncomingMessage(
 
       if (source === 'demo_scheduling_slots') {
         await notifyDemoSlotsOffered({
-          customerName,
+          customerName: resolvedDemoName,
           phone: conversation.customer_phone,
           conversationId: conversation.id,
           slotLabels: slotsOffered,
         });
       } else {
         await notifyDemoLinkSent({
-          customerName,
+          customerName: resolvedDemoName,
           phone: conversation.customer_phone,
           conversationId: conversation.id,
           reason: 'LINK DEMO ENVIADO (sin slots disponibles)',
@@ -1248,6 +1293,10 @@ export async function processIncomingMessage(
       toolResults = result.toolResults;
     } catch (error) {
       console.error('[process-message] Claude call failed', error);
+      const { alertAnthropicCreditBalanceTooLow } = await import(
+        '@/lib/anthropic-billing-alert'
+      );
+      void alertAnthropicCreditBalanceTooLow(error);
       replyText = FALLBACK_MESSAGE;
     }
   }

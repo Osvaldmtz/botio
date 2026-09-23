@@ -9,6 +9,10 @@ import { notifySalesTeam } from '@/lib/kalyo-notify';
 import { savePendingDemoSlots } from '@/lib/demo-conversation';
 import { getDemoBookingUrl } from '@/lib/demo-booking-messages';
 import {
+  nameFromEmailLocalPart,
+  resolveDemoCustomerName,
+} from '@/lib/demo-customer-name';
+import {
   formatSlotsForBot,
   getAvailableSlots,
   isValidEmail,
@@ -1111,7 +1115,12 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               bot_message: 'El email no parece válido. ¿Me lo compartes de nuevo?',
             };
           }
-          if (!name) {
+          const resolvedName = resolveDemoCustomerName({
+            toolName: name,
+            formName: name,
+            emailLocalPart: nameFromEmailLocalPart(email),
+          });
+          if (!name || resolvedName === 'Doctor/a') {
             return {
               status: 'error',
               bot_message: 'Necesito tu nombre completo para agendar la demo.',
@@ -1164,7 +1173,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
             await savePendingDemoSlots(supabase, conversationId, {
               slots,
               customer_email: email,
-              customer_name: name,
+              customer_name: resolvedName,
               customer_phone: senderFrom,
               customer_city: tzMatch.city_normalized,
               customer_timezone: tzMatch.timezone,

@@ -136,8 +136,15 @@ export async function createDemoBookingCalendarEvent(
 
     try {
       const { notifyDemoConfirmed } = await import('@/lib/demo-confirmed-notify');
+      const { resolveDemoCustomerName, nameFromEmailLocalPart } = await import(
+        '@/lib/demo-customer-name'
+      );
+      const safeName = resolveDemoCustomerName({
+        formName: input.name,
+        emailLocalPart: nameFromEmailLocalPart(input.email),
+      });
       await notifyDemoConfirmed({
-        customerName: input.name,
+        customerName: safeName,
         customerEmail: input.email,
         customerPhone: input.whatsapp,
         scheduledAt,
