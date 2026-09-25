@@ -6,6 +6,7 @@ import {
   displayPatientName,
   formatPatientAck,
   formatPsychologistNotification,
+  patientAckFromNumber,
   phonesEquivalent,
 } from '@/lib/patient-inbound-utils';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -100,6 +101,8 @@ export async function tryHandlePatientInbound(params: {
   senderPhone: string;
   messageBody: string;
   bot: BotCredentials;
+  /** Twilio `To` — the business number that received this inbound. */
+  inboundTo?: string | null;
 }): Promise<boolean> {
   const patient = await findPatientByPhone(params.senderPhone);
   if (!patient?.psychologist_id) return false;
@@ -162,13 +165,21 @@ export async function tryHandlePatientInbound(params: {
   }
 
   try {
-    await sendWhatsApp({
-      accountSid,
-      authToken,
-      from,
-      to: params.senderPhone,
-      body: patientReply,
-    });
+    const ackFrom = patientAckFromNumber(params.inboundTo);
+    if (!ackFrom) {
+      console.warn(
+        '[patient-inbound] skip patient ack; inbound To has no open session on a known sender',
+        params.inboundTo,
+      );
+    } else {
+      await sendWhatsApp({
+        accountSid,
+        authToken,
+        from: ackFrom,
+        to: params.senderPhone,
+        body: patientReply,
+      });
+    }
   } catch (error) {
     console.error('[patient-inbound] failed to reply to patient', error);
   }

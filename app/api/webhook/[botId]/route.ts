@@ -221,6 +221,7 @@ export async function POST(request: Request, { params }: Params) {
         senderPhone: from,
         messageBody: incoming.body,
         bot: bot as BotCredentials,
+        inboundTo: twilioParams.To ?? null,
       });
       if (handledAsPatient) {
         console.log(`[webhook] patient inbound handled | bot=${bot.id} | from=${from}`);

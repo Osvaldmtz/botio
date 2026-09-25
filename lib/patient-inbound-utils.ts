@@ -54,6 +54,18 @@ export function formatPatientAck(patientName: string): string {
   );
 }
 
+const SESSION_SENDERS = ['15559374917', '17373667277'];
+
+/**
+ * The ack must leave from the number the patient just wrote to.
+ * Sending it from the other business number is freeform outside that 24h window (63016).
+ */
+export function patientAckFromNumber(inboundTo: string | null | undefined): string | null {
+  const value = digitsOnly(inboundTo ?? '');
+  const match = SESSION_SENDERS.find((sender) => value.endsWith(sender));
+  return match ? `whatsapp:+${match}` : null;
+}
+
 export function displayPatientName(fullName: string | null | undefined): string {
   const trimmed = fullName?.trim();
   return trimmed || 'paciente';

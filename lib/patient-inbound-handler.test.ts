@@ -6,6 +6,7 @@ import {
   buildPhoneLookupSuffixes,
   formatPatientAck,
   formatPsychologistNotification,
+  patientAckFromNumber,
   phonesEquivalent,
 } from './patient-inbound-utils';
 
@@ -101,5 +102,12 @@ describe('message templates', () => {
       formatPatientAck('Ana'),
       'Hola Ana, tu mensaje fue enviado a tu psicólogo. En breve te contactará directamente. 😊',
     );
+  });
+
+  it('replies from the number the patient just wrote, not the other sender', () => {
+    assert.equal(patientAckFromNumber('whatsapp:+17373667277'), 'whatsapp:+17373667277');
+    assert.equal(patientAckFromNumber('whatsapp:+15559374917'), 'whatsapp:+15559374917');
+    assert.equal(patientAckFromNumber('whatsapp:+5215555555555'), null);
+    assert.equal(patientAckFromNumber(null), null);
   });
 });
