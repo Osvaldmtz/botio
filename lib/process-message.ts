@@ -1311,6 +1311,7 @@ export async function processIncomingMessage(
   const guardResult = applyDemoConfirmationGuard({
     replyText,
     toolsCalled,
+    toolResults,
     conversationId: conversation.id,
   });
   if (guardResult.guarded) {

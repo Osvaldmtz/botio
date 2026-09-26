@@ -65,10 +65,7 @@ assert(
   shouldInterceptDemoTimeCheck(pending, 'Es a las 12:30?'),
   'time question with pending must intercept check',
 );
-assert(
-  !shouldInterceptDemoTimeCheck(pending, '2'),
-  'slot number must use confirm, not time check',
-);
+assert(!shouldInterceptDemoTimeCheck(pending, '2'), 'slot number must use confirm, not time check');
 assert(hasCustomTimeRequest('lunes 12:30'), 'hasCustomTimeRequest for lunes 12:30');
 
 // response guard
@@ -82,6 +79,7 @@ const guarded = applyDemoConfirmationGuard({
   conversationId: 'conv-test',
 });
 assert(guarded.guarded, 'must guard when confirm_demo_slot missing');
+assert(!looksLikeDemoConfirmation(guarded.replyText), 'guarded reply must not confirm the demo');
 assert(
   !applyDemoConfirmationGuard({
     replyText: 'Demo agendada.',
@@ -89,6 +87,35 @@ assert(
     conversationId: 'conv-test',
   }).guarded,
   'must not guard when tool was called',
+);
+const keilaReply =
+  'Entendido, solo por la tarde. Confirmo: tu opción es la **2️⃣ Lunes 28 sep, 15:00 (CDMX)** — ¿es correcto?';
+assert(looksLikeDemoConfirmation(keilaReply), 'must detect slot confirmation without booking');
+assert(
+  applyDemoConfirmationGuard({
+    replyText: keilaReply,
+    toolsCalled: [],
+    conversationId: 'conv-test',
+  }).guarded,
+  'must guard Keila-style confirmation',
+);
+assert(
+  applyDemoConfirmationGuard({
+    replyText: '✅ ¡Demo agendada!',
+    toolsCalled: ['confirm_demo_slot'],
+    toolResults: { confirm_demo_slot: { status: 'need_email', bot_message: 'email?' } },
+    conversationId: 'conv-test',
+  }).guarded,
+  'must guard when confirm_demo_slot did not succeed',
+);
+assert(
+  !applyDemoConfirmationGuard({
+    replyText: '✅ ¡Demo agendada!',
+    toolsCalled: ['confirm_demo_slot'],
+    toolResults: { confirm_demo_slot: { status: 'success', bot_message: 'ok' } },
+    conversationId: 'conv-test',
+  }).guarded,
+  'must allow a successful confirm_demo_slot',
 );
 
 console.log('✓ All demo flow interceptor tests passed');

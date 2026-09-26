@@ -1,5 +1,10 @@
 import 'server-only';
 import crypto from 'node:crypto';
+import {
+  normalizeWhatsAppAddress,
+  splitWhatsAppBody,
+  WHATSAPP_BODY_PART_LIMIT,
+} from '@/lib/whatsapp-outbound';
 
 type QuickReplyButton = {
   id: string;
@@ -76,9 +81,25 @@ function parseTwilioError(text: string, httpStatus: number): TwilioApiError {
   }
 }
 
-export async function sendWhatsAppMessage(
-  args: SendWhatsAppArgs,
-): Promise<TwilioMessageSendResult> {
+const WHATSAPP_PART_DELAY_MS = 500;
+
+function usesTwilioContentTemplate(args: SendWhatsAppArgs): boolean {
+  if (args.contentSid) return true;
+  return Boolean(args.quickReplies?.length && process.env.KALYO_QUICK_REPLY_CONTENT_SID);
+}
+
+function outboundBodies(args: SendWhatsAppArgs): Array<string | undefined> {
+  if (
+    usesTwilioContentTemplate(args) ||
+    !args.body ||
+    args.body.length <= WHATSAPP_BODY_PART_LIMIT
+  ) {
+    return [args.body];
+  }
+  return splitWhatsAppBody(args.body);
+}
+
+async function postWhatsAppMessage(args: SendWhatsAppArgs): Promise<TwilioMessageSendResult> {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${args.accountSid}/Messages.json`;
   const response = await fetch(url, {
     method: 'POST',
@@ -100,6 +121,28 @@ export async function sendWhatsAppMessage(
   }
 
   return { sid: data.sid };
+}
+
+export async function sendWhatsAppMessage(
+  args: SendWhatsAppArgs,
+): Promise<TwilioMessageSendResult> {
+  const bodies = outboundBodies(args);
+  if (bodies.length > 1) {
+    console.log(`[twilio] splitting WhatsApp body into ${bodies.length} parts`);
+  }
+
+  let result: TwilioMessageSendResult | null = null;
+  for (let i = 0; i < bodies.length; i++) {
+    if (i > 0) {
+      await new Promise((resolve) => setTimeout(resolve, WHATSAPP_PART_DELAY_MS));
+    }
+    result = await postWhatsAppMessage({ ...args, body: bodies[i] });
+  }
+
+  if (!result) {
+    throw new TwilioApiError('Twilio send had no message body', null, 400);
+  }
+  return result;
 }
 
 export async function fetchTwilioMessageStatus(
@@ -128,13 +171,11 @@ export async function sendWhatsApp(args: SendWhatsAppArgs): Promise<void> {
   await sendWhatsAppMessage(args);
 }
 
-// Twilio requires both From and To to carry the "whatsapp:" channel prefix for
-// WhatsApp messages. Admin users sometimes store a bot's number as a bare
-// "+E164" value, which triggers Twilio error 21910 ("Invalid From and To pair").
-// Normalize here so callers don't have to think about it.
+// Twilio requires both From and To to carry the "whatsapp:" channel prefix.
+// Bare "+E164" values trigger error 21910. Internal spaces (for example
+// "whatsapp:+593 996001411") are stripped so Twilio accepts the number.
 function toWhatsAppAddress(address: string): string {
-  const trimmed = address.trim();
-  return trimmed.startsWith('whatsapp:') ? trimmed : `whatsapp:${trimmed}`;
+  return normalizeWhatsAppAddress(address);
 }
 
 /**

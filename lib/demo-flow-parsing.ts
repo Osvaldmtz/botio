@@ -14,9 +14,11 @@ export const TIME_REQUEST_RE =
 
 export const HALLUCINATION_PATTERNS = [
   /demo\s+(agendada|confirmada|reservada)/i,
-  /te\s+(enviar[eé]|envío)\s+la\s+invitaci[oó]n/i,
+  /te\s+(enviar[eé]|envío|envi[eé])\s+la\s+invitaci[oó]n/i,
   /listo.*google\s+meet/i,
-  /confirmado.*(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado)/i,
+  /confirmado.*(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|\d{1,2}:\d{2})/i,
+  /confirmo\s*:.*(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|\d{1,2}:\d{2})/i,
+  /tu opci[oó]n es la.*\d{1,2}:\d{2}/i,
   /confirmado:\s*demo/i,
 ];
 
@@ -81,18 +83,34 @@ export function looksLikeDemoConfirmation(text: string): boolean {
   return HALLUCINATION_PATTERNS.some((re) => re.test(text));
 }
 
+function confirmDemoSlotSucceeded(
+  toolsCalled: string[],
+  toolResults?: Record<string, unknown>,
+): boolean {
+  if (!toolsCalled.includes('confirm_demo_slot')) return false;
+  if (!toolResults || !Object.prototype.hasOwnProperty.call(toolResults, 'confirm_demo_slot')) {
+    return true;
+  }
+  const raw = toolResults.confirm_demo_slot;
+  if (!raw || typeof raw !== 'object') return false;
+  return (raw as { status?: unknown }).status === 'success';
+}
+
 export function applyDemoConfirmationGuard(params: {
   replyText: string;
   toolsCalled: string[];
+  toolResults?: Record<string, unknown>;
   conversationId: string;
 }): { replyText: string; guarded: boolean } {
-  const confirmedViaTool = params.toolsCalled.includes('confirm_demo_slot');
-  if (confirmedViaTool || !looksLikeDemoConfirmation(params.replyText)) {
+  if (
+    !looksLikeDemoConfirmation(params.replyText) ||
+    confirmDemoSlotSucceeded(params.toolsCalled, params.toolResults)
+  ) {
     return { replyText: params.replyText, guarded: false };
   }
 
   console.error(
-    `[demo-flow-warning] LLM hallucinated demo confirmation without tool call | conv=${params.conversationId}`,
+    `[demo-flow-warning] blocking demo confirmation without successful confirm_demo_slot | conv=${params.conversationId}`,
   );
 
   return {
@@ -102,11 +120,7 @@ export function applyDemoConfirmationGuard(params: {
   };
 }
 
-const DEMO_TZ_TOOL_NAMES = [
-  'check_specific_time',
-  'schedule_demo',
-  'confirm_demo_slot',
-] as const;
+const DEMO_TZ_TOOL_NAMES = ['check_specific_time', 'schedule_demo', 'confirm_demo_slot'] as const;
 
 function extractDemoToolBotMessage(
   toolResults: Record<string, unknown>,
