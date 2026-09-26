@@ -1,6 +1,7 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { toGoogleHostDateTime } from '@/lib/calendar-slots';
+import { deliverLandingDemoConfirmationWhatsApp } from '@/lib/demo-booking-confirmation';
 import {
   DEMO_HOST_EMAIL,
   DEMO_HOST_NAME,
@@ -28,6 +29,37 @@ export type DemoBookingCalendarResult = {
   error?: string;
   skipped?: boolean;
 };
+
+async function loadKalyoTwilioCreds(
+  supabase: ReturnType<typeof createAdminClient>,
+): Promise<{ accountSid: string; authToken: string; from: string } | null> {
+  const botId = process.env.KALYO_BOT_ID;
+  if (!botId) {
+    console.error('[demo-booking-calendar] missing KALYO_BOT_ID');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('bots')
+    .select('twilio_account_sid, twilio_auth_token, twilio_whatsapp_number')
+    .eq('id', botId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[demo-booking-calendar] failed to load Twilio creds', error.message);
+    return null;
+  }
+  if (!data?.twilio_account_sid || !data.twilio_auth_token || !data.twilio_whatsapp_number) {
+    console.error('[demo-booking-calendar] Kalyo bot is missing Twilio credentials');
+    return null;
+  }
+
+  return {
+    accountSid: data.twilio_account_sid,
+    authToken: data.twilio_auth_token,
+    from: data.twilio_whatsapp_number,
+  };
+}
 
 function buildDescription(input: DemoBookingCalendarInput, meetLink: string): string {
   const lines = [
@@ -157,6 +189,26 @@ export async function createDemoBookingCalendarEvent(
     } catch (err) {
       console.error(
         '[demo-booking-calendar] notify failed (non-fatal)',
+        err instanceof Error ? err.message : err,
+      );
+    }
+
+    try {
+      const creds = await loadKalyoTwilioCreds(supabase);
+      const { sendWhatsApp } = await import('@/lib/twilio');
+      const confirmation = await deliverLandingDemoConfirmationWhatsApp({
+        whatsapp: input.whatsapp,
+        scheduledAt,
+        meetLink,
+        creds,
+        sendFn: sendWhatsApp,
+      });
+      console.log(
+        `[demo-booking-calendar] confirmation whatsapp | booking_id=${input.bookingId} | result=${confirmation}`,
+      );
+    } catch (err) {
+      console.error(
+        '[demo-booking-calendar] confirmation whatsapp failed (non-fatal)',
         err instanceof Error ? err.message : err,
       );
     }

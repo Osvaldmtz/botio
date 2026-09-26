@@ -9,6 +9,8 @@ import {
 export type DemoReminderNotifyEvent =
   | 'reminder_24h_sent'
   | 'reminder_1h_sent'
+  | 'reminder_24h_no_phone'
+  | 'reminder_1h_no_phone'
   | 'customer_confirmed'
   | 'customer_requested_reschedule'
   | 'customer_cancelled';
@@ -76,6 +78,27 @@ export function buildDemoReminderTelegramText(
         `🎥 Link Meet: ${meet}\n\n` +
         `Esperando respuesta del cliente`
       );
+    case 'reminder_24h_no_phone':
+      return (
+        `🔔 <b>Recordatorio 24h — sin WhatsApp</b>\n\n` +
+        `Cliente: ${name}\n` +
+        `Teléfono: ${phone}\n` +
+        `Email: ${email}\n` +
+        `Demo: ${escapeHtml(dateLabel)}\n` +
+        `⏰ ${escapeHtml(timeLabel)} ${escapeHtml(timezoneLabel)}\n` +
+        `🎥 Meet: ${meet}\n\n` +
+        `No hay número de WhatsApp. El recordatorio no se envió.`
+      );
+    case 'reminder_1h_no_phone':
+      return (
+        `⏰ <b>Recordatorio 1h — sin WhatsApp</b>\n\n` +
+        `Cliente: ${name}\n` +
+        `Teléfono: ${phone}\n` +
+        `Email: ${email}\n` +
+        `Demo en 1 hora: ${escapeHtml(dateTime)}\n` +
+        `🎥 Link Meet: ${meet}\n\n` +
+        `No hay número de WhatsApp. El recordatorio no se envió.`
+      );
     case 'customer_confirmed':
       return (
         `✅ <b>Cliente CONFIRMÓ asistencia</b>\n\n` +
@@ -138,7 +161,7 @@ export async function notifyDemoReminderEvent(
     display?: DemoDisplayTimezone;
     sendTelegram?: SendTelegramFn;
   },
-): Promise<void> {
+): Promise<boolean> {
   const sendTelegram = options?.sendTelegram ?? defaultSendTelegram;
 
   try {
@@ -151,10 +174,12 @@ export async function notifyDemoReminderEvent(
     const text = buildDemoReminderTelegramText(event, demo, display, extra);
     await sendTelegram(text);
     console.log(`[demo-reminder-notify] sent | event=${event} | demo_id=${demo.id}`);
+    return true;
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     console.error(
       `[demo-reminder-notify] failed | event=${event} | demo_id=${demo.id} | error=${error}`,
     );
+    return false;
   }
 }
