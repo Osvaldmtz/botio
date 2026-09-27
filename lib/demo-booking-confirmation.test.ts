@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  DEMO_CONFIRMATION_TEMPLATE_SID,
+  buildLandingDemoConfirmationContentVariables,
   deliverLandingDemoConfirmationWhatsApp,
-  formatLandingDemoConfirmationWhatsApp,
 } from './demo-booking-confirmation';
 
 const creds = {
@@ -12,20 +13,22 @@ const creds = {
 };
 
 describe('landing demo confirmation whatsapp', () => {
-  it('includes date, time, and meet link', () => {
-    const body = formatLandingDemoConfirmationWhatsApp({
+  it('fills the approved template variables in Mexico time', () => {
+    const variables = buildLandingDemoConfirmationContentVariables({
+      name: 'Ana Pérez',
       scheduledAt: new Date('2026-10-02T15:00:00.000Z'),
-      phone: '+573001112233',
       meetLink: 'https://meet.google.com/pgd-dxmb-sfk',
     });
-    assert.match(body, /2 oct/i);
-    assert.match(body, /Meet: https:\/\/meet\.google\.com\/pgd-dxmb-sfk/);
-    assert.match(body, /\d{1,2}:\d{2}/);
+    assert.equal(variables['1'], 'Ana');
+    assert.equal(variables['2'], 'Viernes 2 de octubre');
+    assert.equal(variables['3'], '9:00 a.m.');
+    assert.equal(variables['4'], 'https://meet.google.com/pgd-dxmb-sfk');
   });
 
   it('skips WhatsApp when the number is blank', async () => {
     let calls = 0;
     const result = await deliverLandingDemoConfirmationWhatsApp({
+      name: 'Ana Pérez',
       whatsapp: '   ',
       scheduledAt: new Date('2026-10-02T15:00:00.000Z'),
       meetLink: 'https://meet.google.com/pgd-dxmb-sfk',
@@ -38,20 +41,28 @@ describe('landing demo confirmation whatsapp', () => {
     assert.equal(calls, 0);
   });
 
-  it('sends the confirmation body to the registered number', async () => {
-    const sent: Array<{ to: string; body?: string }> = [];
+  it('sends the confirmation template to the registered number', async () => {
+    const sent: Array<{ to: string; contentSid?: string; contentVariables?: Record<string, string> }> =
+      [];
     const result = await deliverLandingDemoConfirmationWhatsApp({
+      name: 'Ana Pérez',
       whatsapp: '+573001112233',
       scheduledAt: new Date('2026-10-02T15:00:00.000Z'),
-      meetLink: 'https://meet.google.com/abc-defg-hij',
+      meetLink: 'https://meet.google.com/pgd-dxmb-sfk',
       creds,
       sendFn: async (args) => {
-        sent.push({ to: args.to, body: args.body });
+        sent.push({
+          to: args.to,
+          contentSid: args.contentSid,
+          contentVariables: args.contentVariables,
+        });
       },
     });
     assert.equal(result, 'sent');
     assert.equal(sent.length, 1);
     assert.equal(sent[0]?.to, '+573001112233');
-    assert.match(sent[0]?.body ?? '', /Meet: https:\/\/meet\.google\.com\/abc-defg-hij/);
+    assert.equal(sent[0]?.contentSid, DEMO_CONFIRMATION_TEMPLATE_SID);
+    assert.equal(sent[0]?.contentVariables?.['4'], 'https://meet.google.com/pgd-dxmb-sfk');
+    assert.equal(sent[0]?.contentSid, 'HX29d10d428100ef15a89bbd66290dd914');
   });
 });

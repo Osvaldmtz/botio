@@ -197,6 +197,7 @@ export async function createDemoBookingCalendarEvent(
       const creds = await loadKalyoTwilioCreds(supabase);
       const { sendWhatsApp } = await import('@/lib/twilio');
       const confirmation = await deliverLandingDemoConfirmationWhatsApp({
+        name: input.name,
         whatsapp: input.whatsapp,
         scheduledAt,
         meetLink,
