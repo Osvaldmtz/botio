@@ -6,9 +6,11 @@ import {
   DEMO_HOST_EMAIL,
   DEMO_HOST_NAME,
   DEMO_TIMEZONE,
+  assertDemoSlotBookable,
   getCalendarClient,
   getDemoMeetLink,
 } from '@/lib/google-calendar';
+import { DemoSlotUnavailableError } from '@/lib/demo-availability';
 
 const DEFAULT_DURATION_MINUTES = 30;
 
@@ -27,6 +29,7 @@ export type DemoBookingCalendarResult = {
   eventId?: string;
   meetLink?: string | null;
   error?: string;
+  code?: string;
   skipped?: boolean;
 };
 
@@ -108,6 +111,20 @@ export async function createDemoBookingCalendarEvent(
   }
 
   const endAt = new Date(scheduledAt.getTime() + DEFAULT_DURATION_MINUTES * 60_000);
+
+  try {
+    await assertDemoSlotBookable({
+      slotStart: scheduledAt,
+      durationMinutes: DEFAULT_DURATION_MINUTES,
+      excludeBookingId: input.bookingId,
+    });
+  } catch (err) {
+    if (err instanceof DemoSlotUnavailableError) {
+      return { ok: false, error: err.message, code: 'slot_unavailable' };
+    }
+    throw err;
+  }
+
   const meetLink = getDemoMeetLink();
 
   try {

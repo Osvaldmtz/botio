@@ -24,9 +24,17 @@ const LABEL_BY_TIMEZONE: Record<string, string> = {
   'America/Monterrey': 'Monterrey',
 };
 
-const WORK_DAYS = new Set([1, 2, 3, 4, 5, 6]);
-const WORK_START_HOUR = 9;
-const WORK_END_HOUR = 20;
+/** Customer-local window used only to estimate overlap with the person's day. */
+const CUSTOMER_WORK_DAYS = new Set([1, 2, 3, 4, 5, 6]);
+const CUSTOMER_WORK_START_HOUR = 9;
+const CUSTOMER_WORK_END_HOUR = 20;
+
+/** Host demo desk, America/Bogota. Weekdays 09:00–19:00, Saturday 12:00–14:00. */
+export function hostDemoWindow(weekday: number): { startMin: number; endMin: number } | null {
+  if (weekday >= 1 && weekday <= 5) return { startMin: 9 * 60, endMin: 19 * 60 };
+  if (weekday === 6) return { startMin: 12 * 60, endMin: 14 * 60 };
+  return null;
+}
 
 function stripHoraPrefix(label?: string): string {
   return (label ?? '').replace(/^hora\s+/i, '').trim();
@@ -81,31 +89,38 @@ export function hostLocalToDate(
   return fromZonedTime(localIso, HOST_TIMEZONE);
 }
 
-function isWithinBusinessHoursInZone(
-  slotStart: Date,
-  durationMinutes: number,
-  timezone: string,
-): boolean {
+function isWithinCustomerWindow(slotStart: Date, durationMinutes: number, timezone: string): boolean {
   const zoned = toZonedTime(slotStart, timezone);
   const start = {
     weekday: zoned.getDay(),
     hour: zoned.getHours(),
     minute: zoned.getMinutes(),
   };
-  if (!WORK_DAYS.has(start.weekday)) return false;
-  if (start.hour < WORK_START_HOUR || start.hour >= WORK_END_HOUR) return false;
+  if (!CUSTOMER_WORK_DAYS.has(start.weekday)) return false;
+  if (start.hour < CUSTOMER_WORK_START_HOUR || start.hour >= CUSTOMER_WORK_END_HOUR) return false;
 
   const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
   const endZoned = toZonedTime(slotEnd, timezone);
   const endHour = endZoned.getHours();
   const endMinute = endZoned.getMinutes();
-  if (endHour > WORK_END_HOUR) return false;
-  if (endHour === WORK_END_HOUR && endMinute > 0) return false;
+  if (endHour > CUSTOMER_WORK_END_HOUR) return false;
+  if (endHour === CUSTOMER_WORK_END_HOUR && endMinute > 0) return false;
   return true;
 }
 
 export function isWithinHostBusinessHours(slotStart: Date, durationMinutes: number): boolean {
-  return isWithinBusinessHoursInZone(slotStart, durationMinutes, HOST_TIMEZONE);
+  const start = getHostTzParts(slotStart);
+  const window = hostDemoWindow(start.weekday);
+  if (!window) return false;
+
+  const startMin = start.hour * 60 + start.minute;
+  if (startMin < window.startMin) return false;
+
+  const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
+  const end = getHostTzParts(slotEnd);
+  if (end.year !== start.year || end.month !== start.month || end.day !== start.day) return false;
+  const endMin = end.hour * 60 + end.minute;
+  return endMin <= window.endMin;
 }
 
 export function getCustomerTzParts(date: Date, customerTimezone: string): HostTzParts {
@@ -125,7 +140,7 @@ export function isWithinCustomerBusinessHours(
   durationMinutes: number,
   customerTimezone: string,
 ): boolean {
-  return isWithinBusinessHoursInZone(slotStart, durationMinutes, customerTimezone);
+  return isWithinCustomerWindow(slotStart, durationMinutes, customerTimezone);
 }
 
 /** Slot must fall within 9–20h Mon–Sat in both host (Cali) and customer timezones. */
@@ -226,14 +241,19 @@ export function generateHostCandidateSlots(
 
   while (cursor.getTime() <= endMs) {
     const parts = getHostTzParts(cursor);
-    if (WORK_DAYS.has(parts.weekday)) {
-      for (let hour = WORK_START_HOUR; hour < WORK_END_HOUR; hour++) {
-        for (const minute of [0, 30]) {
-          const slotStart = hostLocalToDate(parts.year, parts.month, parts.day, hour, minute);
-          if (!isWithinHostBusinessHours(slotStart, durationMinutes)) continue;
-          if (slotStart.getTime() >= startDate.getTime() && slotStart.getTime() <= endMs) {
-            slots.push(slotStart);
-          }
+    const window = hostDemoWindow(parts.weekday);
+    if (window) {
+      for (let minutes = window.startMin; minutes < window.endMin; minutes += 30) {
+        const slotStart = hostLocalToDate(
+          parts.year,
+          parts.month,
+          parts.day,
+          Math.floor(minutes / 60),
+          minutes % 60,
+        );
+        if (!isWithinHostBusinessHours(slotStart, durationMinutes)) continue;
+        if (slotStart.getTime() >= startDate.getTime() && slotStart.getTime() <= endMs) {
+          slots.push(slotStart);
         }
       }
     }

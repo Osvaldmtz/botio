@@ -1,0 +1,139 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { hostLocalToDate } from './calendar-slots';
+import {
+  pickPrioritySlots,
+  slotBlockReason,
+  type AvailabilityContext,
+  type OccupiedInterval,
+} from './demo-availability';
+
+function at(year: number, month: number, day: number, hour: number, minute = 0): Date {
+  return hostLocalToDate(year, month, day, hour, minute);
+}
+
+function booking(start: Date): OccupiedInterval {
+  return { start, end: new Date(start.getTime() + 30 * 60_000) };
+}
+
+function context(
+  bookings: OccupiedInterval[],
+  extra?: Partial<AvailabilityContext>,
+): AvailabilityContext {
+  return {
+    bookings,
+    busy: [],
+    reference: at(2026, 9, 30, 8),
+    durationMinutes: 30,
+    ...extra,
+  };
+}
+
+describe('demo availability', () => {
+  it('keeps weekday hours at 9:00–19:00 Colombia and closes Sunday', () => {
+    const open = context([]);
+    assert.equal(slotBlockReason(at(2026, 9, 30, 9), open), null);
+    assert.equal(slotBlockReason(at(2026, 9, 30, 15, 30), open), null);
+    assert.equal(slotBlockReason(at(2026, 9, 30, 18, 30), open), 'afternoon_locked');
+    assert.equal(slotBlockReason(at(2026, 9, 30, 8, 30), open), 'outside_hours');
+    assert.equal(slotBlockReason(at(2026, 9, 30, 19), open), 'outside_hours');
+    assert.equal(slotBlockReason(at(2026, 10, 4, 12), open), 'outside_hours');
+  });
+
+  it('limits Saturday to 12:00–14:00 and two demos', () => {
+    const open = context([
+      booking(at(2026, 9, 30, 9)),
+      booking(at(2026, 9, 30, 10)),
+      booking(at(2026, 9, 30, 11)),
+      booking(at(2026, 9, 30, 12)),
+      booking(at(2026, 9, 30, 13)),
+      booking(at(2026, 10, 1, 9)),
+      booking(at(2026, 10, 1, 10)),
+      booking(at(2026, 10, 1, 11)),
+      booking(at(2026, 10, 1, 12)),
+      booking(at(2026, 10, 1, 13)),
+      booking(at(2026, 10, 2, 9)),
+      booking(at(2026, 10, 2, 10)),
+      booking(at(2026, 10, 2, 11)),
+      booking(at(2026, 10, 2, 12)),
+      booking(at(2026, 10, 2, 13)),
+    ]);
+    assert.equal(slotBlockReason(at(2026, 10, 3, 11, 30), open), 'outside_hours');
+    assert.equal(slotBlockReason(at(2026, 10, 3, 12), open), null);
+    assert.equal(slotBlockReason(at(2026, 10, 3, 14), open), 'outside_hours');
+
+    const fullSaturday = context([
+      ...open.bookings,
+      booking(at(2026, 10, 3, 12)),
+      booking(at(2026, 10, 3, 13)),
+    ]);
+    assert.equal(slotBlockReason(at(2026, 10, 3, 12, 30), fullSaturday), 'daily_max');
+  });
+
+  it('requires 30 minutes between demos', () => {
+    const taken = context([booking(at(2026, 9, 30, 9))]);
+    assert.equal(slotBlockReason(at(2026, 9, 30, 9, 30), taken), 'conflict');
+    assert.equal(slotBlockReason(at(2026, 9, 30, 10), taken), null);
+  });
+
+  it('counts scheduled rows toward the weekday maximum of 5', () => {
+    const full = context([
+      booking(at(2026, 9, 30, 9)),
+      booking(at(2026, 9, 30, 10)),
+      booking(at(2026, 9, 30, 11)),
+      booking(at(2026, 9, 30, 12)),
+      booking(at(2026, 9, 30, 13)),
+    ]);
+    assert.equal(slotBlockReason(at(2026, 9, 30, 14), full), 'daily_max');
+  });
+
+  it('hides afternoon slots until three preferred demos exist that day', () => {
+    const two = context([booking(at(2026, 9, 30, 9)), booking(at(2026, 9, 30, 10))]);
+    assert.equal(slotBlockReason(at(2026, 9, 30, 16), two), 'afternoon_locked');
+    assert.equal(slotBlockReason(at(2026, 9, 30, 9, 30), two), 'conflict');
+    assert.equal(slotBlockReason(at(2026, 9, 30, 11), two), null);
+
+    const three = context([
+      booking(at(2026, 9, 30, 9)),
+      booking(at(2026, 9, 30, 10)),
+      booking(at(2026, 9, 30, 11)),
+    ]);
+    assert.equal(slotBlockReason(at(2026, 9, 30, 16), three), null);
+  });
+
+  it('offers Saturday only after the next three weekdays are full', () => {
+    const slots = [
+      at(2026, 9, 30, 9),
+      at(2026, 10, 1, 9),
+      at(2026, 10, 3, 12),
+    ];
+    assert.deepEqual(
+      pickPrioritySlots(slots.filter((slot) => slotBlockReason(slot, context([])) === null)).map(
+        (slot) => slot.toISOString(),
+      ),
+      [at(2026, 9, 30, 9).toISOString(), at(2026, 10, 1, 9).toISOString()],
+    );
+  });
+
+  it('orders preferred weekday slots before afternoon and Saturday', () => {
+    const filled = [
+      ...[9, 10, 11, 12, 13].map((hour) => booking(at(2026, 9, 30, hour))),
+      ...[9, 10, 11, 12, 13].map((hour) => booking(at(2026, 10, 1, hour))),
+      ...[9, 10, 11, 12, 13].map((hour) => booking(at(2026, 10, 2, hour))),
+      booking(at(2026, 10, 5, 9)),
+      booking(at(2026, 10, 5, 10)),
+      booking(at(2026, 10, 5, 11)),
+    ];
+    const mondayMorning = at(2026, 10, 5, 15, 30);
+    const mondayAfternoon = at(2026, 10, 5, 16);
+    const saturday = at(2026, 10, 3, 12);
+    const ctx = context(filled);
+    const picked = pickPrioritySlots(
+      [saturday, mondayAfternoon, mondayMorning].filter((slot) => slotBlockReason(slot, ctx) === null),
+    );
+    assert.deepEqual(
+      picked.map((slot) => slot.toISOString()),
+      [mondayMorning.toISOString(), mondayAfternoon.toISOString(), saturday.toISOString()],
+    );
+  });
+});

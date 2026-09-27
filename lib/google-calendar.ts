@@ -6,26 +6,28 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   buildCalendarSlot,
   customerLocalToUtcDate,
-  formatSlotForCustomerRequest,
   formatSlotTimeDual,
   generateHostCandidateSlots,
   getHostTzParts,
   hostLocalToDate,
   HOST_TIMEZONE,
-  isWithinCustomerBusinessHours,
   isWithinHostBusinessHours,
-  isWithinOverlapBusinessHours,
   MIN_ADVANCE_HOURS as CALENDAR_MIN_ADVANCE_HOURS,
   toGoogleHostDateTime,
 } from '@/lib/calendar-slots';
 import {
-  getCustomerTimezone,
-  getCustomerTimezoneLabel,
-} from '@/lib/timezone-from-phone';
-import {
   nameFromEmailLocalPart,
   resolveDemoCustomerName,
 } from '@/lib/demo-customer-name';
+import {
+  COLOMBIA_TIME_LABEL,
+  DemoSlotUnavailableError,
+  pickPrioritySlots,
+  slotBlockMessage,
+  slotBlockReason,
+  type AvailabilityContext,
+  type OccupiedInterval,
+} from '@/lib/demo-availability';
 
 export const DEMO_TIMEZONE = HOST_TIMEZONE;
 export const DEMO_HOST_EMAIL = process.env.DEMO_HOST_EMAIL ?? 'osvamtz@gmail.com';
@@ -435,21 +437,6 @@ function addDaysHost(base: Date, days: number): Date {
   return d;
 }
 
-function slotOverlapsBusy(
-  slotStart: Date,
-  slotEnd: Date,
-  busy: { start?: string | null; end?: string | null }[],
-): boolean {
-  const s = slotStart.getTime();
-  const e = slotEnd.getTime();
-  return busy.some((b) => {
-    if (!b.start || !b.end) return false;
-    const bs = new Date(b.start).getTime();
-    const be = new Date(b.end).getTime();
-    return s < be && e > bs;
-  });
-}
-
 function matchesPreferences(
   slotStart: Date,
   preferredDay: string,
@@ -484,40 +471,6 @@ function matchesPreferences(
   return true;
 }
 
-function pickDistributedSlots(candidates: Date[], max = 3): Date[] {
-  if (candidates.length <= max) return candidates;
-
-  const morning = candidates.filter((d) => getHostTzParts(d).hour < 12);
-  const afternoon = candidates.filter((d) => getHostTzParts(d).hour >= 12);
-
-  const picked: Date[] = [];
-  const usedDays = new Set<string>();
-
-  const dayKey = (d: Date) => {
-    const p = getHostTzParts(d);
-    return `${p.year}-${p.month}-${p.day}`;
-  };
-
-  if (morning[0]) {
-    picked.push(morning[0]);
-    usedDays.add(dayKey(morning[0]));
-  }
-  if (afternoon[0] && picked.length < max) {
-    const alt = afternoon.find((d) => !usedDays.has(dayKey(d))) ?? afternoon[0];
-    picked.push(alt);
-    usedDays.add(dayKey(alt));
-  }
-
-  for (const slot of candidates) {
-    if (picked.length >= max) break;
-    if (!picked.some((p) => p.getTime() === slot.getTime())) {
-      picked.push(slot);
-    }
-  }
-
-  return picked.slice(0, max).sort((a, b) => a.getTime() - b.getTime());
-}
-
 export type GetAvailableSlotsParams = {
   startDate?: Date;
   endDate?: Date;
@@ -534,37 +487,8 @@ export type AvailableSlotsResult = {
   overlap_limited?: boolean;
 };
 
-function resolveCustomerTimezone(
-  customerTimezone?: string,
-  customerPhone?: string,
-): string {
-  return customerTimezone ?? getCustomerTimezone(customerPhone);
-}
-
-function applyOverlapFilter(
-  candidates: Date[],
-  durationMinutes: number,
-  customerTimezone?: string,
-  customerPhone?: string,
-): { candidates: Date[]; overlap_limited: boolean } {
-  if (!customerTimezone && !customerPhone) {
-    return { candidates, overlap_limited: false };
-  }
-
-  const tz = resolveCustomerTimezone(customerTimezone, customerPhone);
-  const overlap = candidates.filter((slotStart) =>
-    isWithinOverlapBusinessHours(slotStart, durationMinutes, tz),
-  );
-
-  if (overlap.length > 0) {
-    return { candidates: overlap, overlap_limited: false };
-  }
-
-  if (candidates.length > 0) {
-    return { candidates, overlap_limited: true };
-  }
-
-  return { candidates: [], overlap_limited: false };
+function colombiaOfferSlot(slotStart: Date, durationMinutes: number): CalendarSlot {
+  return buildCalendarSlot(slotStart, durationMinutes, undefined, HOST_TIMEZONE, COLOMBIA_TIME_LABEL);
 }
 
 export async function getAvailableSlots(
@@ -581,59 +505,32 @@ export async function getAvailableSlots(
     `[calendar] checking availability | from=${startDate.toISOString()} to=${endDate.toISOString()}`,
   );
 
-  const calendar = await getCalendarClient();
-  const freebusy = await calendar.freebusy.query({
-    requestBody: {
-      timeMin: startDate.toISOString(),
-      timeMax: endDate.toISOString(),
-      timeZone: DEMO_TIMEZONE,
-      items: [{ id: DEMO_HOST_EMAIL }],
-    },
+  const ctx = await loadAvailabilityContext({
+    from: startDate,
+    to: endDate,
+    reference: now,
+    durationMinutes,
   });
 
-  const busy = freebusy.data.calendars?.[DEMO_HOST_EMAIL]?.busy ?? [];
-
-  let candidates = generateHostCandidateSlots(startDate, endDate, durationMinutes)
-    .filter((slotStart) => isWithinHostBusinessHours(slotStart, durationMinutes))
-    .filter((slotStart) => {
-      const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
-      return !slotOverlapsBusy(slotStart, slotEnd, busy);
-    });
+  let candidates = generateHostCandidateSlots(startDate, endDate, durationMinutes).filter(
+    (slotStart) => slotBlockReason(slotStart, ctx) === null,
+  );
 
   const preferredDay = params.preferredDay ?? 'any';
   const preferredTime = params.preferredTime ?? 'any';
 
   if (preferredDay !== 'any' || preferredTime !== 'any') {
-    const filtered = candidates.filter((s) =>
-      matchesPreferences(s, preferredDay, preferredTime, now),
+    const filtered = candidates.filter((slot) =>
+      matchesPreferences(slot, preferredDay, preferredTime, now),
     );
     if (filtered.length > 0) candidates = filtered;
   }
 
-  const { candidates: overlapCandidates, overlap_limited } = applyOverlapFilter(
-    candidates,
-    durationMinutes,
-    params.customerTimezone,
-    params.customerPhone,
-  );
-  candidates = overlapCandidates;
-
-  const selected = pickDistributedSlots(candidates, 3);
-  console.log(
-    `[calendar] found ${selected.length} slots${overlap_limited ? ' (overlap_limited)' : ''}`,
-  );
+  const selected = pickPrioritySlots(candidates, 3);
+  console.log(`[calendar] found ${selected.length} slots`);
 
   return {
-    slots: selected.map((slotStart) =>
-      buildCalendarSlot(
-        slotStart,
-        durationMinutes,
-        params.customerPhone,
-        params.customerTimezone ?? resolveCustomerTimezone(undefined, params.customerPhone),
-        params.customerLabel,
-      ),
-    ),
-    overlap_limited: overlap_limited || undefined,
+    slots: selected.map((slotStart) => colombiaOfferSlot(slotStart, durationMinutes)),
   };
 }
 
@@ -661,37 +558,125 @@ async function queryFreeBusyForRange(
   return freebusy.data.calendars?.[DEMO_HOST_EMAIL]?.busy ?? [];
 }
 
+function parseBusyIntervals(
+  busy: { start?: string | null; end?: string | null }[],
+): OccupiedInterval[] {
+  return busy.flatMap((block) => {
+    if (!block.start || !block.end) return [];
+    const start = new Date(block.start);
+    const end = new Date(block.end);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+    return [{ start, end }];
+  });
+}
+
+async function loadBookedIntervals(
+  excludeBookingId?: string,
+  focus?: Date,
+): Promise<OccupiedInterval[]> {
+  const supabase = createAdminClient();
+  const from = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  let to = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000);
+  if (focus && focus.getTime() + 2 * 24 * 60 * 60 * 1000 > to.getTime()) {
+    to = new Date(focus.getTime() + 2 * 24 * 60 * 60 * 1000);
+  }
+
+  const [demos, bookings] = await Promise.all([
+    supabase
+      .from('scheduled_demos')
+      .select('scheduled_at, duration_minutes')
+      .eq('status', 'scheduled')
+      .gte('scheduled_at', from.toISOString())
+      .lt('scheduled_at', to.toISOString()),
+    supabase
+      .from('demo_bookings')
+      .select('id, scheduled_at')
+      .in('status', ['pending', 'confirmed'])
+      .gte('scheduled_at', from.toISOString())
+      .lt('scheduled_at', to.toISOString()),
+  ]);
+
+  if (demos.error) throw new Error(demos.error.message);
+  if (bookings.error) throw new Error(bookings.error.message);
+
+  const intervals: OccupiedInterval[] = [];
+  for (const row of demos.data ?? []) {
+    const start = new Date(row.scheduled_at as string);
+    const duration =
+      typeof row.duration_minutes === 'number' ? row.duration_minutes : DEFAULT_DURATION_MINUTES;
+    intervals.push({ start, end: new Date(start.getTime() + duration * 60_000) });
+  }
+  for (const row of bookings.data ?? []) {
+    if (excludeBookingId && row.id === excludeBookingId) continue;
+    const start = new Date(row.scheduled_at as string);
+    intervals.push({
+      start,
+      end: new Date(start.getTime() + DEFAULT_DURATION_MINUTES * 60_000),
+    });
+  }
+  return intervals;
+}
+
+async function loadAvailabilityContext(params: {
+  from: Date;
+  to: Date;
+  reference?: Date;
+  durationMinutes?: number;
+  excludeBookingId?: string;
+}): Promise<AvailabilityContext> {
+  const [bookings, busy] = await Promise.all([
+    loadBookedIntervals(params.excludeBookingId, params.to),
+    queryFreeBusyForRange(params.from, params.to),
+  ]);
+  return {
+    bookings,
+    busy: parseBusyIntervals(busy),
+    reference: params.reference ?? new Date(),
+    durationMinutes: params.durationMinutes ?? DEFAULT_DURATION_MINUTES,
+  };
+}
+
+export async function assertDemoSlotBookable(params: {
+  slotStart: Date;
+  durationMinutes?: number;
+  excludeBookingId?: string;
+}): Promise<void> {
+  const durationMinutes = params.durationMinutes ?? DEFAULT_DURATION_MINUTES;
+  const padMs = 2 * 60 * 60 * 1000;
+  const ctx = await loadAvailabilityContext({
+    from: new Date(params.slotStart.getTime() - padMs),
+    to: new Date(params.slotStart.getTime() + durationMinutes * 60_000 + padMs),
+    durationMinutes,
+    excludeBookingId: params.excludeBookingId,
+  });
+  const reason = slotBlockReason(params.slotStart, ctx);
+  if (reason) {
+    throw new DemoSlotUnavailableError(reason, slotBlockMessage(reason));
+  }
+}
+
 async function findAlternativesNear(
   anchor: Date,
   durationMinutes: number,
-  customerPhone?: string,
-  customerTimezone?: string,
-  customerLabel?: string,
 ): Promise<CalendarSlot[]> {
-  const tz = customerTimezone ?? getCustomerTimezone(customerPhone);
-  const label = customerLabel ?? getCustomerTimezoneLabel(customerPhone);
-
   const now = new Date();
   const earliest = new Date(now.getTime() + CALENDAR_MIN_ADVANCE_HOURS * 60 * 60 * 1000);
   const windowStart = new Date(Math.max(anchor.getTime() - 2 * 60 * 60 * 1000, earliest.getTime()));
   const windowEnd = new Date(anchor.getTime() + 2 * 60 * 60 * 1000);
+  const ctx = await loadAvailabilityContext({
+    from: windowStart,
+    to: windowEnd,
+    reference: now,
+    durationMinutes,
+  });
 
-  const busy = await queryFreeBusyForRange(windowStart, windowEnd);
-  let candidates = generateHostCandidateSlots(windowStart, windowEnd, durationMinutes)
-    .filter((slotStart) => isWithinHostBusinessHours(slotStart, durationMinutes))
-    .filter((slotStart) => {
-      const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
-      return !slotOverlapsBusy(slotStart, slotEnd, busy);
-    })
-    .sort(
-      (a, b) => Math.abs(a.getTime() - anchor.getTime()) - Math.abs(b.getTime() - anchor.getTime()),
-    );
+  const candidates = generateHostCandidateSlots(windowStart, windowEnd, durationMinutes).filter(
+    (slotStart) => slotBlockReason(slotStart, ctx) === null,
+  );
 
-  ({ candidates } = applyOverlapFilter(candidates, durationMinutes, customerTimezone, customerPhone));
-
-  return candidates
-    .slice(0, 3)
-    .map((slotStart) => buildCalendarSlot(slotStart, durationMinutes, customerPhone, tz, label));
+  return pickPrioritySlots(candidates, 3).map((slotStart) =>
+    colombiaOfferSlot(slotStart, durationMinutes),
+  );
 }
 
 async function getFallbackAlternatives(
@@ -701,13 +686,7 @@ async function getFallbackAlternatives(
   customerTimezone?: string,
   customerLabel?: string,
 ): Promise<CalendarSlot[]> {
-  const near = await findAlternativesNear(
-    anchor,
-    durationMinutes,
-    customerPhone,
-    customerTimezone,
-    customerLabel,
-  );
+  const near = await findAlternativesNear(anchor, durationMinutes);
   if (near.length >= 3) return near;
 
   const general = await getAvailableSlots({
@@ -786,24 +765,6 @@ export async function checkSpecificTime(
     };
   }
 
-  if (!isWithinCustomerBusinessHours(slotStart, durationMinutes, tz)) {
-    const alternatives = await getFallbackAlternatives(
-      slotStart,
-      durationMinutes,
-      params.customerPhone,
-      tz,
-      label,
-    );
-    return {
-      status: 'outside_customer_hours',
-      alternatives,
-      bot_message: formatAlternativesBotMessage(
-        `Ese horario está fuera de tu horario laboral (9:00–20:00 ${label}). Te ofrezco:`,
-        alternatives,
-      ),
-    };
-  }
-
   if (!isWithinHostBusinessHours(slotStart, durationMinutes)) {
     const alternatives = await getFallbackAlternatives(
       slotStart,
@@ -816,58 +777,41 @@ export async function checkSpecificTime(
       status: 'outside_hours',
       alternatives,
       bot_message: formatAlternativesBotMessage(
-        'Ese horario no está disponible (fuera del horario del equipo, 9:00–20:00 hora Cali). Te ofrezco:',
+        'Ese horario está fuera del horario de demos (lun–vie 9:00–19:00, sáb 12:00–14:00, hora de Colombia). Te ofrezco:',
         alternatives,
       ),
     };
   }
 
-  const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
-  const busy = await queryFreeBusyForRange(
-    new Date(slotStart.getTime() - 60_000),
-    new Date(slotEnd.getTime() + 60_000),
-  );
-
   console.log(
     `[calendar] checking specific time | requested=${params.requestedDate} ${params.requestedTime} ${tz} | utc=${slotStart.toISOString()}`,
   );
 
-  if (slotOverlapsBusy(slotStart, slotEnd, busy)) {
-    const alternatives = await findAlternativesNear(
-      slotStart,
-      durationMinutes,
-      params.customerPhone,
-      tz,
-      label,
-    );
+  const ctx = await loadAvailabilityContext({
+    from: new Date(slotStart.getTime() - 2 * 60 * 60 * 1000),
+    to: new Date(slotStart.getTime() + 2 * 60 * 60 * 1000),
+    reference: now,
+    durationMinutes,
+  });
+  const reason = slotBlockReason(slotStart, ctx);
+  if (reason) {
+    const alternatives = await findAlternativesNear(slotStart, durationMinutes);
     const fallback =
       alternatives.length > 0
         ? alternatives
-        : await getFallbackAlternatives(
-            slotStart,
-            durationMinutes,
-            params.customerPhone,
-            tz,
-            label,
-          );
+        : await getFallbackAlternatives(slotStart, durationMinutes, params.customerPhone, tz, label);
     return {
-      status: 'busy',
+      status: reason === 'outside_hours' ? 'outside_hours' : 'busy',
       alternatives: fallback,
-      bot_message: formatAlternativesBotMessage(
-        'Ese horario está ocupado, pero te ofrezco alternativas cercanas:',
-        fallback,
-      ),
+      bot_message: formatAlternativesBotMessage(slotBlockMessage(reason), fallback),
     };
   }
 
-  const built = buildCalendarSlot(slotStart, durationMinutes, params.customerPhone, tz, label);
-  // User asked in their local clock — label customer-first with CDMX via date-fns-tz.
-  const requestLabel = formatSlotForCustomerRequest(slotStart, tz, label);
-  const slot = { ...built, label_es: requestLabel };
+  const built = colombiaOfferSlot(slotStart, durationMinutes);
   return {
     status: 'available',
-    slot,
-    bot_message: `¡Sí! ${requestLabel} está disponible. ¿Confirmamos?`,
+    slot: built,
+    bot_message: `¡Sí! ${built.label_es} está disponible. ¿Confirmamos?`,
   };
 }
 
@@ -893,6 +837,10 @@ export function formatSlotsForBot(
 
 export async function createDemoEvent(params: CreateDemoEventParams): Promise<CreateDemoEventResult> {
   const durationMinutes = params.durationMinutes ?? DEFAULT_DURATION_MINUTES;
+  await assertDemoSlotBookable({
+    slotStart: params.scheduledAt,
+    durationMinutes,
+  });
   const calendar = await getCalendarClient();
   const scheduledAt = params.scheduledAt;
   const endAt = new Date(scheduledAt.getTime() + durationMinutes * 60_000);
@@ -1038,16 +986,15 @@ export async function cancelDemoEvent(demoId: string, reason: string): Promise<v
 export function formatDemoConfirmationMessage(
   scheduledAt: Date,
   customerEmail: string,
-  displayTimezone: string,
-  displayLabel: string,
+  _displayTimezone: string,
+  _displayLabel: string,
   meetLink: string = getDemoMeetLink(),
 ): string {
-  const tz = displayTimezone?.trim() || 'America/Bogota';
-  const dateLabel = formatInTimeZone(scheduledAt, tz, 'EEEE d MMM', {
+  const dateLabel = formatInTimeZone(scheduledAt, HOST_TIMEZONE, 'EEEE d MMM', {
     locale: es,
   });
   const capitalizedDate = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
-  const timeLabel = formatSlotTimeDual(scheduledAt, tz, displayLabel);
+  const timeLabel = formatSlotTimeDual(scheduledAt, HOST_TIMEZONE, COLOMBIA_TIME_LABEL);
 
   return (
     '✅ ¡Demo agendada!\n\n' +

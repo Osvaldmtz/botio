@@ -62,7 +62,8 @@ export async function POST(request: Request) {
   try {
     const result = await createDemoBookingCalendarEvent(parsed);
     if (!result.ok) {
-      return NextResponse.json(result, { status: 500 });
+      const status = result.code === 'slot_unavailable' ? 409 : 500;
+      return NextResponse.json(result, { status });
     }
     return NextResponse.json(result);
   } catch (error) {

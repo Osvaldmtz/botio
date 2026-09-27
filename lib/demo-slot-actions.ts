@@ -12,6 +12,7 @@ import {
   savePendingCustomSlot,
   savePendingDemoSlots,
 } from '@/lib/demo-conversation';
+import { DemoSlotUnavailableError } from '@/lib/demo-availability';
 import { movePipelineStage } from '@/lib/pipeline-utils';
 import { normalizeStage, STAGE_RANK } from '@/lib/pipeline';
 import { recordOutcome } from '@/lib/ab-testing';
@@ -175,6 +176,9 @@ export async function executeConfirmDemoSlot(params: {
       ),
     };
   } catch (err) {
+    if (err instanceof DemoSlotUnavailableError) {
+      return { status: 'unavailable', bot_message: err.message };
+    }
     console.error('[confirm_demo_slot] failed', err);
     return {
       status: 'error',
