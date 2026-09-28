@@ -1,17 +1,27 @@
 import { formatInTimeZone } from 'date-fns-tz';
 import { es } from 'date-fns/locale';
-import { DEMO_NAME_FALLBACK, demoGreetingName } from '@/lib/demo-customer-name';
-import { formatDemoTime12h } from '@/lib/demo-reminder-messages';
+import { demoGreetingName } from '@/lib/demo-customer-name';
+import {
+  demoTimeZonePhrase,
+  formatDemoTime12h,
+  type DemoDisplayTimezone,
+} from '@/lib/demo-reminder-messages';
+import { resolvePhoneTimezone } from '@/lib/timezone-from-phone';
 
-/** Mexico clock, matching the template copy "(hora de México)". */
+/** Mexico clock, matching the live template copy "(hora de México)". */
 const DEMO_CONFIRMATION_TIMEZONE = 'America/Mexico_City';
 
 const DEFAULT_DEMO_MEET_LINK = 'https://meet.google.com/pgd-dxmb-sfk';
 
-/** Approved WhatsApp HSM: kalyo_demo_confirmation (UTILITY, es). */
+/** Previous HSM kalyo_demo_confirmation. Still approved in Meta; sends use v2. */
 export const DEMO_CONFIRMATION_TEMPLATE_SID =
   process.env.KALYO_DEMO_CONFIRMATION_TEMPLATE_SID ??
   'HX29d10d428100ef15a89bbd66290dd914';
+
+/** Live HSM: kalyo_demo_confirmation_v2 (UTILITY, es). {{1}} fecha, {{2}} hora, {{3}} zona. */
+export const DEMO_CONFIRMATION_V2_TEMPLATE_SID =
+  process.env.KALYO_DEMO_CONFIRMATION_V2_TEMPLATE_SID ??
+  'HX5273e5777e114ab65abf03ce0658f44a';
 
 export type LandingDemoTwilioCreds = {
   accountSid: string;
@@ -59,6 +69,33 @@ export function buildLandingDemoConfirmationContentVariables(params: {
   };
 }
 
+/** Variables for kalyo_demo_confirmation_v2. Clock follows the phone country. */
+export function buildLandingDemoConfirmationV2ContentVariables(params: {
+  scheduledAt: Date | string;
+  phone?: string | null;
+}): Record<string, string> {
+  const scheduledAt =
+    params.scheduledAt instanceof Date ? params.scheduledAt.toISOString() : params.scheduledAt;
+  const phoneZone = resolvePhoneTimezone(params.phone);
+  const display: DemoDisplayTimezone = {
+    timezone: phoneZone.timezone,
+    label: phoneZone.label,
+  };
+  const rawDate = formatInTimeZone(
+    new Date(scheduledAt),
+    display.timezone,
+    "EEEE d 'de' MMMM",
+    { locale: es },
+  );
+  const dateLabel = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
+
+  return {
+    '1': dateLabel,
+    '2': formatDemoTime12h(scheduledAt, display.timezone),
+    '3': demoTimeZonePhrase(display),
+  };
+}
+
 /**
  * Immediate WhatsApp confirmation for a kalyo.io/demo booking.
  * Blank phone skips the send; the Google Calendar invite email is the customer notice.
@@ -79,12 +116,10 @@ export async function deliverLandingDemoConfirmationWhatsApp(params: {
     return 'failed';
   }
 
-  const contentVariables = buildLandingDemoConfirmationContentVariables({
-    name: params.name,
+  const contentVariables = buildLandingDemoConfirmationV2ContentVariables({
     scheduledAt: params.scheduledAt,
-    meetLink: params.meetLink,
+    phone,
   });
-  if (!contentVariables['1']) contentVariables['1'] = DEMO_NAME_FALLBACK;
 
   try {
     await params.sendFn({
@@ -92,7 +127,7 @@ export async function deliverLandingDemoConfirmationWhatsApp(params: {
       authToken: params.creds.authToken,
       from: params.creds.from,
       to: phone,
-      contentSid: DEMO_CONFIRMATION_TEMPLATE_SID,
+      contentSid: DEMO_CONFIRMATION_V2_TEMPLATE_SID,
       contentVariables,
     });
     console.log(`[demo-booking-confirmation] whatsapp sent | to=${phone}`);
