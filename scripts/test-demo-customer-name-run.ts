@@ -97,6 +97,7 @@ assert.match(r1h, /Doctor\/a/);
 const vars = buildReminder24hContentVariables(demo, display);
 assert.ok(vars);
 assert.equal(vars!['1'], DEMO_NAME_FALLBACK);
+assert.equal(vars!['2'], '12:00 p.m. (hora Colombia)');
 assert.doesNotMatch(vars!['1'], /Lead WhatsApp/i);
 
 const good = formatReminder24h({ ...demo, customer_name: 'Miguel Angel Ramirez' }, display);

@@ -83,7 +83,24 @@ export function formatDemoTime12h(scheduledAt: string, timezone: string): string
   const date = new Date(scheduledAt);
   return formatInTimeZone(date, timezone, 'h:mm a', { locale: es })
     .replace('a. m.', 'a.m.')
-    .replace('p. m.', 'p.m.');
+    .replace('p. m.', 'p.m.')
+    .replace(/\bAM\b/, 'a.m.')
+    .replace(/\bPM\b/, 'p.m.');
+}
+
+/** Zone phrase next to a clock. Colombia stays "hora Colombia" (UTC-5, no DST). */
+export function demoTimeZonePhrase(display: DemoDisplayTimezone): string {
+  if (!display.timezone?.trim() || display.timezone === 'America/Bogota') {
+    return 'hora Colombia';
+  }
+  return display.label?.trim() || 'hora Colombia';
+}
+
+export function formatDemoTime12hWithZone(
+  scheduledAt: string,
+  display: DemoDisplayTimezone,
+): string {
+  return `${formatDemoTime12h(scheduledAt, display.timezone)} (${demoTimeZonePhrase(display)})`;
 }
 
 export function formatReminder24h(
@@ -130,7 +147,7 @@ export function buildReminder24hContentVariables(
   const name = demoGreetingName(demo.customer_name);
   return {
     '1': name || DEMO_NAME_FALLBACK,
-    '2': formatDemoTime12h(demo.scheduled_at, display.timezone),
+    '2': formatDemoTime12hWithZone(demo.scheduled_at, display),
     '3': meetLink,
   };
 }
