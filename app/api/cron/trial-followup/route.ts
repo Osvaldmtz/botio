@@ -2,6 +2,10 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getKalyoClient } from '@/lib/kalyo';
 import { sendWhatsApp } from '@/lib/twilio';
+import {
+  contactHasActiveKalyoSubscription,
+  filterTrialFollowupRecipients,
+} from '@/lib/trial-paid-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,6 +21,9 @@ type TrialUser = {
   email: string;
   phone: string;
   trial_ends_at: string;
+  subscription_status: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
 };
 
 type TwilioCreds = {
@@ -71,7 +78,9 @@ async function findTrialUsersExpiring(daysFromNow: number): Promise<TrialUser[]>
   const supabase = getKalyoClient();
   const { data, error } = await supabase
     .from('psychologists')
-    .select('id, email, phone, trial_ends_at')
+    .select(
+      'id, email, phone, trial_ends_at, subscription_status, stripe_customer_id, stripe_subscription_id',
+    )
     .in('plan', ['professional', 'starter'])
     .not('phone', 'is', null)
     .gte('trial_ends_at', start)
@@ -83,9 +92,29 @@ async function findTrialUsersExpiring(daysFromNow: number): Promise<TrialUser[]>
   console.log(
     `[trial-followup-fix] matching plan=professional|starter trials | daysFromNow=${daysFromNow} | range=${start}..${end} | found=${data?.length ?? 0}`,
   );
-  return (data ?? []).filter(
+  const withPhone = (data ?? []).filter(
     (u): u is TrialUser => typeof u.phone === 'string' && u.phone.trim().length > 0,
   );
+  const notPaidOnRow = filterTrialFollowupRecipients(withPhone);
+  const eligible: TrialUser[] = [];
+  for (const user of notPaidOnRow) {
+    const paidOnSameContact = await contactHasActiveKalyoSubscription({
+      email: user.email,
+      phone: user.phone,
+    });
+    if (paidOnSameContact) {
+      console.log(
+        `[trial-followup] skip | reason=active_subscription_same_contact | email=${user.email}`,
+      );
+      continue;
+    }
+    eligible.push(user);
+  }
+  const skipped = withPhone.length - eligible.length;
+  if (skipped > 0) {
+    console.log(`[trial-followup] skipped ${skipped} active subscribers | daysFromNow=${daysFromNow}`);
+  }
+  return eligible;
 }
 
 async function sendBatch(

@@ -5,6 +5,7 @@ import {
   type OnboardingNarrativeDay,
 } from '@/lib/trial-onboarding-messages';
 import { evaluateDay9Eligibility } from '@/lib/trial-onboarding-day9-eligibility';
+import { contactHasActiveKalyoSubscription } from '@/lib/trial-paid-guard';
 import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
 import {
   notifyTrialOnboardingSent,
@@ -143,6 +144,24 @@ async function sendOnboardingDay(params: {
     return 'skipped';
   }
 
+  if (
+    await contactHasActiveKalyoSubscription({
+      email: params.row.trial_user_email,
+      phone,
+    })
+  ) {
+    const now = new Date().toISOString();
+    await params.supabase
+      .from('trial_onboarding_messages')
+      .update({ upgraded_to_paid_at: now })
+      .eq('id', params.row.id)
+      .is('upgraded_to_paid_at', null);
+    console.log(
+      `[trial-onboarding] skipped | day=${params.day} | reason=active_subscription | id=${params.row.id} | email=${params.row.trial_user_email}`,
+    );
+    return 'skipped';
+  }
+
   const body = buildMessageBody(params.day, params.row);
 
   try {
@@ -230,11 +249,15 @@ export async function processTrialOnboardingDay9Row(params: {
   const eligibility = await evaluateDay9Eligibility(params.supabase, params.row);
 
   if (eligibility.action === 'skip') {
+    const skippedAt = new Date().toISOString();
     await params.supabase
       .from('trial_onboarding_messages')
       .update({
         day_9_status: eligibility.status,
-        day_9_sent_at: new Date().toISOString(),
+        day_9_sent_at: skippedAt,
+        ...(eligibility.reason === 'active_subscription'
+          ? { upgraded_to_paid_at: skippedAt }
+          : {}),
       })
       .eq('id', params.row.id)
       .is('day_9_sent_at', null);

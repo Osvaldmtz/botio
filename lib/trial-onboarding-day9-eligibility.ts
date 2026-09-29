@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
+import { contactHasActiveKalyoSubscription } from '@/lib/trial-paid-guard';
 
 export type Day9Eligibility =
   | { action: 'send_coupon' }
@@ -42,26 +43,11 @@ export async function hadPriorCouponOffer(
   return (rowCount ?? 0) > 0;
 }
 
-export async function isKalyoSubscriptionActive(email: string): Promise<boolean> {
-  try {
-    const { getKalyoClient } = await import('@/lib/kalyo');
-    const kalyo = getKalyoClient();
-    const { data, error } = await kalyo
-      .from('psychologists')
-      .select('subscription_status')
-      .eq('email', email.trim().toLowerCase())
-      .maybeSingle();
-
-    if (error) {
-      console.error('[trial-onboarding] kalyo subscription lookup failed', error);
-      return false;
-    }
-
-    return (data?.subscription_status as string | null) === 'active';
-  } catch (err) {
-    console.error('[trial-onboarding] kalyo client unavailable', err);
-    return false;
-  }
+export async function isKalyoSubscriptionActive(
+  email: string,
+  phone?: string | null,
+): Promise<boolean> {
+  return contactHasActiveKalyoSubscription({ email, phone });
 }
 
 export async function evaluateDay9Eligibility(
@@ -70,6 +56,7 @@ export async function evaluateDay9Eligibility(
     trial_user_email: string;
     trial_ends_at: string;
     conversation_id: string | null;
+    customer_phone?: string | null;
     unsubscribed: boolean;
     upgraded_to_paid_at: string | null;
     day_15_sent_at: string | null;
@@ -92,7 +79,7 @@ export async function evaluateDay9Eligibility(
     return { action: 'skip', reason: 'day7_not_sent', status: 'skipped_pending_day7' };
   }
 
-  if (await isKalyoSubscriptionActive(row.trial_user_email)) {
+  if (await isKalyoSubscriptionActive(row.trial_user_email, row.customer_phone)) {
     return { action: 'skip', reason: 'active_subscription', status: 'skipped_paid' };
   }
 
