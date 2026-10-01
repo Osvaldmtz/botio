@@ -6,6 +6,13 @@ import {
   assertBookableDemoPhone,
   buildConfirmationFailedAlert,
 } from '@/lib/demo-phone';
+import { demoDisplayTimezone } from '@/lib/timezone-from-phone';
+import {
+  deliverDemoChannels,
+  demoEmailSubject,
+  renderDemoEmailHtml,
+  sendDemoEmailViaResend,
+} from '@/lib/demo-channel-delivery';
 import {
   DEMO_HOST_EMAIL,
   DEMO_HOST_NAME,
@@ -277,56 +284,78 @@ export async function createDemoBookingCalendarEvent(
       );
     }
 
-    try {
-      const creds = await loadKalyoTwilioCreds(supabase);
-      const { sendWhatsApp } = await import('@/lib/twilio');
-      const confirmation = await deliverLandingDemoConfirmationWhatsApp({
-        name: input.name,
-        whatsapp: customerPhone,
-        scheduledAt,
-        meetLink,
-        creds,
-        sendFn: sendWhatsApp,
-      });
-      const sent = confirmation === 'sent';
-      await markConfirmationSent(
-        supabase,
-        input.bookingId,
-        customerPhone,
-        input.scheduledAt,
-        sent,
+    const clock = demoDisplayTimezone(customerPhone);
+    const emailContent = {
+      kind: 'confirmation' as const,
+      name: input.name,
+      scheduledAt,
+      meetLink,
+      timezone: clock.timezone,
+      timezoneLabel: clock.label,
+    };
+    const channels = await deliverDemoChannels({
+      email: input.email,
+      phone: customerPhone,
+      sendEmail: () =>
+        sendDemoEmailViaResend({
+          to: input.email,
+          subject: demoEmailSubject(emailContent),
+          html: renderDemoEmailHtml(emailContent),
+        }),
+      sendWhatsApp: async () => {
+        const { sendWhatsApp } = await import('@/lib/twilio');
+        const confirmation = await deliverLandingDemoConfirmationWhatsApp({
+          name: input.name,
+          whatsapp: customerPhone,
+          scheduledAt,
+          meetLink,
+          creds: credsForCheck,
+          sendFn: sendWhatsApp,
+        });
+        if (confirmation !== 'sent') {
+          throw new Error(
+            confirmation === 'skipped_no_phone'
+              ? 'sin número de WhatsApp'
+              : 'Twilio no aceptó el mensaje de confirmación',
+          );
+        }
+      },
+    });
+    const nowIso = new Date().toISOString();
+    await supabase
+      .from('demo_bookings')
+      .update({
+        confirmation_sent: channels.whatsapp === 'sent',
+        email_sent_at: channels.email === 'sent' ? nowIso : null,
+        whatsapp_sent_at: channels.whatsapp === 'sent' ? nowIso : null,
+        email_error: channels.emailError,
+        whatsapp_error: channels.whatsappError,
+      })
+      .eq('id', input.bookingId);
+    if (channels.email === 'failed') {
+      console.error(
+        `[demo-booking-calendar] email failed | booking_id=${input.bookingId} | ${channels.emailError}`,
       );
-      if (!sent) {
-        await alertConfirmationFailed(
-          buildConfirmationFailedAlert({
-            name: input.name,
-            phone: customerPhone,
-            email: input.email,
-            when: input.scheduledAt,
-            reason:
-              confirmation === 'skipped_no_phone'
-                ? 'sin número de WhatsApp'
-                : 'Twilio no aceptó el mensaje de confirmación',
-          }),
-        );
-      }
-      console.log(
-        `[demo-booking-calendar] confirmation whatsapp | booking_id=${input.bookingId} | result=${confirmation}`,
+    }
+    if (channels.whatsapp === 'failed') {
+      console.error(
+        `[demo-booking-calendar] whatsapp failed | booking_id=${input.bookingId} | ${channels.whatsappError}`,
       );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error('[demo-booking-calendar] confirmation whatsapp failed (non-fatal)', message);
-      await markConfirmationSent(supabase, input.bookingId, customerPhone, input.scheduledAt, false);
+    }
+    if (channels.alert) {
       await alertConfirmationFailed(
         buildConfirmationFailedAlert({
           name: input.name,
           phone: customerPhone,
           email: input.email,
           when: input.scheduledAt,
-          reason: message,
+          reason: channels.whatsappError || channels.emailError || 'confirmación incompleta',
         }),
       );
     }
+    console.log(
+      `[demo-booking-calendar] confirmation | booking_id=${input.bookingId} | email=${channels.email} | whatsapp=${channels.whatsapp}`,
+    );
 
     return { ok: true, eventId, meetLink };
   } catch (err) {

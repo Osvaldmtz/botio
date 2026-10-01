@@ -13,6 +13,13 @@ import {
   notifyDemoReminderEvent,
   type SendTelegramFn,
 } from '@/lib/demo-reminder-notifications';
+import {
+  deliverDemoChannels,
+  demoEmailSubject,
+  renderDemoEmailHtml,
+  sendDemoEmailViaResend,
+  type DemoEmailKind,
+} from '@/lib/demo-channel-delivery';
 
 export type TwilioCreds = {
   accountSid: string;
@@ -153,6 +160,41 @@ export async function fetchPending1hBookingReminders(
   return fetchPendingBookingReminders(supabase, '1h');
 }
 
+async function persistChannelResult(
+  supabase: SupabaseClient,
+  table: 'scheduled_demos' | 'demo_bookings',
+  id: string,
+  patch: Record<string, string | null>,
+): Promise<void> {
+  if (Object.keys(patch).length === 0) return;
+  const { error } = await supabase.from(table).update(patch).eq('id', id);
+  if (error) console.error(`[demo-reminders] channel update failed | id=${id}`, error);
+}
+
+async function sendReminderEmail(params: {
+  kind: DemoEmailKind;
+  to: string;
+  name: string;
+  scheduledAt: string;
+  meetLink: string;
+  timezone: string;
+  timezoneLabel: string;
+}): Promise<void> {
+  const content = {
+    kind: params.kind,
+    name: params.name,
+    scheduledAt: params.scheduledAt,
+    meetLink: params.meetLink,
+    timezone: params.timezone,
+    timezoneLabel: params.timezoneLabel,
+  };
+  await sendDemoEmailViaResend({
+    to: params.to,
+    subject: demoEmailSubject(content),
+    html: renderDemoEmailHtml(content),
+  });
+}
+
 async function sendReminder(params: {
   supabase: SupabaseClient;
   demo: DemoReminderRow;
@@ -162,8 +204,9 @@ async function sendReminder(params: {
   sendTelegram?: SendTelegramFn;
 }): Promise<'sent' | 'skipped' | 'failed'> {
   const phone = params.demo.customer_phone?.trim();
-  if (!phone) {
-    console.error(`[demo-reminders] skipped | demo_id=${params.demo.id} | reason=no_phone`);
+  const email = params.demo.customer_email?.trim();
+  if (!phone && !email) {
+    console.error(`[demo-reminders] skipped | demo_id=${params.demo.id} | reason=no_phone_or_email`);
     return 'skipped';
   }
 
@@ -189,41 +232,89 @@ async function sendReminder(params: {
       ? buildReminder24hContentVariables(demoForSend, display)
       : buildReminder1hContentVariables(demoForSend);
 
-  if (!contentVariables) {
+  if (phone && !contentVariables) {
     console.error(
       `[demo-reminders] skipped | demo_id=${params.demo.id} | reason=no_meet_link`,
     );
     return 'skipped';
   }
 
-  try {
-    await params.sendFn({
-      accountSid: params.creds.accountSid,
-      authToken: params.creds.authToken,
-      from: params.creds.from,
-      to: phone,
-      contentSid,
-      contentVariables,
-    });
-  } catch (err) {
-    console.error(`[demo-reminders] send failed | demo_id=${params.demo.id} | type=${params.type}`, err);
-    return 'failed';
+  const meetLink =
+    demoForSend.google_meet_link?.trim() ||
+    process.env.KALYO_DEMO_MEET_LINK?.trim() ||
+    'https://meet.google.com/pgd-dxmb-sfk';
+  const delivery = await deliverDemoChannels({
+    email,
+    phone,
+    sendEmail: email
+      ? () =>
+          sendReminderEmail({
+            kind: params.type === '24h' ? 'reminder_24h' : 'reminder_1h',
+            to: email,
+            name: params.demo.customer_name,
+            scheduledAt: params.demo.scheduled_at,
+            meetLink,
+            timezone: display.timezone,
+            timezoneLabel: display.label,
+          })
+      : undefined,
+    sendWhatsApp:
+      phone && contentVariables
+        ? () =>
+            params.sendFn({
+              accountSid: params.creds.accountSid,
+              authToken: params.creds.authToken,
+              from: params.creds.from,
+              to: phone,
+              contentSid,
+              contentVariables,
+            })
+        : undefined,
+  });
+
+  if (delivery.email === 'failed') {
+    console.error(
+      `[demo-reminders] email failed | demo_id=${params.demo.id} | type=${params.type} | ${delivery.emailError}`,
+    );
+  }
+  if (delivery.whatsapp === 'failed') {
+    console.error(
+      `[demo-reminders] whatsapp failed | demo_id=${params.demo.id} | type=${params.type} | ${delivery.whatsappError}`,
+    );
+  }
+  if (delivery.alert && params.sendTelegram) {
+    await params.sendTelegram(
+      `⚠️ Recordatorio ${params.type} incompleto\n${params.demo.customer_name}\nemail=${delivery.email} whatsapp=${delivery.whatsapp}`,
+    );
   }
 
+  const nowIso = new Date().toISOString();
   const column = params.type === '24h' ? 'reminder_24h_sent_at' : 'reminder_1h_sent_at';
-  const { error: updateError } = await params.supabase
-    .from('scheduled_demos')
-    .update({ [column]: new Date().toISOString() })
-    .eq('id', params.demo.id)
-    .eq('status', 'scheduled')
-    .is(column, null);
-
-  if (updateError) {
-    console.error(`[demo-reminders] update failed | demo_id=${params.demo.id}`, updateError);
-    return 'failed';
+  const emailColumn =
+    params.type === '24h' ? 'reminder_24h_email_sent_at' : 'reminder_1h_email_sent_at';
+  const patch: Record<string, string | null> = {};
+  if (delivery.whatsapp === 'sent') patch[column] = nowIso;
+  if (delivery.email === 'sent') patch[emailColumn] = nowIso;
+  patch.email_error = delivery.emailError;
+  patch.whatsapp_error = delivery.whatsappError;
+  if (delivery.whatsapp === 'sent') {
+    const { error: updateError } = await params.supabase
+      .from('scheduled_demos')
+      .update({ ...patch, [column]: nowIso })
+      .eq('id', params.demo.id)
+      .eq('status', 'scheduled')
+      .is(column, null);
+    if (updateError) {
+      console.error(`[demo-reminders] update failed | demo_id=${params.demo.id}`, updateError);
+      return 'failed';
+    }
+  } else {
+    await persistChannelResult(params.supabase, 'scheduled_demos', params.demo.id, patch);
   }
 
-  if (params.demo.conversation_id) {
+  if (delivery.whatsapp !== 'sent' && delivery.email !== 'sent') return 'failed';
+
+  if (delivery.whatsapp === 'sent' && params.demo.conversation_id) {
     await params.supabase.from('messages').insert({
       conversation_id: params.demo.conversation_id,
       role: 'assistant',
@@ -238,16 +329,21 @@ async function sendReminder(params: {
       .eq('id', params.demo.conversation_id);
   }
 
-  console.log(
-    `[demo-reminders] sent | demo_id=${params.demo.id} | phone=${phone} | type=${params.type}`,
-  );
-
-  await notifyDemoReminderEvent(
-    params.type === '24h' ? 'reminder_24h_sent' : 'reminder_1h_sent',
-    demoForSend,
-    {},
-    { supabase: params.supabase, sendTelegram: params.sendTelegram },
-  );
+  if (delivery.whatsapp === 'sent') {
+    console.log(
+      `[demo-reminders] sent | demo_id=${params.demo.id} | phone=${phone} | type=${params.type}`,
+    );
+    await notifyDemoReminderEvent(
+      params.type === '24h' ? 'reminder_24h_sent' : 'reminder_1h_sent',
+      demoForSend,
+      {},
+      { supabase: params.supabase, sendTelegram: params.sendTelegram },
+    );
+  } else if (delivery.email === 'sent') {
+    console.log(
+      `[demo-reminders] email only | demo_id=${params.demo.id} | type=${params.type}`,
+    );
+  }
 
   return 'sent';
 }
@@ -284,6 +380,24 @@ async function sendBookingReminder(params: {
   const display = await resolveDemoDisplayTimezone(params.supabase, demo);
 
   if (!phone) {
+    if (demo.customer_email?.trim()) {
+      try {
+        await sendReminderEmail({
+          kind: params.type === '24h' ? 'reminder_24h' : 'reminder_1h',
+          to: demo.customer_email.trim(),
+          name: demo.customer_name,
+          scheduledAt: demo.scheduled_at,
+          meetLink: resolveMeetLink(params.booking.google_meet_link || params.booking.meet_link),
+          timezone: display.timezone,
+          timezoneLabel: display.label,
+        });
+      } catch (err) {
+        console.error(
+          `[demo-reminders] booking email failed | booking_id=${params.booking.id}`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
     console.error(
       `[demo-reminders] booking skipped | booking_id=${params.booking.id} | reason=no_phone`,
     );
@@ -312,22 +426,55 @@ async function sendBookingReminder(params: {
     return 'skipped';
   }
 
-  try {
-    await params.sendFn({
-      accountSid: params.creds.accountSid,
-      authToken: params.creds.authToken,
-      from: params.creds.from,
-      to: phone,
-      contentSid,
-      contentVariables,
-    });
-  } catch (err) {
+  const delivery = await deliverDemoChannels({
+    email: demo.customer_email,
+    phone,
+    sendEmail: demo.customer_email?.trim()
+      ? () =>
+          sendReminderEmail({
+            kind: params.type === '24h' ? 'reminder_24h' : 'reminder_1h',
+            to: demo.customer_email.trim(),
+            name: demo.customer_name,
+            scheduledAt: demo.scheduled_at,
+            meetLink: resolveMeetLink(params.booking.google_meet_link || params.booking.meet_link),
+            timezone: display.timezone,
+            timezoneLabel: display.label,
+          })
+      : undefined,
+    sendWhatsApp: () =>
+      params.sendFn({
+        accountSid: params.creds.accountSid,
+        authToken: params.creds.authToken,
+        from: params.creds.from,
+        to: phone,
+        contentSid,
+        contentVariables,
+      }),
+  });
+
+  if (delivery.email === 'failed') {
     console.error(
-      `[demo-reminders] booking send failed | booking_id=${params.booking.id} | type=${params.type}`,
-      err,
+      `[demo-reminders] booking email failed | booking_id=${params.booking.id} | ${delivery.emailError}`,
     );
-    return 'failed';
   }
+  if (delivery.whatsapp === 'failed') {
+    console.error(
+      `[demo-reminders] booking send failed | booking_id=${params.booking.id} | type=${params.type} | ${delivery.whatsappError}`,
+    );
+  }
+  if (delivery.alert && params.sendTelegram) {
+    await params.sendTelegram(
+      `⚠️ Recordatorio ${params.type} incompleto\n${demo.customer_name}\nemail=${delivery.email} whatsapp=${delivery.whatsapp}`,
+    );
+  }
+  const emailColumn =
+    params.type === '24h' ? 'reminder_24h_email_sent_at' : 'reminder_1h_email_sent_at';
+  await persistChannelResult(params.supabase, 'demo_bookings', params.booking.id, {
+    ...(delivery.email === 'sent' ? { [emailColumn]: new Date().toISOString() } : {}),
+    email_error: delivery.emailError,
+    whatsapp_error: delivery.whatsappError,
+  });
+  if (delivery.whatsapp !== 'sent') return 'failed';
 
   const marked = await markBookingReminderSent(params.supabase, params.booking.id, params.type);
   if (!marked) return 'failed';

@@ -16,6 +16,12 @@ import { pendingSlotsWithAlternatives } from '@/lib/demo-flow-parsing';
 import { DemoSlotUnavailableError } from '@/lib/demo-availability';
 import { validateDemoPhoneFormat } from '@/lib/demo-phone';
 import { demoDisplayTimezone } from '@/lib/timezone-from-phone';
+import {
+  deliverDemoChannels,
+  demoEmailSubject,
+  renderDemoEmailHtml,
+  sendDemoEmailViaResend,
+} from '@/lib/demo-channel-delivery';
 import { movePipelineStage } from '@/lib/pipeline-utils';
 import { normalizeStage, STAGE_RANK } from '@/lib/pipeline';
 import { recordOutcome } from '@/lib/ab-testing';
@@ -174,18 +180,53 @@ export async function executeConfirmDemoSlot(params: {
       timezone: pending.customer_timezone ?? pending.display_timezone,
       label: pending.customer_city_label ?? pending.display_label,
     });
+    const botMessage = formatDemoConfirmationMessage(
+      scheduledAt,
+      resolvedEmail,
+      clock.timezone,
+      clock.label,
+      result.meetLink,
+    );
+    const emailContent = {
+      kind: 'confirmation' as const,
+      name: resolvedName,
+      scheduledAt,
+      meetLink: result.meetLink,
+      timezone: clock.timezone,
+      timezoneLabel: clock.label,
+    };
+    const channels = await deliverDemoChannels({
+      email: resolvedEmail,
+      phone: senderFrom,
+      sendEmail: () =>
+        sendDemoEmailViaResend({
+          to: resolvedEmail,
+          subject: demoEmailSubject(emailContent),
+          html: renderDemoEmailHtml(emailContent),
+        }),
+      sendWhatsApp: async () => {
+        // The booking reply is the WhatsApp confirmation. Do not send a second template.
+      },
+    });
+    const nowIso = new Date().toISOString();
+    await supabase
+      .from('scheduled_demos')
+      .update({
+        email_sent_at: channels.email === 'sent' ? nowIso : null,
+        whatsapp_sent_at: channels.whatsapp === 'sent' ? nowIso : null,
+        email_error: channels.emailError,
+        whatsapp_error: channels.whatsappError,
+      })
+      .eq('id', result.demoId);
+    if (channels.email === 'failed') {
+      console.error(`[confirm_demo_slot] email failed | demo_id=${result.demoId} | ${channels.emailError}`);
+    }
 
     return {
       status: 'success',
       demo_id: result.demoId,
       meet_link: result.meetLink,
-      bot_message: formatDemoConfirmationMessage(
-        scheduledAt,
-        resolvedEmail,
-        clock.timezone,
-        clock.label,
-        result.meetLink,
-      ),
+      bot_message: botMessage,
     };
   } catch (err) {
     if (err instanceof DemoSlotUnavailableError) {
