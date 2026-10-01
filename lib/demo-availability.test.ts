@@ -87,6 +87,17 @@ describe('demo availability', () => {
     assert.equal(slotBlockReason(at(2026, 9, 30, 14), full), 'daily_max');
   });
 
+  it('closes Monday 5 Oct 2026 before 13:30 and opens the whole afternoon', () => {
+    const open = context([]);
+    assert.equal(slotBlockReason(at(2026, 10, 5, 9), open), 'morning_closed');
+    assert.equal(slotBlockReason(at(2026, 10, 5, 13), open), 'morning_closed');
+    assert.equal(slotBlockReason(at(2026, 10, 5, 13, 30), open), null);
+    assert.equal(slotBlockReason(at(2026, 10, 5, 16), open), null);
+    assert.equal(slotBlockReason(at(2026, 10, 5, 18, 30), open), null);
+    assert.equal(slotBlockReason(at(2026, 10, 6, 9), open), null);
+    assert.equal(slotBlockReason(at(2026, 10, 6, 16), open), 'afternoon_locked');
+  });
+
   it('hides afternoon slots until three preferred demos exist that day', () => {
     const two = context([booking(at(2026, 9, 30, 9)), booking(at(2026, 9, 30, 10))]);
     assert.equal(slotBlockReason(at(2026, 9, 30, 16), two), 'afternoon_locked');

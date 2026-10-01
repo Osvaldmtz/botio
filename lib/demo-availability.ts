@@ -30,6 +30,7 @@ export type AvailabilityContext = {
 
 export type SlotBlockReason =
   | 'outside_hours'
+  | 'morning_closed'
   | 'daily_max'
   | 'afternoon_locked'
   | 'saturday_locked'
@@ -79,6 +80,17 @@ export function isAfternoonStart(date: Date): boolean {
   return minutesOfDay(date) >= 16 * 60;
 }
 
+/**
+ * One-off desk change for Monday 5 Oct 2026 (Colombia):
+ * no demos before 13:30, and the whole afternoon is open without the usual morning quota.
+ */
+const MONDAY_2026_10_05 = '2026-10-05';
+const MONDAY_2026_10_05_OPEN_FROM_MIN = 13 * 60 + 30;
+
+function isMonday20261005(date: Date): boolean {
+  return colombiaDayKey(date) === MONDAY_2026_10_05;
+}
+
 export function dailyMaxFor(date: Date): number | null {
   if (isWeekday(date)) return WEEKDAY_DAILY_MAX;
   if (isSaturday(date)) return SATURDAY_DAILY_MAX;
@@ -89,6 +101,8 @@ export function slotBlockMessage(reason: SlotBlockReason): string {
   switch (reason) {
     case 'outside_hours':
       return 'Ese horario está fuera del horario de demos: lunes a viernes de 9:00 a 19:00, sábados de 12:00 a 14:00, hora de Colombia. Domingos no hay demos.';
+    case 'morning_closed':
+      return 'El lunes 5 de octubre no hay demos antes de la 1:30 p.m., hora de Colombia. Desde la 1:30 p.m. y toda la tarde sí hay horario.';
     case 'daily_max':
       return 'Ese día ya llegó al máximo de demos. ¿Te ofrezco otro día?';
     case 'afternoon_locked':
@@ -146,12 +160,16 @@ export function slotBlockReason(
   const duration = ctx.durationMinutes;
   if (!isWithinHostBusinessHours(slotStart, duration)) return 'outside_hours';
 
+  if (isMonday20261005(slotStart) && minutesOfDay(slotStart) < MONDAY_2026_10_05_OPEN_FROM_MIN) {
+    return 'morning_closed';
+  }
+
   const dayKey = colombiaDayKey(slotStart);
   const dayBookings = onDay(ctx.bookings, dayKey);
   const max = dailyMaxFor(slotStart);
   if (max == null || dayBookings.length >= max) return 'daily_max';
 
-  if (isAfternoonStart(slotStart)) {
+  if (isAfternoonStart(slotStart) && !isMonday20261005(slotStart)) {
     const preferred = dayBookings.filter((booking) => isPreferredStart(booking.start));
     if (preferred.length < AFTERNOON_UNLOCK_PREFERRED_COUNT) return 'afternoon_locked';
   }
