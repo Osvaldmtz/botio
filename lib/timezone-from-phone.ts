@@ -79,3 +79,26 @@ export function resolvePhoneTimezone(phone: string | undefined | null): {
     label: rule?.label ?? DEFAULT_CUSTOMER_TIMEZONE_LABEL,
   };
 }
+
+export function hasPhoneTimezone(phone: string | undefined | null): boolean {
+  return matchPhoneTimezoneRule(phone) !== null;
+}
+
+/**
+ * Clock shown to the customer. A known calling code wins over city or host
+ * Colombia: +52 is always CDMX, +57 is always Bogotá.
+ */
+export function demoDisplayTimezone(
+  phone?: string | null,
+  fallback?: { timezone?: string | null; label?: string | null },
+): { timezone: string; label: string } {
+  if (hasPhoneTimezone(phone)) return resolvePhoneTimezone(phone);
+  const timezone = fallback?.timezone?.trim();
+  if (timezone) {
+    return {
+      timezone,
+      label: fallback?.label?.trim() || timezone,
+    };
+  }
+  return resolvePhoneTimezone(phone);
+}

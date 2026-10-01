@@ -19,8 +19,8 @@ import {
   nameFromEmailLocalPart,
   resolveDemoCustomerName,
 } from '@/lib/demo-customer-name';
+import { demoDisplayTimezone } from '@/lib/timezone-from-phone';
 import {
-  COLOMBIA_TIME_LABEL,
   DemoSlotUnavailableError,
   pickPrioritySlots,
   slotBlockMessage,
@@ -487,8 +487,21 @@ export type AvailableSlotsResult = {
   overlap_limited?: boolean;
 };
 
-function colombiaOfferSlot(slotStart: Date, durationMinutes: number): CalendarSlot {
-  return buildCalendarSlot(slotStart, durationMinutes, undefined, HOST_TIMEZONE, COLOMBIA_TIME_LABEL);
+function offerSlot(
+  slotStart: Date,
+  durationMinutes: number,
+  phone?: string,
+  timezone?: string,
+  label?: string,
+): CalendarSlot {
+  const display = demoDisplayTimezone(phone, { timezone, label });
+  return buildCalendarSlot(
+    slotStart,
+    durationMinutes,
+    phone,
+    display.timezone,
+    display.label,
+  );
 }
 
 export async function getAvailableSlots(
@@ -530,7 +543,15 @@ export async function getAvailableSlots(
   console.log(`[calendar] found ${selected.length} slots`);
 
   return {
-    slots: selected.map((slotStart) => colombiaOfferSlot(slotStart, durationMinutes)),
+    slots: selected.map((slotStart) =>
+      offerSlot(
+        slotStart,
+        durationMinutes,
+        params.customerPhone,
+        params.customerTimezone,
+        params.customerLabel,
+      ),
+    ),
   };
 }
 
@@ -658,6 +679,9 @@ export async function assertDemoSlotBookable(params: {
 async function findAlternativesNear(
   anchor: Date,
   durationMinutes: number,
+  phone?: string,
+  timezone?: string,
+  label?: string,
 ): Promise<CalendarSlot[]> {
   const now = new Date();
   const earliest = new Date(now.getTime() + CALENDAR_MIN_ADVANCE_HOURS * 60 * 60 * 1000);
@@ -675,7 +699,7 @@ async function findAlternativesNear(
   );
 
   return pickPrioritySlots(candidates, 3).map((slotStart) =>
-    colombiaOfferSlot(slotStart, durationMinutes),
+    offerSlot(slotStart, durationMinutes, phone, timezone, label),
   );
 }
 
@@ -686,7 +710,13 @@ async function getFallbackAlternatives(
   customerTimezone?: string,
   customerLabel?: string,
 ): Promise<CalendarSlot[]> {
-  const near = await findAlternativesNear(anchor, durationMinutes);
+  const near = await findAlternativesNear(
+    anchor,
+    durationMinutes,
+    customerPhone,
+    customerTimezone,
+    customerLabel,
+  );
   if (near.length >= 3) return near;
 
   const general = await getAvailableSlots({
@@ -731,8 +761,12 @@ export async function checkSpecificTime(
   params: CheckSpecificTimeParams,
 ): Promise<CheckSpecificTimeResult> {
   const durationMinutes = params.durationMinutes ?? DEFAULT_DURATION_MINUTES;
-  const tz = params.customerTimezone;
-  const label = params.customerLabel ?? 'hora local';
+  const display = demoDisplayTimezone(params.customerPhone, {
+    timezone: params.customerTimezone,
+    label: params.customerLabel,
+  });
+  const tz = display.timezone;
+  const label = display.label;
 
   let slotStart: Date;
   try {
@@ -807,7 +841,13 @@ export async function checkSpecificTime(
     };
   }
 
-  const built = colombiaOfferSlot(slotStart, durationMinutes);
+  const built = offerSlot(
+    slotStart,
+    durationMinutes,
+    params.customerPhone,
+    tz,
+    label,
+  );
   return {
     status: 'available',
     slot: built,
@@ -983,29 +1023,7 @@ export async function cancelDemoEvent(demoId: string, reason: string): Promise<v
   if (updateError) throw new Error(updateError.message);
 }
 
-export function formatDemoConfirmationMessage(
-  scheduledAt: Date,
-  customerEmail: string,
-  _displayTimezone: string,
-  _displayLabel: string,
-  meetLink: string = getDemoMeetLink(),
-): string {
-  const dateLabel = formatInTimeZone(scheduledAt, HOST_TIMEZONE, 'EEEE d MMM', {
-    locale: es,
-  });
-  const capitalizedDate = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
-  const timeLabel = formatSlotTimeDual(scheduledAt, HOST_TIMEZONE, COLOMBIA_TIME_LABEL);
-
-  return (
-    '✅ ¡Demo agendada!\n\n' +
-    `📅 ${capitalizedDate}\n` +
-    `⏰ ${timeLabel}\n` +
-    `👤 Con ${DEMO_HOST_TEAM_LABEL}\n` +
-    `🎥 Meet: ${meetLink}\n` +
-    `📨 Invitación enviada a ${customerEmail}\n\n` +
-    'Te llegará un recordatorio 1 hora antes. ¿Algo más en lo que te pueda ayudar?'
-  );
-}
+export { formatDemoConfirmationMessage } from '@/lib/demo-booking-messages';
 
 export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());

@@ -3,6 +3,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { toGoogleHostDateTime } from '@/lib/calendar-slots';
 import { deliverLandingDemoConfirmationWhatsApp } from '@/lib/demo-booking-confirmation';
 import {
+  assertBookableDemoPhone,
+  buildConfirmationFailedAlert,
+} from '@/lib/demo-phone';
+import {
   DEMO_HOST_EMAIL,
   DEMO_HOST_NAME,
   DEMO_TIMEZONE,
@@ -64,6 +68,52 @@ async function loadKalyoTwilioCreds(
   };
 }
 
+async function markConfirmationSent(
+  supabase: ReturnType<typeof createAdminClient>,
+  bookingId: string,
+  phone: string,
+  scheduledAt: string,
+  sent: boolean,
+): Promise<void> {
+  const { error: bookingError } = await supabase
+    .from('demo_bookings')
+    .update({ confirmation_sent: sent })
+    .eq('id', bookingId);
+  if (bookingError) {
+    console.error('[demo-booking-calendar] confirmation_sent booking update failed', bookingError);
+  }
+
+  const { error: demoError } = await supabase
+    .from('scheduled_demos')
+    .update({ confirmation_sent: sent })
+    .eq('customer_phone', phone)
+    .eq('scheduled_at', scheduledAt);
+  if (demoError) {
+    console.error('[demo-booking-calendar] confirmation_sent demo update failed', demoError);
+  }
+}
+
+async function alertConfirmationFailed(text: string): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+  if (!token || !chatId) {
+    console.error('[demo-booking-calendar] telegram alert skipped, missing env');
+    return;
+  }
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true,
+    }),
+  });
+  if (!response.ok) {
+    console.error('[demo-booking-calendar] telegram alert failed', response.status);
+  }
+}
+
 function buildDescription(input: DemoBookingCalendarInput, meetLink: string): string {
   const lines = [
     `Demo de ${DEFAULT_DURATION_MINUTES} minutos con ${input.name}`,
@@ -109,6 +159,23 @@ export async function createDemoBookingCalendarEvent(
   if (Number.isNaN(scheduledAt.getTime())) {
     return { ok: false, error: 'invalid scheduledAt' };
   }
+
+  const credsForCheck = await loadKalyoTwilioCreds(supabase);
+  const phoneCheck = await assertBookableDemoPhone(input.whatsapp, credsForCheck);
+  if (!phoneCheck.ok) {
+    await markConfirmationSent(supabase, input.bookingId, input.whatsapp, input.scheduledAt, false);
+    await alertConfirmationFailed(
+      buildConfirmationFailedAlert({
+        name: input.name,
+        phone: input.whatsapp,
+        email: input.email,
+        when: input.scheduledAt,
+        reason: phoneCheck.message,
+      }),
+    );
+    return { ok: false, error: phoneCheck.message, code: 'invalid_phone' };
+  }
+  const customerPhone = phoneCheck.e164;
 
   const endAt = new Date(scheduledAt.getTime() + DEFAULT_DURATION_MINUTES * 60_000);
 
@@ -215,19 +282,49 @@ export async function createDemoBookingCalendarEvent(
       const { sendWhatsApp } = await import('@/lib/twilio');
       const confirmation = await deliverLandingDemoConfirmationWhatsApp({
         name: input.name,
-        whatsapp: input.whatsapp,
+        whatsapp: customerPhone,
         scheduledAt,
         meetLink,
         creds,
         sendFn: sendWhatsApp,
       });
+      const sent = confirmation === 'sent';
+      await markConfirmationSent(
+        supabase,
+        input.bookingId,
+        customerPhone,
+        input.scheduledAt,
+        sent,
+      );
+      if (!sent) {
+        await alertConfirmationFailed(
+          buildConfirmationFailedAlert({
+            name: input.name,
+            phone: customerPhone,
+            email: input.email,
+            when: input.scheduledAt,
+            reason:
+              confirmation === 'skipped_no_phone'
+                ? 'sin número de WhatsApp'
+                : 'Twilio no aceptó el mensaje de confirmación',
+          }),
+        );
+      }
       console.log(
         `[demo-booking-calendar] confirmation whatsapp | booking_id=${input.bookingId} | result=${confirmation}`,
       );
     } catch (err) {
-      console.error(
-        '[demo-booking-calendar] confirmation whatsapp failed (non-fatal)',
-        err instanceof Error ? err.message : err,
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[demo-booking-calendar] confirmation whatsapp failed (non-fatal)', message);
+      await markConfirmationSent(supabase, input.bookingId, customerPhone, input.scheduledAt, false);
+      await alertConfirmationFailed(
+        buildConfirmationFailedAlert({
+          name: input.name,
+          phone: customerPhone,
+          email: input.email,
+          when: input.scheduledAt,
+          reason: message,
+        }),
       );
     }
 

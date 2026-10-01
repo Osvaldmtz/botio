@@ -14,6 +14,8 @@ import {
 } from '@/lib/demo-conversation';
 import { pendingSlotsWithAlternatives } from '@/lib/demo-flow-parsing';
 import { DemoSlotUnavailableError } from '@/lib/demo-availability';
+import { validateDemoPhoneFormat } from '@/lib/demo-phone';
+import { demoDisplayTimezone } from '@/lib/timezone-from-phone';
 import { movePipelineStage } from '@/lib/pipeline-utils';
 import { normalizeStage, STAGE_RANK } from '@/lib/pipeline';
 import { recordOutcome } from '@/lib/ab-testing';
@@ -48,6 +50,10 @@ export async function executeConfirmDemoSlot(params: {
   creds?: KalyoTwilioCreds;
 }): Promise<DemoToolResult> {
   const { supabase, conversationId, slotNumber, senderFrom, botId } = params;
+  const phoneCheck = validateDemoPhoneFormat(senderFrom);
+  if (!phoneCheck.ok) {
+    return { status: 'invalid_phone', bot_message: phoneCheck.message };
+  }
   const email = params.customerEmail?.trim() ?? '';
   const name = params.customerName?.trim() ?? '';
 
@@ -164,6 +170,11 @@ export async function executeConfirmDemoSlot(params: {
       scheduled_at: slot.start,
     });
 
+    const clock = demoDisplayTimezone(senderFrom, {
+      timezone: pending.customer_timezone ?? pending.display_timezone,
+      label: pending.customer_city_label ?? pending.display_label,
+    });
+
     return {
       status: 'success',
       demo_id: result.demoId,
@@ -171,8 +182,8 @@ export async function executeConfirmDemoSlot(params: {
       bot_message: formatDemoConfirmationMessage(
         scheduledAt,
         resolvedEmail,
-        pending.customer_timezone ?? pending.display_timezone,
-        pending.customer_city_label ?? pending.display_label,
+        clock.timezone,
+        clock.label,
         result.meetLink,
       ),
     };

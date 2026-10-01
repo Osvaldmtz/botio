@@ -7,8 +7,10 @@ import {
 } from '@/lib/calendar-slots';
 import { DEMO_HOST_TEAM_LABEL } from '@/lib/demo-booking-messages';
 import {
+  demoDisplayTimezone,
   getCustomerTimezone,
   getCustomerTimezoneLabel,
+  hasPhoneTimezone,
 } from '@/lib/timezone-from-phone';
 import { DEMO_NAME_FALLBACK, demoGreetingName, holaDemo } from '@/lib/demo-customer-name';
 
@@ -31,6 +33,10 @@ export async function resolveDemoDisplayTimezone(
   supabase: SupabaseClient,
   demo: DemoReminderRow,
 ): Promise<DemoDisplayTimezone> {
+  if (hasPhoneTimezone(demo.customer_phone)) {
+    return demoDisplayTimezone(demo.customer_phone);
+  }
+
   if (demo.conversation_id) {
     const { data: conv } = await supabase
       .from('conversations')
