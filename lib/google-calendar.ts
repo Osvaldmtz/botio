@@ -1,12 +1,9 @@
 import 'server-only';
 import { google, type calendar_v3 } from 'googleapis';
-import { formatInTimeZone } from 'date-fns-tz';
-import { es } from 'date-fns/locale';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   buildCalendarSlot,
   customerLocalToUtcDate,
-  formatSlotTimeDual,
   generateHostCandidateSlots,
   getHostTzParts,
   hostLocalToDate,
@@ -43,10 +40,10 @@ export function getDemoMeetLink(): string {
   return fromEnv || DEFAULT_DEMO_MEET_LINK;
 }
 
+export { formatSlotTimeDual } from '@/lib/calendar-slots';
 export {
   formatSlotForES,
   formatSlotForCustomerRequest,
-  formatSlotTimeDual,
   generateHostCandidateSlots,
   getHostTzParts,
   hostLocalToDate,
