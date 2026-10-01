@@ -11,6 +11,7 @@ import {
 import { parseSlotChoice } from '@/lib/demo-flow-parsing';
 import {
   handleDemoReminderResponse,
+  maybeHandlePendingBookedConfirm,
   shouldInterceptDemoReminderResponse,
   type ActiveReminderDemo,
   type DemoReminderInterceptResult,
@@ -26,6 +27,7 @@ export {
 
 export {
   handleDemoReminderResponse,
+  maybeHandlePendingBookedConfirm,
   shouldInterceptDemoReminderResponse,
   type ActiveReminderDemo,
   type DemoReminderInterceptResult,

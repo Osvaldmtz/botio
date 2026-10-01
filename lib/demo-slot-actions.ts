@@ -9,9 +9,10 @@ import {
 import {
   clearPendingDemoSlots,
   loadPendingDemoSlots,
-  savePendingCustomSlot,
   savePendingDemoSlots,
+  type PendingDemoSlots,
 } from '@/lib/demo-conversation';
+import { pendingSlotsWithAlternatives } from '@/lib/demo-flow-parsing';
 import { DemoSlotUnavailableError } from '@/lib/demo-availability';
 import { movePipelineStage } from '@/lib/pipeline-utils';
 import { normalizeStage, STAGE_RANK } from '@/lib/pipeline';
@@ -188,6 +189,55 @@ export async function executeConfirmDemoSlot(params: {
   }
 }
 
+async function resolvePendingSlotIdentity(params: {
+  supabase: SupabaseClient;
+  conversationId: string;
+  pending: PendingDemoSlots | null;
+  customerTimezone: string;
+  customerLabel?: string;
+  senderFrom: string;
+}): Promise<PendingDemoSlots> {
+  const { pending } = params;
+  let email = pending?.customer_email ?? '';
+  let name = pending?.customer_name ?? '';
+  let expiresAt = pending?.expires_at;
+
+  if (!email || !name || !expiresAt) {
+    const { data: demo } = await params.supabase
+      .from('scheduled_demos')
+      .select('customer_email, customer_name, scheduled_at')
+      .eq('conversation_id', params.conversationId)
+      .eq('status', 'scheduled')
+      .order('scheduled_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    email = email || (typeof demo?.customer_email === 'string' ? demo.customer_email : '');
+    name = name || (typeof demo?.customer_name === 'string' ? demo.customer_name : '');
+    if (!expiresAt && typeof demo?.scheduled_at === 'string') {
+      expiresAt = demo.scheduled_at;
+    }
+  }
+
+  const label =
+    params.customerLabel || pending?.customer_city_label || pending?.display_label || params.customerTimezone;
+
+  return {
+    slots: pending?.slots ?? [],
+    custom: pending?.custom,
+    customer_email: email,
+    customer_name: name,
+    customer_phone: pending?.customer_phone || params.senderFrom,
+    customer_city: pending?.customer_city,
+    customer_timezone: params.customerTimezone,
+    customer_city_label: label,
+    display_timezone: pending?.display_timezone || params.customerTimezone,
+    display_label: pending?.display_label || label,
+    offered_at: pending?.offered_at || new Date().toISOString(),
+    ...(expiresAt ? { expires_at: expiresAt } : {}),
+  };
+}
+
 export async function executeCheckSpecificTime(params: {
   supabase: SupabaseClient;
   conversationId: string;
@@ -227,15 +277,38 @@ export async function executeCheckSpecificTime(params: {
     });
 
     if (result.status === 'available' && result.slot) {
-      if (pending) {
-        await savePendingCustomSlot(supabase, conversationId, result.slot);
-      }
-    } else if (result.alternatives?.length && pending) {
-      await savePendingDemoSlots(supabase, conversationId, {
-        ...pending,
-        slots: result.alternatives,
-        custom: undefined,
+      const base = await resolvePendingSlotIdentity({
+        supabase,
+        conversationId,
+        pending,
+        customerTimezone,
+        customerLabel,
+        senderFrom,
       });
+      await savePendingDemoSlots(supabase, conversationId, {
+        ...base,
+        custom: result.slot,
+        slots: pending?.slots ?? base.slots,
+      });
+    } else if (result.alternatives?.length) {
+      const identity = await resolvePendingSlotIdentity({
+        supabase,
+        conversationId,
+        pending,
+        customerTimezone,
+        customerLabel,
+        senderFrom,
+      });
+      const next = pendingSlotsWithAlternatives({
+        existing: pending,
+        alternatives: result.alternatives,
+        identity,
+        originalDemoAt: identity.expires_at ?? null,
+        nowIso: new Date().toISOString(),
+      });
+      if (next) {
+        await savePendingDemoSlots(supabase, conversationId, next);
+      }
     }
 
     return result;

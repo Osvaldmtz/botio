@@ -32,6 +32,7 @@ import {
   handleDemoReminderResponse,
   handleDemoTimeCheckInterception,
   loadConversationPending,
+  maybeHandlePendingBookedConfirm,
   shouldInterceptDemoConfirm,
   shouldInterceptDemoReminderResponse,
   shouldInterceptDemoTimeCheck,
@@ -700,6 +701,60 @@ export async function processIncomingMessage(
       }
     }
 
+    const bookedConfirm = await maybeHandlePendingBookedConfirm({
+      supabase,
+      conversationId: conversation.id,
+      customerPhone: conversation.customer_phone,
+      messageBody,
+      creds: kalyoCreds,
+    });
+    const reminderDemo = bookedConfirm
+      ? null
+      : await shouldInterceptDemoReminderResponse(
+          supabase,
+          conversation.customer_phone,
+          messageBody,
+          { conversationId: conversation.id },
+        );
+    const reminderIntercept = bookedConfirm
+      ? bookedConfirm
+      : reminderDemo
+        ? await handleDemoReminderResponse({
+            supabase,
+            conversationId: conversation.id,
+            customerPhone: conversation.customer_phone,
+            messageBody,
+            demo: reminderDemo,
+            creds: kalyoCreds,
+          })
+        : null;
+    if (reminderIntercept) {
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: reminderIntercept.replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: reminderIntercept.source,
+          tools_called: reminderIntercept.toolsCalled,
+          reminder_response: reminderIntercept.reminderResponse,
+        },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      console.log(
+        `[process-message] channel=${channel} | source=${reminderIntercept.source} | conv=${conversation.id}`,
+      );
+
+      return {
+        replyText: reminderIntercept.replyText,
+        storedReply: reminderIntercept.replyText,
+        conversationId: conversation.id,
+        source: reminderIntercept.source,
+      };
+    }
+
     await trackObjectionOutcome(supabase, conversation.id, messageBody);
 
     if (isAmbassadorFlowsEnabled()) {
@@ -876,46 +931,6 @@ export async function processIncomingMessage(
       };
     }
 
-    const reminderDemo = await shouldInterceptDemoReminderResponse(
-      supabase,
-      conversation.customer_phone,
-      messageBody,
-    );
-    if (reminderDemo) {
-      const intercept = await handleDemoReminderResponse({
-        supabase,
-        conversationId: conversation.id,
-        customerPhone: conversation.customer_phone,
-        messageBody,
-        demo: reminderDemo,
-        creds: kalyoCreds,
-      });
-
-      const assistantNow = new Date().toISOString();
-      await supabase.from('messages').insert({
-        conversation_id: conversation.id,
-        role: 'assistant',
-        content: intercept.replyText,
-        source: 'text',
-        source_type: 'claude',
-        metadata: {
-          source: intercept.source,
-          tools_called: intercept.toolsCalled,
-          reminder_response: intercept.reminderResponse,
-        },
-      });
-      await touchConversation(supabase, conversation.id, assistantNow);
-      console.log(
-        `[process-message] channel=${channel} | source=${intercept.source} | conv=${conversation.id}`,
-      );
-
-      return {
-        replyText: intercept.replyText,
-        storedReply: intercept.replyText,
-        conversationId: conversation.id,
-        source: intercept.source,
-      };
-    }
   }
 
   if (handoffActive) {

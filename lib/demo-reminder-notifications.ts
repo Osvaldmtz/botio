@@ -17,6 +17,7 @@ export type DemoReminderNotifyEvent =
 
 export type DemoReminderNotifyExtra = {
   cancellation_reason?: string;
+  pipeline_stage?: string;
 };
 
 export type DemoReminderNotifyDemo = DemoReminderRow & {
@@ -123,9 +124,9 @@ export function buildDemoReminderTelegramText(
         `Cliente: ${name}\n` +
         `Teléfono: ${phone}\n` +
         `Demo cancelada: ${escapeHtml(dateTime)}\n` +
-        `Razón: ${field(extra?.cancellation_reason ?? 'cancelled_by_customer_via_reminder')}\n\n` +
-        `Evento de Calendar cancelado.\n` +
-        `Lead va a pipeline 'lost' o se mantiene en 'qualified' para re-attempt.`
+        `Razón: ${field(extra?.cancellation_reason ?? 'cancelled_by_customer_via_reminder')}\n` +
+        `Pipeline: ${field(extra?.pipeline_stage)}\n\n` +
+        `Evento de Calendar cancelado.`
       );
   }
 }
