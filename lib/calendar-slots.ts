@@ -350,7 +350,13 @@ export function parseRelativeDate(text: string, currentDate = new Date()): strin
     }
   }
 
-  const dayMonth = normalized.match(/(?:el\s+)?(\d{1,2})(?:\s+de\s+([a-z]+))?/);
+  // "a las 9" is a clock, not the 9th. Strip times before looking for a day number.
+  const withoutClock = normalized
+    .replace(/\b(?:a\s+)?las\s+\d{1,2}(?::\d{2})?(?:\s*(?:am|pm|horas?|hrs?|h))?\b/g, ' ')
+    .replace(/\b\d{1,2}[:.]\d{2}(?:\s*(?:am|pm))?\b/g, ' ')
+    .replace(/\b\d{1,2}\s*(?:am|pm|horas?|hrs?)\b/g, ' ');
+
+  const dayMonth = withoutClock.match(/(?:el\s+)?(\d{1,2})(?:\s+de\s+([a-z]+))?/);
   if (dayMonth) {
     const day = parseInt(dayMonth[1], 10);
     const monthNames: Record<string, number> = {

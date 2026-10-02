@@ -18,6 +18,8 @@ export const HALLUCINATION_PATTERNS = [
   /listo.*google\s+meet/i,
   /confirmado.*(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|\d{1,2}:\d{2})/i,
   /confirmo\s*:.*(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|\d{1,2}:\d{2})/i,
+  /confirmo tu demo/i,
+  /te enviaremos un email de confirmaci[oó]n/i,
   /tu opci[oó]n es la.*\d{1,2}:\d{2}/i,
   /confirmado:\s*demo/i,
 ];
@@ -43,6 +45,43 @@ export function parseSlotChoice(
     return 'custom';
   }
 
+  if (pending) {
+    return matchUniquePendingSlotByWeekday(trimmed, pending);
+  }
+
+  return null;
+}
+
+const WEEKDAY_WORDS = [
+  'lunes',
+  'martes',
+  'miercoles',
+  'jueves',
+  'viernes',
+  'sabado',
+  'domingo',
+] as const;
+
+/**
+ * "El viernes" confirms the only Friday in the offer.
+ * Two Thursdays, or a message that also names an hour, stay unclaimed.
+ */
+function matchUniquePendingSlotByWeekday(
+  text: string,
+  pending: PendingDemoSlots,
+): 1 | 2 | 3 | null {
+  if (parseTimeFromText(text)) return null;
+  const folded = foldReminderText(text);
+  const mentioned = WEEKDAY_WORDS.filter((day) => new RegExp(`\\b${day}\\b`).test(folded));
+  if (mentioned.length !== 1) return null;
+
+  const day = mentioned[0];
+  const hits = pending.slots.flatMap((slot, index) =>
+    foldReminderText(slot.label_es).includes(day) ? [index] : [],
+  );
+  if (hits.length !== 1) return null;
+  const slotNumber = hits[0] + 1;
+  if (slotNumber === 1 || slotNumber === 2 || slotNumber === 3) return slotNumber;
   return null;
 }
 
