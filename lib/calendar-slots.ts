@@ -179,7 +179,6 @@ export function isWithinOverlapBusinessHours(
 export function formatSlotForES(
   slotStart: Date,
   customerTimezone?: string,
-  _customerLabel?: string,
 ): string {
   const tz = customerTimezone?.trim() || DEFAULT_CUSTOMER_TIMEZONE;
   const datePart = formatInTimeZone(slotStart, tz, 'EEEE d MMM', { locale: es });
@@ -290,7 +289,7 @@ export function formatSlotLabelsForPhone(
     stripHoraPrefix(displayLabelOverride) ||
     getCustomerTimezoneLabel(customerPhone);
   return {
-    label_es: formatSlotForES(slotStart, displayTimezone, displayLabel),
+    label_es: formatSlotForES(slotStart, displayTimezone),
     display_timezone: displayTimezone,
     display_label: displayLabel,
   };

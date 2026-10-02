@@ -54,15 +54,15 @@ assert(mx.timezone === 'America/Mexico_City' && mx.label === 'CDMX', 'whatsapp: 
 // Same instant: 09:00 CDMX = 10:00 Bogotá
 const cdmxNine = fromZonedTime('2026-09-16T09:00:00', 'America/Mexico_City');
 
-const mxLabel = formatSlotForES(cdmxNine, 'America/Mexico_City', 'CDMX');
+const mxLabel = formatSlotForES(cdmxNine, 'America/Mexico_City');
 assert(mxLabel.includes('09:00 AM'), `MX local 09:00 AM: ${mxLabel}`);
 assert(!mxLabel.includes('Bogotá'), `MX must not say Bogotá: ${mxLabel}`);
 
-const coLabel = formatSlotForES(cdmxNine, 'America/Bogota', 'Bogotá');
+const coLabel = formatSlotForES(cdmxNine, 'America/Bogota');
 assert(coLabel.includes('10:00 AM'), `CO local 10:00 AM: ${coLabel}`);
 assert(!coLabel.includes('CDMX'), `CO must not say CDMX: ${coLabel}`);
 
-const peLabel = formatSlotForES(cdmxNine, 'America/Lima', 'Lima');
+const peLabel = formatSlotForES(cdmxNine, 'America/Lima');
 assert(peLabel.includes('10:00 AM'), `PE: ${peLabel}`);
 
 const phoneMx = '+525511112222';
