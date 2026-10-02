@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { formatSlotTimeDual } from './calendar-slots';
+import { formatSlotTimeDual, buildCalendarSlot, formatCustomerSlotOffer, formatSlotLabelsForPhone } from './calendar-slots';
 import { formatDemoConfirmationMessage } from './demo-booking-messages';
 import { formatReminder24h } from './demo-reminder-messages';
 import { demoDisplayTimezone } from './timezone-from-phone';
@@ -59,5 +59,57 @@ describe('demo clock follows the phone', () => {
       zone,
     );
     assert.match(reminder, /09:00 \(Bogotá\)/);
+  });
+});
+
+const FRIDAY_NINE_CO = new Date('2026-10-02T14:00:00.000Z');
+const THURSDAY_ONE_CO = new Date('2026-10-01T18:00:00.000Z');
+
+describe('slot offers are in the customer clock', () => {
+  it('shows +52 in CDMX and keeps the UTC instant', () => {
+    const friday = buildCalendarSlot(
+      FRIDAY_NINE_CO,
+      30,
+      '+527224183685',
+      'America/Bogota',
+      'hora de Colombia',
+    );
+    assert.equal(friday.start, '2026-10-02T14:00:00.000Z');
+    assert.equal(friday.end, '2026-10-02T14:30:00.000Z');
+    assert.equal(friday.display_timezone, 'America/Mexico_City');
+    assert.equal(friday.display_label, 'CDMX');
+    assert.match(friday.label_es, /08:00 AM/);
+    assert.equal(friday.label_es.includes('Colombia'), false);
+
+    const thursday = buildCalendarSlot(THURSDAY_ONE_CO, 30, '+527224183685');
+    const offer = formatCustomerSlotOffer([thursday, friday, thursday]);
+    assert.match(offer, /Horarios en tu hora \(CDMX\):/);
+    assert.match(offer, /12:00 PM/);
+    assert.match(offer, /08:00 AM/);
+    assert.equal(offer.includes('Colombia'), false);
+  });
+
+  it('shows +57 in Bogotá', () => {
+    const slot = formatSlotLabelsForPhone(FRIDAY_NINE_CO, '+573001112233');
+    assert.equal(slot.display_timezone, 'America/Bogota');
+    assert.equal(slot.display_label, 'Bogotá');
+    assert.match(slot.label_es, /09:00 AM/);
+    assert.match(formatCustomerSlotOffer([slot]), /Horarios en tu hora \(Bogotá\):/);
+  });
+
+  it('shows +51 in Lima', () => {
+    const slot = formatSlotLabelsForPhone(FRIDAY_NINE_CO, '+51999888777');
+    assert.equal(slot.display_timezone, 'America/Lima');
+    assert.equal(slot.display_label, 'Lima');
+    assert.match(slot.label_es, /09:00 AM/);
+    assert.match(formatCustomerSlotOffer([slot]), /Horarios en tu hora \(Lima\):/);
+  });
+
+  it('uses Bogotá when the phone is not a known calling code', () => {
+    const slot = formatSlotLabelsForPhone(FRIDAY_NINE_CO, 'no-es-telefono');
+    assert.equal(slot.display_timezone, 'America/Bogota');
+    assert.equal(slot.display_label, 'Bogotá');
+    assert.match(slot.label_es, /09:00 AM/);
+    assert.match(formatCustomerSlotOffer([slot]), /Horarios en tu hora \(Bogotá\):/);
   });
 });

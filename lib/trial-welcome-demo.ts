@@ -11,18 +11,19 @@ const WELCOME_DEMO_MIN_ADVANCE_MS = 12 * 60 * 60 * 1000;
 
 /** Soft CTA block with Calendar slots (legacy / optional embed). */
 export function formatTrialWelcomeDemoBlock(
-  slots: Array<{ label_es: string }>,
+  slots: Array<{ label_es: string; display_label?: string }>,
 ): string {
   const usable = slots.filter((s) => s.label_es?.trim());
   if (usable.length === 0) return '';
 
+  const zone = usable[0]?.display_label?.trim() || 'Bogotá';
   const lines = usable
     .slice(0, 3)
     .map((slot, i) => `${i + 1}. ${slot.label_es}`)
     .join('\n');
 
   return (
-    `Para que aproveches al máximo tu prueba, te puedo mostrar Kalyo en vivo en 30 minutos. Tengo estos horarios:\n\n` +
+    `Para que aproveches al máximo tu prueba, te puedo mostrar Kalyo en vivo en 30 minutos. Horarios en tu hora (${zone}):\n\n` +
     `${lines}\n\n` +
     `Responde 1, 2 o 3 para agendar. O si prefieres explorar por tu cuenta, entra a app.kalyo.io y crea tu primer paciente.`
   );

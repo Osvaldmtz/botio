@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   buildCalendarSlot,
   customerLocalToUtcDate,
+  formatCustomerSlotOffer,
   generateHostCandidateSlots,
   getHostTzParts,
   hostLocalToDate,
@@ -556,8 +557,7 @@ function formatAlternativesBotMessage(prefix: string, alternatives: CalendarSlot
   if (alternatives.length === 0) {
     return `${prefix} ¿Quieres que consulte otros días?`;
   }
-  const lines = alternatives.map((slot, i) => `${i + 1}️⃣ ${slot.label_es}`);
-  return `${prefix}\n${lines.join('\n')}\n\n¿Cuál te viene mejor? Responde con 1, 2 o 3.`;
+  return `${prefix}\n\n${formatCustomerSlotOffer(alternatives)}`;
 }
 
 async function queryFreeBusyForRange(
@@ -826,7 +826,13 @@ export async function checkSpecificTime(
   });
   const reason = slotBlockReason(slotStart, ctx);
   if (reason) {
-    const alternatives = await findAlternativesNear(slotStart, durationMinutes);
+    const alternatives = await findAlternativesNear(
+      slotStart,
+      durationMinutes,
+      params.customerPhone,
+      tz,
+      label,
+    );
     const fallback =
       alternatives.length > 0
         ? alternatives
@@ -848,7 +854,7 @@ export async function checkSpecificTime(
   return {
     status: 'available',
     slot: built,
-    bot_message: `¡Sí! ${built.label_es} está disponible. ¿Confirmamos?`,
+    bot_message: `¡Sí! ${built.label_es} (${built.display_label}) está disponible. ¿Confirmamos?`,
   };
 }
 
@@ -856,20 +862,7 @@ export function formatSlotsForBot(
   slots: CalendarSlot[],
   options?: { overlap_limited?: boolean },
 ): string {
-  if (slots.length === 0) {
-    return 'No encontré horarios disponibles en los próximos días. ¿Te funciona algún día de la próxima semana?';
-  }
-
-  const lines = slots.map((slot, i) => `${i + 1}️⃣ ${slot.label_es}`);
-  const prefix = options?.overlap_limited
-    ? 'Tu zona horaria tiene poco overlap con nuestro horario laboral. Te ofrezco los horarios disponibles incluso fuera de tu rango ideal:\n'
-    : 'Aquí tienes horarios disponibles:\n';
-
-  return (
-    prefix +
-    lines.join('\n') +
-    '\n\n¿Cuál te viene mejor? Responde con 1, 2 o 3.'
-  );
+  return formatCustomerSlotOffer(slots, options);
 }
 
 export async function createDemoEvent(params: CreateDemoEventParams): Promise<CreateDemoEventResult> {

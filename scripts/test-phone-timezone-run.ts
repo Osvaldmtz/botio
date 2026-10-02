@@ -5,6 +5,7 @@
 import { fromZonedTime } from 'date-fns-tz';
 import {
   formatSlotForES,
+  formatSlotLabelsForPhone,
   formatSlotTimeDual,
 } from '../lib/calendar-slots';
 import {
@@ -54,39 +55,29 @@ assert(mx.timezone === 'America/Mexico_City' && mx.label === 'CDMX', 'whatsapp: 
 const cdmxNine = fromZonedTime('2026-09-16T09:00:00', 'America/Mexico_City');
 
 const mxLabel = formatSlotForES(cdmxNine, 'America/Mexico_City', 'CDMX');
-assert(mxLabel.includes('09:00'), `MX local 09:00: ${mxLabel}`);
-assert(mxLabel.includes('(CDMX)'), `MX label: ${mxLabel}`);
+assert(mxLabel.includes('09:00 AM'), `MX local 09:00 AM: ${mxLabel}`);
 assert(!mxLabel.includes('Bogotá'), `MX must not say Bogotá: ${mxLabel}`);
 
 const coLabel = formatSlotForES(cdmxNine, 'America/Bogota', 'Bogotá');
-assert(coLabel.includes('10:00'), `CO local 10:00: ${coLabel}`);
-assert(coLabel.includes('(Bogotá)'), `CO label: ${coLabel}`);
+assert(coLabel.includes('10:00 AM'), `CO local 10:00 AM: ${coLabel}`);
 assert(!coLabel.includes('CDMX'), `CO must not say CDMX: ${coLabel}`);
 
 const peLabel = formatSlotForES(cdmxNine, 'America/Lima', 'Lima');
-assert(peLabel.includes('10:00') && peLabel.includes('(Lima)'), `PE: ${peLabel}`);
+assert(peLabel.includes('10:00 AM'), `PE: ${peLabel}`);
 
 const phoneMx = '+525511112222';
 const phoneCo = '+573001112233';
 assert(
-  formatSlotForES(cdmxNine, getCustomerTimezone(phoneMx), getCustomerTimezoneLabel(phoneMx)).includes(
-    '(CDMX)',
-  ),
+  formatSlotLabelsForPhone(cdmxNine, phoneMx).display_label === 'CDMX',
   'phone +52 drives CDMX label',
 );
 assert(
-  formatSlotForES(cdmxNine, getCustomerTimezone(phoneCo), getCustomerTimezoneLabel(phoneCo)).includes(
-    '(Bogotá)',
-  ),
+  formatSlotLabelsForPhone(cdmxNine, phoneCo).display_label === 'Bogotá',
   'phone +57 drives Bogotá label',
 );
 
-const slotsLine = `1️⃣ ${formatSlotForES(
-  cdmxNine,
-  getCustomerTimezone(phoneMx),
-  getCustomerTimezoneLabel(phoneMx),
-)}`;
-assert(slotsLine.includes('(CDMX)'), `slot line MX: ${slotsLine}`);
+const slotsLine = `1️⃣ ${formatSlotLabelsForPhone(cdmxNine, phoneMx).label_es}`;
+assert(slotsLine.includes('09:00 AM'), `slot line MX: ${slotsLine}`);
 assert(!slotsLine.includes('Bogotá'), `slot line MX no Bogotá: ${slotsLine}`);
 
 assert(

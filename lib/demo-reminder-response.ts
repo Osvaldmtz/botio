@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { cityToTimezone } from '@/lib/city-to-timezone';
+import { formatCustomerSlotOffer } from '@/lib/calendar-slots';
 import {
   clearPendingBookedConfirm,
   clearPendingDemoCancellation,
@@ -159,12 +160,8 @@ async function offerRescheduleSlots(params: {
     });
   }
 
-  const slotLines = result.slots.map((slot, i) => `${i + 1}️⃣ ${slot.label_es}`).join('\n');
-  return (
-    'Claro, te puedo reagendar. Aquí tienes nuevos horarios disponibles:\n' +
-    `${slotLines}\n\n` +
-    '¿Cuál te viene mejor? Responde con 1, 2 o 3.'
-  );
+  const slotLines = formatCustomerSlotOffer(result.slots);
+  return `Claro, te puedo reagendar.\n\n${slotLines}`;
 }
 
 async function maybeNotifySales(

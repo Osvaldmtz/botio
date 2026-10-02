@@ -2,8 +2,11 @@ import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { es } from 'date-fns/locale';
 import {
   DEFAULT_CUSTOMER_TIMEZONE,
+  DEFAULT_CUSTOMER_TIMEZONE_LABEL,
   getCustomerTimezone,
   getCustomerTimezoneLabel,
+  hasPhoneTimezone,
+  resolvePhoneTimezone,
 } from '@/lib/timezone-from-phone';
 
 export const HOST_TIMEZONE = process.env.DEMO_HOST_TIMEZONE ?? 'America/Bogota';
@@ -42,6 +45,15 @@ function stripHoraPrefix(label?: string): string {
 
 function localClock(instant: Date, timezone: string): string {
   return formatInTimeZone(instant, timezone, 'HH:mm');
+}
+
+/** Customer-facing clock: "08:00 AM", "12:00 PM". */
+function formatClock12(instant: Date, timezone: string): string {
+  const hour24 = Number(formatInTimeZone(instant, timezone, 'H'));
+  const minute = formatInTimeZone(instant, timezone, 'mm');
+  const suffix = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+  return `${pad2(hour12)}:${minute} ${suffix}`;
 }
 
 function sameLocalClock(instant: Date, a: string, b: string): boolean {
@@ -156,30 +168,23 @@ export function isWithinOverlapBusinessHours(
 }
 
 /**
- * Demo slot label in the customer's local timezone (primary).
- * Uses date-fns-tz — never fixed offsets — so DST/IANA rules stay correct.
- * Sofía must copy label_es / bot_message verbatim (no manual hour math).
+ * Demo slot line in the customer's local clock, without a city suffix.
+ * The offer header names the zone ("Horarios en tu hora (CDMX)").
+ * Uses date-fns-tz — never fixed offsets.
  *
  * Examples:
- *   Mexicano → "Martes 8 jun, 10:00 (CDMX)"
- *   Colombiano → "Martes 8 jun, 10:00 (Bogotá)"
+ *   Mexicano → "Martes 8 jun, 10:00 AM"
+ *   Colombiano → "Martes 8 jun, 11:00 AM"
  */
 export function formatSlotForES(
   slotStart: Date,
   customerTimezone?: string,
-  customerLabel?: string,
+  _customerLabel?: string,
 ): string {
   const tz = customerTimezone?.trim() || DEFAULT_CUSTOMER_TIMEZONE;
-  const city =
-    stripHoraPrefix(customerLabel) ||
-    LABEL_BY_TIMEZONE[tz] ||
-    cityLabelFromTimezone(tz);
-
-  const datePart = formatInTimeZone(slotStart, tz, 'EEEE d MMM, HH:mm', {
-    locale: es,
-  });
+  const datePart = formatInTimeZone(slotStart, tz, 'EEEE d MMM', { locale: es });
   const capitalized = datePart.charAt(0).toUpperCase() + datePart.slice(1);
-  return `${capitalized} (${city})`;
+  return `${capitalized}, ${formatClock12(slotStart, tz)}`;
 }
 
 /** Time line for confirmations in customer local clock: "10:00 (Bogotá)". */
@@ -275,14 +280,40 @@ export function formatSlotLabelsForPhone(
   displayTimezoneOverride?: string,
   displayLabelOverride?: string,
 ): { label_es: string; display_timezone: string; display_label: string } {
-  const displayTimezone = displayTimezoneOverride ?? getCustomerTimezone(customerPhone);
+  const phoneZone = hasPhoneTimezone(customerPhone)
+    ? resolvePhoneTimezone(customerPhone)
+    : null;
+  const displayTimezone =
+    phoneZone?.timezone || displayTimezoneOverride?.trim() || getCustomerTimezone(customerPhone);
   const displayLabel =
-    stripHoraPrefix(displayLabelOverride) || getCustomerTimezoneLabel(customerPhone);
+    phoneZone?.label ||
+    stripHoraPrefix(displayLabelOverride) ||
+    getCustomerTimezoneLabel(customerPhone);
   return {
     label_es: formatSlotForES(slotStart, displayTimezone, displayLabel),
     display_timezone: displayTimezone,
     display_label: displayLabel,
   };
+}
+
+/** Three-slot offer. The header carries the zone; each line is the local clock. */
+export function formatCustomerSlotOffer(
+  slots: Array<{ label_es: string; display_label?: string }>,
+  options?: { overlap_limited?: boolean },
+): string {
+  if (slots.length === 0) {
+    return 'No encontré horarios disponibles en los próximos días. ¿Te funciona algún día de la próxima semana?';
+  }
+
+  const zoneLabel = slots[0]?.display_label?.trim() || DEFAULT_CUSTOMER_TIMEZONE_LABEL;
+  const header = `Horarios en tu hora (${zoneLabel}):`;
+  const lines = slots.map((slot, i) => `${i + 1}️⃣ ${slot.label_es}`);
+  const prefix = options?.overlap_limited
+    ? 'Tu zona horaria tiene poco overlap con nuestro horario laboral. Te ofrezco los horarios disponibles incluso fuera de tu rango ideal.\n\n' +
+      `${header}\n`
+    : `${header}\n`;
+
+  return `${prefix}${lines.join('\n')}\n\n¿Cuál te viene mejor? Responde con 1, 2 o 3.`;
 }
 
 export function customerLocalToUtcDate(
