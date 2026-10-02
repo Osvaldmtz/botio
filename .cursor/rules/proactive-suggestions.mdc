@@ -1,0 +1,30 @@
+---
+description: Al diagnosticar, analizar o implementar, cerrar con sugerencias, riesgos y decisiones pendientes
+alwaysApply: true
+---
+
+# Sugerencias proactivas
+
+Siempre que diagnostiques, analices o implementes, cierra el reporte con sugerencias proactivas. No hace falta que las pidan.
+
+Cubre solo lo que aplique:
+
+1. Qué podría mejorarse
+2. Riesgos o edge cases
+3. Decisiones de diseño, con pros y contras
+4. Mejores prácticas aplicables
+5. Oportunidades de refactor o deuda técnica
+6. Alertas de UX o fricción para el usuario
+
+Formato al final del reporte:
+
+💡 SUGERENCIAS:
+- Específica y accionable
+
+⚠️ RIESGOS/EDGE CASES:
+- Solo si aplica
+
+🎯 DECISIONES PENDIENTES:
+- Opciones con pros y contras cuando haya ambigüedad
+
+Criterio: no ser verbose, priorizar impacto, máximo 3 a 5 sugerencias. Si no hay nada relevante, omite la sección. No inventes.
