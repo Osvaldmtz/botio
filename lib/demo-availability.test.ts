@@ -30,17 +30,17 @@ function context(
 }
 
 describe('demo availability', () => {
-  it('keeps weekday hours at 9:00–19:00 Colombia and closes Sunday', () => {
+  it('keeps weekday hours at 9:00–18:00 Colombia and closes Sunday', () => {
     const open = context([]);
     assert.equal(slotBlockReason(at(2026, 9, 30, 9), open), null);
     assert.equal(slotBlockReason(at(2026, 9, 30, 15, 30), open), null);
-    assert.equal(slotBlockReason(at(2026, 9, 30, 18, 30), open), 'afternoon_locked');
+    assert.equal(slotBlockReason(at(2026, 9, 30, 17, 30), open), null);
     assert.equal(slotBlockReason(at(2026, 9, 30, 8, 30), open), 'outside_hours');
-    assert.equal(slotBlockReason(at(2026, 9, 30, 19), open), 'outside_hours');
+    assert.equal(slotBlockReason(at(2026, 9, 30, 18), open), 'outside_hours');
     assert.equal(slotBlockReason(at(2026, 10, 4, 12), open), 'outside_hours');
   });
 
-  it('limits Saturday to 12:00–14:00 and two demos', () => {
+  it('limits Saturday to 9:00–13:00 and two demos', () => {
     const open = context([
       booking(at(2026, 9, 30, 9)),
       booking(at(2026, 9, 30, 10)),
@@ -58,9 +58,10 @@ describe('demo availability', () => {
       booking(at(2026, 10, 2, 12)),
       booking(at(2026, 10, 2, 13)),
     ]);
-    assert.equal(slotBlockReason(at(2026, 10, 3, 11, 30), open), 'outside_hours');
-    assert.equal(slotBlockReason(at(2026, 10, 3, 12), open), null);
-    assert.equal(slotBlockReason(at(2026, 10, 3, 14), open), 'outside_hours');
+    assert.equal(slotBlockReason(at(2026, 10, 3, 8, 30), open), 'outside_hours');
+    assert.equal(slotBlockReason(at(2026, 10, 3, 9), open), null);
+    assert.equal(slotBlockReason(at(2026, 10, 3, 12, 30), open), null);
+    assert.equal(slotBlockReason(at(2026, 10, 3, 13), open), 'outside_hours');
 
     const fullSaturday = context([
       ...open.bookings,
@@ -93,14 +94,14 @@ describe('demo availability', () => {
     assert.equal(slotBlockReason(at(2026, 10, 5, 13), open), 'morning_closed');
     assert.equal(slotBlockReason(at(2026, 10, 5, 13, 30), open), null);
     assert.equal(slotBlockReason(at(2026, 10, 5, 16), open), null);
-    assert.equal(slotBlockReason(at(2026, 10, 5, 18, 30), open), null);
+    assert.equal(slotBlockReason(at(2026, 10, 5, 17, 30), open), null);
     assert.equal(slotBlockReason(at(2026, 10, 6, 9), open), null);
-    assert.equal(slotBlockReason(at(2026, 10, 6, 16), open), 'afternoon_locked');
+    assert.equal(slotBlockReason(at(2026, 10, 6, 16), open), null);
   });
 
-  it('hides afternoon slots until three preferred demos exist that day', () => {
+  it('keeps afternoon slots open through 17:30 even without morning demos', () => {
     const two = context([booking(at(2026, 9, 30, 9)), booking(at(2026, 9, 30, 10))]);
-    assert.equal(slotBlockReason(at(2026, 9, 30, 16), two), 'afternoon_locked');
+    assert.equal(slotBlockReason(at(2026, 9, 30, 16), two), null);
     assert.equal(slotBlockReason(at(2026, 9, 30, 9, 30), two), 'conflict');
     assert.equal(slotBlockReason(at(2026, 9, 30, 11), two), null);
 

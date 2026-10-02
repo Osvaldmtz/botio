@@ -29,10 +29,10 @@ const CUSTOMER_WORK_DAYS = new Set([1, 2, 3, 4, 5, 6]);
 const CUSTOMER_WORK_START_HOUR = 9;
 const CUSTOMER_WORK_END_HOUR = 20;
 
-/** Host demo desk, America/Bogota. Weekdays 09:00–19:00, Saturday 12:00–14:00. */
+/** Host demo desk, America/Bogota. Weekdays 09:00–18:00, Saturday 09:00–13:00. */
 export function hostDemoWindow(weekday: number): { startMin: number; endMin: number } | null {
-  if (weekday >= 1 && weekday <= 5) return { startMin: 9 * 60, endMin: 19 * 60 };
-  if (weekday === 6) return { startMin: 12 * 60, endMin: 14 * 60 };
+  if (weekday >= 1 && weekday <= 5) return { startMin: 9 * 60, endMin: 18 * 60 };
+  if (weekday === 6) return { startMin: 9 * 60, endMin: 13 * 60 };
   return null;
 }
 

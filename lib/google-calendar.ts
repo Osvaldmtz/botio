@@ -609,7 +609,7 @@ async function loadBookedIntervals(
     supabase
       .from('demo_bookings')
       .select('id, scheduled_at')
-      .in('status', ['pending', 'confirmed'])
+      .in('status', ['pending', 'confirmed', 'rescheduled_by_admin'])
       .gte('scheduled_at', from.toISOString())
       .lt('scheduled_at', to.toISOString()),
   ]);
@@ -808,7 +808,7 @@ export async function checkSpecificTime(
       status: 'outside_hours',
       alternatives,
       bot_message: formatAlternativesBotMessage(
-        'Ese horario está fuera del horario de demos (lun–vie 9:00–19:00, sáb 12:00–14:00, hora de Colombia). Te ofrezco:',
+        'Ese horario está fuera del horario de demos (lun–vie 9:00–18:00, sáb 9:00–13:00, hora de Colombia). Te ofrezco:',
         alternatives,
       ),
     };

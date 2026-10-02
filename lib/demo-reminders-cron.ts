@@ -43,7 +43,7 @@ const DEMO_SELECT =
 const BOOKING_SELECT =
   'id, name, email, whatsapp, scheduled_at, meet_link, google_meet_link, status, reminder_24h_sent, reminder_1h_sent';
 
-const ACTIVE_BOOKING_STATUSES = ['pending', 'confirmed'] as const;
+const ACTIVE_BOOKING_STATUSES = ['pending', 'confirmed', 'rescheduled_by_admin'] as const;
 
 const DEFAULT_MEET_LINK = 'https://meet.google.com/pgd-dxmb-sfk';
 

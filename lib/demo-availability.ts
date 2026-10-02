@@ -8,7 +8,6 @@ export const DEMO_SLOT_DURATION_MINUTES = 30;
 export const DEMO_GAP_MINUTES = 30;
 export const WEEKDAY_DAILY_MAX = 5;
 export const SATURDAY_DAILY_MAX = 2;
-export const AFTERNOON_UNLOCK_PREFERRED_COUNT = 3;
 export const BUSINESS_DAYS_BEFORE_SATURDAY = 3;
 
 export const COLOMBIA_TIME_LABEL = 'hora de Colombia';
@@ -100,7 +99,7 @@ export function dailyMaxFor(date: Date): number | null {
 export function slotBlockMessage(reason: SlotBlockReason): string {
   switch (reason) {
     case 'outside_hours':
-      return 'Ese horario está fuera del horario de demos: lunes a viernes de 9:00 a 19:00, sábados de 12:00 a 14:00, hora de Colombia. Domingos no hay demos.';
+      return 'Ese horario está fuera del horario de demos: lunes a viernes de 9:00 a 18:00, sábados de 9:00 a 13:00, hora de Colombia. Domingos no hay demos.';
     case 'morning_closed':
       return 'El lunes 5 de octubre no hay demos antes de la 1:30 p.m., hora de Colombia. Desde la 1:30 p.m. y toda la tarde sí hay horario.';
     case 'daily_max':
@@ -168,11 +167,6 @@ export function slotBlockReason(
   const dayBookings = onDay(ctx.bookings, dayKey);
   const max = dailyMaxFor(slotStart);
   if (max == null || dayBookings.length >= max) return 'daily_max';
-
-  if (isAfternoonStart(slotStart) && !isMonday20261005(slotStart)) {
-    const preferred = dayBookings.filter((booking) => isPreferredStart(booking.start));
-    if (preferred.length < AFTERNOON_UNLOCK_PREFERRED_COUNT) return 'afternoon_locked';
-  }
 
   if (isSaturday(slotStart) && !areNextBusinessDaysFull(ctx)) return 'saturday_locked';
 
