@@ -73,7 +73,7 @@ describe('demo availability', () => {
     assert.equal(slotBlockReason(at(2026, 10, 10, 12, 30), fullSaturday), 'daily_max');
   });
 
-  it('opens Saturday 3 Oct 2026 with weekday-level capacity', () => {
+  it('opens Saturday 3 Oct 2026 with weekday-level capacity and 15:30 desk slot', () => {
     const twoBooked = context([
       booking(at(2026, 10, 3, 10)),
       booking(at(2026, 10, 3, 13)),
@@ -82,13 +82,21 @@ describe('demo availability', () => {
     assert.equal(slotBlockReason(at(2026, 10, 3, 11), twoBooked), null);
     assert.equal(slotBlockReason(at(2026, 10, 3, 12), twoBooked), null);
     assert.equal(slotBlockReason(at(2026, 10, 3, 12, 30), twoBooked), 'conflict');
+    assert.equal(slotBlockReason(at(2026, 10, 3, 10), twoBooked), 'conflict');
+    assert.equal(slotBlockReason(at(2026, 10, 3, 13), twoBooked), 'conflict');
+    assert.equal(slotBlockReason(at(2026, 10, 3, 15, 30), twoBooked), null);
+
+    // 10:00 and 13:00 stay blocked even if occupancy rows are missing.
+    assert.equal(slotBlockReason(at(2026, 10, 3, 10), context([])), 'conflict');
+    assert.equal(slotBlockReason(at(2026, 10, 3, 13), context([])), 'conflict');
+    assert.equal(slotBlockReason(at(2026, 10, 3, 15, 30), context([])), null);
 
     const fiveBooked = context([
       booking(at(2026, 10, 3, 9)),
       booking(at(2026, 10, 3, 10)),
       booking(at(2026, 10, 3, 11)),
       booking(at(2026, 10, 3, 12)),
-      booking(at(2026, 10, 3, 12, 30)),
+      booking(at(2026, 10, 3, 15, 30)),
     ]);
     assert.equal(slotBlockReason(at(2026, 10, 3, 9, 30), fiveBooked), 'daily_max');
   });

@@ -92,10 +92,13 @@ function isMonday20261005(date: Date): boolean {
 
 /**
  * One-off desk change for Saturday 3 Oct 2026 (Colombia):
- * open more demo slots even though the usual Saturday cap (2) is already full.
+ * - weekday-level daily cap (usual Saturday cap is 2)
+ * - extra open desk slot at 15:30
+ * - 10:00 and 13:00 stay blocked (confirmed demos in demo_bookings + Calendar)
  */
 const SATURDAY_2026_10_03 = '2026-10-03';
 const SATURDAY_2026_10_03_DAILY_MAX = WEEKDAY_DAILY_MAX;
+const SATURDAY_2026_10_03_FORCE_BUSY_MIN = new Set([10 * 60, 13 * 60]);
 
 function isSaturday20261003(date: Date): boolean {
   return colombiaDayKey(date) === SATURDAY_2026_10_03;
@@ -173,6 +176,10 @@ export function slotBlockReason(
 
   if (isMonday20261005(slotStart) && minutesOfDay(slotStart) < MONDAY_2026_10_05_OPEN_FROM_MIN) {
     return 'morning_closed';
+  }
+
+  if (isSaturday20261003(slotStart) && SATURDAY_2026_10_03_FORCE_BUSY_MIN.has(minutesOfDay(slotStart))) {
+    return 'conflict';
   }
 
   const dayKey = colombiaDayKey(slotStart);

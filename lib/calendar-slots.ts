@@ -39,6 +39,21 @@ export function hostDemoWindow(weekday: number): { startMin: number; endMin: num
   return null;
 }
 
+/** One-off Saturday 3 Oct 2026: starts outside the normal Saturday window. */
+const SATURDAY_2026_10_03_EXTRA_STARTS_MIN = [13 * 60, 15 * 60 + 30] as const;
+
+export function isSaturday20261003Host(date: Date): boolean {
+  const parts = getHostTzParts(date);
+  return parts.year === 2026 && parts.month === 10 && parts.day === 3;
+}
+
+function isSaturday20261003ExtraStart(date: Date): boolean {
+  if (!isSaturday20261003Host(date)) return false;
+  const parts = getHostTzParts(date);
+  const startMin = parts.hour * 60 + parts.minute;
+  return (SATURDAY_2026_10_03_EXTRA_STARTS_MIN as readonly number[]).includes(startMin);
+}
+
 function stripHoraPrefix(label?: string): string {
   return (label ?? '').replace(/^hora\s+/i, '').trim();
 }
@@ -122,15 +137,18 @@ function isWithinCustomerWindow(slotStart: Date, durationMinutes: number, timezo
 
 export function isWithinHostBusinessHours(slotStart: Date, durationMinutes: number): boolean {
   const start = getHostTzParts(slotStart);
+  const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
+  const end = getHostTzParts(slotEnd);
+  if (end.year !== start.year || end.month !== start.month || end.day !== start.day) return false;
+
+  // One-off: Saturday 3 Oct 2026 also allows 13:00 (booked/visible) and 15:30 (open desk).
+  if (isSaturday20261003ExtraStart(slotStart)) return true;
+
   const window = hostDemoWindow(start.weekday);
   if (!window) return false;
 
   const startMin = start.hour * 60 + start.minute;
   if (startMin < window.startMin) return false;
-
-  const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60_000);
-  const end = getHostTzParts(slotEnd);
-  if (end.year !== start.year || end.month !== start.month || end.day !== start.day) return false;
   const endMin = end.hour * 60 + end.minute;
   return endMin <= window.endMin;
 }
@@ -247,7 +265,14 @@ export function generateHostCandidateSlots(
     const parts = getHostTzParts(cursor);
     const window = hostDemoWindow(parts.weekday);
     if (window) {
+      const startMinutes = new Set<number>();
       for (let minutes = window.startMin; minutes < window.endMin; minutes += 30) {
+        startMinutes.add(minutes);
+      }
+      if (parts.year === 2026 && parts.month === 10 && parts.day === 3) {
+        for (const minutes of SATURDAY_2026_10_03_EXTRA_STARTS_MIN) startMinutes.add(minutes);
+      }
+      for (const minutes of [...startMinutes].sort((a, b) => a - b)) {
         const slotStart = hostLocalToDate(
           parts.year,
           parts.month,
