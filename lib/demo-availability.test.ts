@@ -41,34 +41,56 @@ describe('demo availability', () => {
   });
 
   it('limits Saturday to 9:00–13:00 and two demos', () => {
-    const open = context([
-      booking(at(2026, 9, 30, 9)),
-      booking(at(2026, 9, 30, 10)),
-      booking(at(2026, 9, 30, 11)),
-      booking(at(2026, 9, 30, 12)),
-      booking(at(2026, 9, 30, 13)),
-      booking(at(2026, 10, 1, 9)),
-      booking(at(2026, 10, 1, 10)),
-      booking(at(2026, 10, 1, 11)),
-      booking(at(2026, 10, 1, 12)),
-      booking(at(2026, 10, 1, 13)),
-      booking(at(2026, 10, 2, 9)),
-      booking(at(2026, 10, 2, 10)),
-      booking(at(2026, 10, 2, 11)),
-      booking(at(2026, 10, 2, 12)),
-      booking(at(2026, 10, 2, 13)),
-    ]);
-    assert.equal(slotBlockReason(at(2026, 10, 3, 8, 30), open), 'outside_hours');
-    assert.equal(slotBlockReason(at(2026, 10, 3, 9), open), null);
-    assert.equal(slotBlockReason(at(2026, 10, 3, 12, 30), open), null);
-    assert.equal(slotBlockReason(at(2026, 10, 3, 13), open), 'outside_hours');
+    const open = context(
+      [
+        booking(at(2026, 10, 7, 9)),
+        booking(at(2026, 10, 7, 10)),
+        booking(at(2026, 10, 7, 11)),
+        booking(at(2026, 10, 7, 12)),
+        booking(at(2026, 10, 7, 13)),
+        booking(at(2026, 10, 8, 9)),
+        booking(at(2026, 10, 8, 10)),
+        booking(at(2026, 10, 8, 11)),
+        booking(at(2026, 10, 8, 12)),
+        booking(at(2026, 10, 8, 13)),
+        booking(at(2026, 10, 9, 9)),
+        booking(at(2026, 10, 9, 10)),
+        booking(at(2026, 10, 9, 11)),
+        booking(at(2026, 10, 9, 12)),
+        booking(at(2026, 10, 9, 13)),
+      ],
+      { reference: at(2026, 10, 7, 8) },
+    );
+    assert.equal(slotBlockReason(at(2026, 10, 10, 8, 30), open), 'outside_hours');
+    assert.equal(slotBlockReason(at(2026, 10, 10, 9), open), null);
+    assert.equal(slotBlockReason(at(2026, 10, 10, 12, 30), open), null);
+    assert.equal(slotBlockReason(at(2026, 10, 10, 13), open), 'outside_hours');
 
-    const fullSaturday = context([
-      ...open.bookings,
-      booking(at(2026, 10, 3, 12)),
+    const fullSaturday = context(
+      [...open.bookings, booking(at(2026, 10, 10, 12)), booking(at(2026, 10, 10, 9))],
+      { reference: at(2026, 10, 7, 8) },
+    );
+    assert.equal(slotBlockReason(at(2026, 10, 10, 12, 30), fullSaturday), 'daily_max');
+  });
+
+  it('opens Saturday 3 Oct 2026 with weekday-level capacity', () => {
+    const twoBooked = context([
+      booking(at(2026, 10, 3, 10)),
       booking(at(2026, 10, 3, 13)),
     ]);
-    assert.equal(slotBlockReason(at(2026, 10, 3, 12, 30), fullSaturday), 'daily_max');
+    assert.equal(slotBlockReason(at(2026, 10, 3, 9), twoBooked), null);
+    assert.equal(slotBlockReason(at(2026, 10, 3, 11), twoBooked), null);
+    assert.equal(slotBlockReason(at(2026, 10, 3, 12), twoBooked), null);
+    assert.equal(slotBlockReason(at(2026, 10, 3, 12, 30), twoBooked), 'conflict');
+
+    const fiveBooked = context([
+      booking(at(2026, 10, 3, 9)),
+      booking(at(2026, 10, 3, 10)),
+      booking(at(2026, 10, 3, 11)),
+      booking(at(2026, 10, 3, 12)),
+      booking(at(2026, 10, 3, 12, 30)),
+    ]);
+    assert.equal(slotBlockReason(at(2026, 10, 3, 9, 30), fiveBooked), 'daily_max');
   });
 
   it('requires 30 minutes between demos', () => {
@@ -115,15 +137,16 @@ describe('demo availability', () => {
 
   it('offers Saturday only after the next three weekdays are full', () => {
     const slots = [
-      at(2026, 9, 30, 9),
-      at(2026, 10, 1, 9),
-      at(2026, 10, 3, 12),
+      at(2026, 10, 7, 9),
+      at(2026, 10, 8, 9),
+      at(2026, 10, 10, 12),
     ];
+    const ctx = context([], { reference: at(2026, 10, 7, 8) });
     assert.deepEqual(
-      pickPrioritySlots(slots.filter((slot) => slotBlockReason(slot, context([])) === null)).map(
+      pickPrioritySlots(slots.filter((slot) => slotBlockReason(slot, ctx) === null)).map(
         (slot) => slot.toISOString(),
       ),
-      [at(2026, 9, 30, 9).toISOString(), at(2026, 10, 1, 9).toISOString()],
+      [at(2026, 10, 7, 9).toISOString(), at(2026, 10, 8, 9).toISOString()],
     );
   });
 

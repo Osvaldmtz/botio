@@ -90,7 +90,19 @@ function isMonday20261005(date: Date): boolean {
   return colombiaDayKey(date) === MONDAY_2026_10_05;
 }
 
+/**
+ * One-off desk change for Saturday 3 Oct 2026 (Colombia):
+ * open more demo slots even though the usual Saturday cap (2) is already full.
+ */
+const SATURDAY_2026_10_03 = '2026-10-03';
+const SATURDAY_2026_10_03_DAILY_MAX = WEEKDAY_DAILY_MAX;
+
+function isSaturday20261003(date: Date): boolean {
+  return colombiaDayKey(date) === SATURDAY_2026_10_03;
+}
+
 export function dailyMaxFor(date: Date): number | null {
+  if (isSaturday20261003(date)) return SATURDAY_2026_10_03_DAILY_MAX;
   if (isWeekday(date)) return WEEKDAY_DAILY_MAX;
   if (isSaturday(date)) return SATURDAY_DAILY_MAX;
   return null;
@@ -168,7 +180,9 @@ export function slotBlockReason(
   const max = dailyMaxFor(slotStart);
   if (max == null || dayBookings.length >= max) return 'daily_max';
 
-  if (isSaturday(slotStart) && !areNextBusinessDaysFull(ctx)) return 'saturday_locked';
+  if (isSaturday(slotStart) && !isSaturday20261003(slotStart) && !areNextBusinessDaysFull(ctx)) {
+    return 'saturday_locked';
+  }
 
   const slotEnd = new Date(slotStart.getTime() + duration * 60_000);
   const occupied = [...ctx.bookings, ...ctx.busy];
