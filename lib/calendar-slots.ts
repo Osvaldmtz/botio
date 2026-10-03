@@ -272,7 +272,7 @@ export function generateHostCandidateSlots(
       if (parts.year === 2026 && parts.month === 10 && parts.day === 3) {
         for (const minutes of SATURDAY_2026_10_03_EXTRA_STARTS_MIN) startMinutes.add(minutes);
       }
-      for (const minutes of [...startMinutes].sort((a, b) => a - b)) {
+      for (const minutes of Array.from(startMinutes).sort((a, b) => a - b)) {
         const slotStart = hostLocalToDate(
           parts.year,
           parts.month,
