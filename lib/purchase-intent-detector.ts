@@ -24,10 +24,23 @@ const PAY_NOW_RE =
   /\b(?:quiero\s+pagar|listo\s+para\s+pagar|c[óo]mo\s+pago|c[óo]mo\s+compro|dame\s+el\s+link\s+de\s+pago|link\s+de\s+pago|p[áa]gina\s+de\s+pago|env[íi]am[eé]\s+el\s+link|m[áa]ndam[eé]\s+el\s+link|pa[sS]am[eé]\s+el\s+link)\b/i;
 
 /**
+ * Free-trial language must never trigger a payment link.
+ * "Quiero la prueba gratis del plan Max" matches PLAN_MAX_RE otherwise
+ * (quiero … plan max) and incorrectly routes to purchase_intent_max.
+ */
+const FREE_TRIAL_RE =
+  /\b(?:prueba\s+(?:gratis|gratuita)|trial\s+gratis|free\s+trial|d[ií]as?\s+gratis|gratis(?:\s+(?:de\s+)?\d+\s*d[ií]as?)?|activar\s+(?:la\s+)?(?:prueba|trial)|sin\s+tarjeta)\b/i;
+
+/**
  * Detects explicit purchase intent from a message.
  * Only fires on strong purchase signals — NOT on questions like "cuánto cuesta el max?".
+ * Also skips free-trial requests so they fall through to the trial activation path.
  */
 export function detectPurchaseIntent(message: string): PurchaseIntent {
+  if (FREE_TRIAL_RE.test(message)) {
+    return { intent: null };
+  }
+
   if (
     PLAN_ULTRA_RE.test(message) ||
     PLAN_ULTRA_SUFFIX_RE.test(message) ||

@@ -41,5 +41,27 @@ assert(detectPurchaseIntent('Cuánto cuesta el max?').intent === null, '"Cuánto
 assert(detectPurchaseIntent('¿Qué diferencia hay entre pro y max?').intent === null, '"¿Qué diferencia...?" → null');
 assert(detectPurchaseIntent('Me interesa conocer Kalyo').intent === null, '"Me interesa conocer Kalyo" → null');
 
+// Free trial must NOT look like purchase (regression: Blanca 2026-10-06)
+assert(
+  detectPurchaseIntent('Quiero la prueba Gratis del plan Max de 7 días').intent === null,
+  '"Quiero la prueba Gratis del plan Max de 7 días" → null (trial, not purchase)',
+);
+assert(
+  detectPurchaseIntent('Quiero el trial gratis del plan Max').intent === null,
+  '"Quiero el trial gratis del plan Max" → null (trial, not purchase)',
+);
+assert(
+  detectPurchaseIntent('Quiero activar la prueba gratis Max').intent === null,
+  '"Quiero activar la prueba gratis Max" → null',
+);
+assert(
+  detectPurchaseIntent('Necesito el Max sin tarjeta').intent === null,
+  '"Necesito el Max sin tarjeta" → null',
+);
+assert(
+  detectPurchaseIntent('Quiero el plan Max gratis').intent === null,
+  '"Quiero el plan Max gratis" → null',
+);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
