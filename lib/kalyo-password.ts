@@ -22,11 +22,24 @@ export function isKalyoTempPasswordFormat(password: string): boolean {
   return /^Kalyo\d{4}[A-HJ-NP-Z2-9]{4}$/.test(password);
 }
 
+/** Tip appended after temp credentials so users know WhatsApp can reset access. */
+export const PASSWORD_SAVE_TIP =
+  'Guarda esta contraseña. Si la pierdes, escríbenos aquí mismo para resetearla.';
+
 /** Own line so long-press copy in WhatsApp does not pick up surrounding punctuation. */
 export function formatWhatsAppTempPasswordBlock(tempPassword: string): string {
   return (
     `🔑 Contraseña (cópiala tal cual, en una sola línea):\n` +
     `${tempPassword}\n` +
-    `(Puedes cambiarla después de entrar)\n`
+    `(Puedes cambiarla después de entrar)\n` +
+    `${PASSWORD_SAVE_TIP}\n`
+  );
+}
+
+/** Fallback when we cannot re-issue a password in the welcome message. */
+export function formatForgotPasswordWhatsAppHint(): string {
+  return (
+    'Si olvidaste tu contraseña, escríbenos aquí mismo y te la reseteamos por WhatsApp ' +
+    '(más confiable que el correo de recuperación).\n'
   );
 }

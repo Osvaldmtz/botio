@@ -40,7 +40,7 @@ const day1Fallback = formatDay1Welcome({
   trialEndsAt,
   email: 'maria@test.com',
 });
-assert(day1Fallback.includes('Olvidé mi contraseña'), 'day1 missing password fallback');
+assert(day1Fallback.includes('escríbenos aquí mismo') || day1Fallback.includes('resetear'), 'day1 missing password fallback');
 
 assert(formatDay2(user).includes('María Test'), 'day2 name');
 assert(formatDay2(user).includes('patients/new'), 'day2 patients link');

@@ -23,9 +23,11 @@ describe('generateKalyoPassword', () => {
 });
 
 describe('formatWhatsAppTempPasswordBlock', () => {
-  it('puts the password on its own line', () => {
+  it('puts the password on its own line and includes save tip', () => {
     const block = formatWhatsAppTempPasswordBlock('Kalyo2026CV7S');
     assert.ok(block.includes('\nKalyo2026CV7S\n'));
     assert.equal(block.includes('Kalyo-'), false);
+    assert.ok(block.includes('Guarda esta contraseña'));
+    assert.ok(block.includes('escríbenos aquí mismo para resetearla'));
   });
 });

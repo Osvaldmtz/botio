@@ -360,7 +360,7 @@ export async function reconcileStripeKalyo(emails: string[]): Promise<ReconcileR
         stripe_subscription_id: activeStripe.subscription_id,
         subscription_status: 'active',
         subscription_current_period_end: activeStripe.current_period_end,
-        plan_expires_at: null,
+        plan_expires_at: activeStripe.current_period_end,
         updated_at: new Date().toISOString(),
       })
       .eq('id', canonical.id);

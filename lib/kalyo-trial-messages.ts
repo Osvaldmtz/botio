@@ -1,4 +1,7 @@
-import { formatWhatsAppTempPasswordBlock } from '@/lib/kalyo-password';
+import {
+  formatForgotPasswordWhatsAppHint,
+  formatWhatsAppTempPasswordBlock,
+} from '@/lib/kalyo-password';
 import {
   humanSupportTrialFooter,
   humanSupportWelcomeFooter,
@@ -35,7 +38,7 @@ export function buildTrialActivationSuccessMessage(params: {
   if (params.reactivated) {
     const passwordLine = params.tempPassword
       ? `\n${formatWhatsAppTempPasswordBlock(params.tempPassword)}`
-      : '\nSi olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n';
+      : `\n${formatForgotPasswordWhatsAppHint()}`;
 
     return (
       `${greeting} Tu prueba gratis de ${planName} está activa 🎉 Entra aquí: https://app.kalyo.io/login — tu email es ${params.email}.${passwordLine}\n` +
@@ -139,7 +142,7 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
       `📧 Email: ${input.email}\n` +
       (input.tempPassword
         ? formatWhatsAppTempPasswordBlock(input.tempPassword)
-        : `Si olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n`) +
+        : formatForgotPasswordWhatsAppHint()) +
       `\n` +
       `📋 *Primeros pasos:*\n` +
       `1. Entra y crea tu primer paciente\n` +
@@ -158,7 +161,7 @@ export function buildDirectEnrollmentWelcomeMessage(input: {
     `📧 Email: ${input.email}\n` +
     (input.tempPassword
       ? `${formatWhatsAppTempPasswordBlock(input.tempPassword)}\n`
-      : `\nSi olvidaste tu contraseña, usa "Olvidé mi contraseña" en el login.\n\n`) +
+      : `\n${formatForgotPasswordWhatsAppHint()}\n`) +
     `¿Dudas? Aquí estoy. 🚀` +
     humanSupportWelcomeFooter()
   );
@@ -184,7 +187,7 @@ export function buildAdminOperatorTrialConfirmation(params: {
       `✅ Trial reactivado\n\n` +
       `📧 ${params.email}\n` +
       `Cliente ya tenía cuenta, sin password nueva.\n` +
-      `Si olvidó, dile que use 'Olvidé mi contraseña'.`
+      `Si olvidó, dile que escriba aquí en WhatsApp para resetearla.`
     );
   }
 

@@ -122,6 +122,8 @@ Point the Twilio WhatsApp sandbox (or your production WhatsApp sender) at that U
 
 Required env vars: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, plus Twilio creds on the bot row.
 
+**Twilio credentials:** production WhatsApp sends use `bots.twilio_account_sid` / `bots.twilio_auth_token` / `bots.twilio_whatsapp_number`. `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` env vars are optional fallbacks for scripts; they may be empty in Vercel Production — that is expected when the bot row is populated.
+
 **Security TODOs before production:**
 
 - Validate `X-Twilio-Signature` on incoming requests.

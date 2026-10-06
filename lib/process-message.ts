@@ -51,6 +51,7 @@ import { isTeamOperatorPhone } from '@/lib/team-members';
 import { handleObjectionMessage } from '@/lib/objection-interceptor';
 import { trackObjectionOutcome } from '@/lib/objection-outcome-tracker';
 import { handlePurchaseIntentMessage } from '@/lib/purchase-intent-handler';
+import { handlePasswordResetWhatsApp } from '@/lib/password-reset-whatsapp';
 import { detectDemoIntent } from '@/lib/demo-intent-detector';
 import {
   buildDemoSchedulingMessage,
@@ -136,6 +137,7 @@ export type ProcessMessageSource =
   | 'objection_handler'
   | 'ambassador_handler'
   | 'purchase_intent_handler'
+  | 'password_reset_whatsapp'
   | 'demo_scheduling_calendly'
   | 'demo_scheduling_slots'
   | 'congreso_handler'
@@ -828,6 +830,41 @@ export async function processIncomingMessage(
         };
       }
     }
+    }
+
+    const passwordReset = await handlePasswordResetWhatsApp({
+      supabase,
+      conversationId: conversation.id,
+      customerPhone: conversation.customer_phone,
+      messageBody,
+      metadata: (conversation.metadata ?? {}) as Record<string, unknown>,
+      isAmbassadorLead,
+      isTeamMember: Boolean((conversation as Record<string, unknown>).is_team_member),
+    });
+    if (passwordReset) {
+      const assistantNow = new Date().toISOString();
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: passwordReset.replyText,
+        source: 'text',
+        source_type: 'claude',
+        metadata: {
+          source: passwordReset.source,
+          password_reset: passwordReset.reset,
+          email: passwordReset.email || null,
+        },
+      });
+      await touchConversation(supabase, conversation.id, assistantNow);
+      console.log(
+        `[process-message] channel=${channel} | source=${passwordReset.source} | reset=${passwordReset.reset} | conv=${conversation.id}`,
+      );
+      return {
+        replyText: passwordReset.replyText,
+        storedReply: passwordReset.replyText,
+        conversationId: conversation.id,
+        source: 'password_reset_whatsapp',
+      };
     }
 
     const purchaseIntent = await handlePurchaseIntentMessage({
