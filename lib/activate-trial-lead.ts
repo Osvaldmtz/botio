@@ -1,5 +1,6 @@
 import { createKalyoTrialAccount } from '@/lib/kalyo-account-creator';
 import { getKalyoClient } from '@/lib/kalyo-supabase';
+import { buildTrialAttribution } from '@/lib/kalyo-trial-attribution';
 import {
   enrollTrialFromKalyoWebhook,
   sendTrialCredentialsWelcome,
@@ -57,11 +58,19 @@ export async function activateTrialForLead(params: {
     return { status: 'error', error: 'missing_fields' };
   }
 
+  const isAdminSource =
+    params.source === 'admin_via_botio' ||
+    params.source === 'kaly_admin' ||
+    params.source === 'admin';
+
   const account = await createKalyoTrialAccount({
     email,
     fullName,
     phone,
     trialPlan: params.trialPlan ?? 'max',
+    attribution: isAdminSource
+      ? buildTrialAttribution({ source: 'admin', medium: 'manual' })
+      : undefined,
   });
 
   if (!account.success) {
@@ -103,6 +112,7 @@ export async function activateTrialForLead(params: {
     source: params.source,
     tempPassword: account.password,
     trialPlan: params.trialPlan ?? 'max',
+    attribution_source: isAdminSource ? 'admin / manual' : undefined,
   });
 
   let welcomeSent = enroll.success;

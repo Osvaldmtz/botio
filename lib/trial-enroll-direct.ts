@@ -4,6 +4,7 @@ import { isValidPhone, normalizePhoneForDB } from '@/lib/phone-validation';
 import { isTeamMember } from '@/lib/team-members';
 import { markTrialActivatedByContact } from '@/lib/conversation-outcome';
 import { markDay1WelcomeSent } from '@/lib/trial-onboarding-cron';
+import { attributionFromEnrollBody } from '@/lib/kalyo-trial-attribution';
 import { notifyTrialEnrolled } from '@/lib/trial-onboarding-notifications';
 import { buildDirectEnrollmentWelcomeMessage } from '@/lib/kalyo-trial-messages';
 import {
@@ -549,6 +550,7 @@ export async function enrollTrialDirect(
     await markDay1WelcomeSent(supabase, enrollmentId);
   }
 
+  const enrollAttr = attributionFromEnrollBody({ source: input.source });
   await notifyTrialEnrolled({
     name: input.fullName,
     email,
@@ -557,6 +559,13 @@ export async function enrollTrialDirect(
     trialEndsAt: input.trialEndsAt,
     welcomeResult: welcomeSid
       ? { success: true, method: 'plain_text', sid: welcomeSid }
+      : null,
+    attribution: enrollAttr
+      ? {
+          utm_source: enrollAttr.utm_source,
+          utm_medium: enrollAttr.utm_medium,
+          attribution_source: enrollAttr.attribution_source,
+        }
       : null,
   });
 

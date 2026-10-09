@@ -1,6 +1,11 @@
 import { getKalyoClient } from '@/lib/kalyo-supabase';
 import { generateKalyoPassword } from '@/lib/kalyo-password';
 import {
+  attributionFromConversationMetadata,
+  attributionWhatsappOrganic,
+  type KalyoTrialAttribution,
+} from '@/lib/kalyo-trial-attribution';
+import {
   KALYO_TRIAL_MS,
   resolveTrialDbPlan,
   type TrialPlanChoice,
@@ -65,10 +70,17 @@ export async function createKalyoTrialAccount(input: {
   phone?: string;
   forceInsertFail?: boolean;
   trialPlan?: TrialPlanChoice;
+  /** Conversation metadata (ads referral) — preferred over organic WhatsApp. */
+  conversationMetadata?: Record<string, unknown> | null;
+  attribution?: KalyoTrialAttribution | null;
 }): Promise<CreateAccountResult> {
   const email = input.email.trim().toLowerCase();
   const fullName = input.fullName.trim() || email.split('@')[0];
   const trialPlan = input.trialPlan ?? 'max';
+  const attribution =
+    input.attribution ??
+    attributionFromConversationMetadata(input.conversationMetadata) ??
+    attributionWhatsappOrganic();
 
   if (!isValidEmail(email)) {
     return { success: false, email, error: 'invalid_email', error_detail: 'Invalid email format' };
@@ -175,6 +187,8 @@ export async function createKalyoTrialAccount(input: {
         terms_accepted_at: new Date().toISOString(),
         default_session_type: '__invalid__',
         voice_id: 'es-MX-DaliaNeural',
+        attribution,
+        attribution_source: attribution.attribution_source,
       }
     : {
         auth_id: userId,
@@ -184,6 +198,8 @@ export async function createKalyoTrialAccount(input: {
         terms_accepted_at: new Date().toISOString(),
         default_session_type: 'in_person',
         voice_id: 'es-MX-DaliaNeural',
+        attribution,
+        attribution_source: attribution.attribution_source,
       };
 
   const { error: insertError } = await supabase.from('psychologists').insert(insertPayload);

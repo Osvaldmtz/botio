@@ -12,6 +12,11 @@ import {
   type GoogleAdsAttributionInput,
 } from '@/lib/ad-attribution';
 import { emailToWebOnlyPhone, isWebOnlyPhone } from '@/lib/web-only-phone';
+import { getKalyoClient } from '@/lib/kalyo-supabase';
+import {
+  attributionFromEnrollBody,
+  type TrialAttributionOrigin,
+} from '@/lib/kalyo-trial-attribution';
 import { markDay1WelcomeSent } from '@/lib/trial-onboarding-cron';
 import {
   notifyTrialEnrolled,
@@ -66,6 +71,7 @@ export type TrialOnboardingEnrollInput = {
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
+  attribution_source?: string;
 };
 
 export type TrialOnboardingEnrollSuccess = {
@@ -737,6 +743,52 @@ export async function enrollTrialFromKalyoWebhook(
     }
   }
 
+  const enrollAttribution = attributionFromEnrollBody({
+    utm_source: input.utm_source,
+    utm_medium: input.utm_medium,
+    utm_campaign: input.utm_campaign,
+    attribution_source: input.attribution_source,
+    gclid: input.gclid,
+    source,
+  });
+
+  if (enrollAttribution) {
+    try {
+      const kalyo = getKalyoClient();
+      const { data: psych } = await kalyo
+        .from('psychologists')
+        .select('id, attribution, attribution_source')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (psych && !psych.attribution_source && !psych.attribution) {
+        await kalyo
+          .from('psychologists')
+          .update({
+            attribution: enrollAttribution,
+            attribution_source: enrollAttribution.attribution_source,
+          })
+          .eq('id', psych.id);
+      }
+    } catch (attrErr) {
+      console.error('[trial-onboarding-webhook] attribution sync failed', attrErr);
+    }
+  }
+
+  const telegramAttribution: TrialAttributionOrigin | null = enrollAttribution
+    ? {
+        utm_source: enrollAttribution.utm_source,
+        utm_medium: enrollAttribution.utm_medium,
+        attribution_source: enrollAttribution.attribution_source,
+      }
+    : input.utm_source || input.utm_medium || input.attribution_source
+      ? {
+          utm_source: input.utm_source,
+          utm_medium: input.utm_medium,
+          attribution_source: input.attribution_source,
+        }
+      : null;
+
   await notifyTrialEnrolled({
     name,
     email,
@@ -744,6 +796,7 @@ export async function enrollTrialFromKalyoWebhook(
     source,
     trialEndsAt: endsAt,
     welcomeResult,
+    attribution: telegramAttribution,
     sendTelegram: options?.sendTelegram,
   });
 
@@ -808,6 +861,10 @@ export function validateTrialEnrollBody(body: unknown):
   const utmMedium = typeof record.utm_medium === 'string' ? record.utm_medium.trim() : undefined;
   const utmCampaign =
     typeof record.utm_campaign === 'string' ? record.utm_campaign.trim() : undefined;
+  const attributionSource =
+    typeof record.attribution_source === 'string'
+      ? record.attribution_source.trim()
+      : undefined;
 
   if (!email || !email.includes('@')) {
     return { ok: false, error: 'email is required' };
@@ -833,6 +890,7 @@ export function validateTrialEnrollBody(body: unknown):
       utm_source: utmSource,
       utm_medium: utmMedium,
       utm_campaign: utmCampaign,
+      attribution_source: attributionSource,
     },
   };
 }

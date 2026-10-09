@@ -1,4 +1,11 @@
+import {
+  formatAttributionOriginLine,
+  type TrialAttributionOrigin,
+} from '@/lib/kalyo-trial-attribution';
+
 export type SendTelegramFn = (text: string) => Promise<void>;
+
+export type { TrialAttributionOrigin };
 
 export type WelcomeMessageResult = {
   success: boolean;
@@ -90,6 +97,7 @@ export function buildTrialEnrolledTelegramText(params: {
   source: string;
   trialEndsAt: string;
   welcomeResult?: WelcomeMessageResult | null;
+  attribution?: TrialAttributionOrigin | null;
 }): string {
   const trialDateStr = new Date(params.trialEndsAt).toLocaleDateString('es-MX', {
     timeZone: 'America/Mexico_City',
@@ -97,12 +105,14 @@ export function buildTrialEnrolledTelegramText(params: {
     month: '2-digit',
     year: 'numeric',
   });
+  const originLine = formatAttributionOriginLine(params.attribution);
 
   return (
     `🎉 <b>Trial enrolado en Onboarding cron</b>\n\n` +
     `Cliente: ${params.name}\n` +
     `📱 WhatsApp: ${params.phone}\n` +
     `📧 Email: ${params.email}\n` +
+    `${originLine}\n` +
     `📍 Source: ${params.source}\n` +
     `📅 Trial vence: ${trialDateStr}\n` +
     `${formatWelcomeDeliveryLine(params.welcomeResult)}\n\n` +
@@ -117,6 +127,7 @@ export async function notifyTrialEnrolled(params: {
   source: string;
   trialEndsAt: string;
   welcomeResult?: WelcomeMessageResult | null;
+  attribution?: TrialAttributionOrigin | null;
   sendTelegram?: SendTelegramFn;
 }): Promise<void> {
   const sendTelegram = params.sendTelegram ?? defaultSendTelegram;

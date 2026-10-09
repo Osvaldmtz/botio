@@ -9,6 +9,7 @@ import type {
 
 type PsychologistAttributionRow = {
   attribution: unknown;
+  attribution_source?: string | null;
   created_at: string;
 };
 
@@ -22,7 +23,7 @@ async function fetchTrialPsychologists(sinceIso: string): Promise<PsychologistAt
   while (true) {
     const { data, error } = await kalyo
       .from('psychologists')
-      .select('attribution, created_at')
+      .select('attribution, attribution_source, created_at')
       .not('trial_ends_at', 'is', null)
       .gte('created_at', sinceIso)
       .order('created_at', { ascending: true })

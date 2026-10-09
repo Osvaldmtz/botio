@@ -11,6 +11,27 @@ describe('formatAcquisitionChannel', () => {
     assert.equal(formatAcquisitionChannel(null), DIRECT_UNKNOWN_CHANNEL);
   });
 
+  it('prefers denormalized attribution_source column', () => {
+    assert.equal(
+      formatAcquisitionChannel(
+        { utm_source: 'google', utm_medium: 'organic' },
+        'google / cpc',
+      ),
+      'google / cpc',
+    );
+  });
+
+  it('prefers nested attribution_source in JSONB', () => {
+    assert.equal(
+      formatAcquisitionChannel({
+        utm_source: 'x',
+        utm_medium: 'y',
+        attribution_source: 'whatsapp / organic',
+      }),
+      'whatsapp / organic',
+    );
+  });
+
   it('formats utm_source and utm_medium', () => {
     assert.equal(
       formatAcquisitionChannel({ utm_source: 'google', utm_medium: 'cpc' }),
@@ -35,9 +56,17 @@ describe('formatAcquisitionChannel', () => {
 describe('aggregateTrialsByChannel', () => {
   it('groups trials and computes percentages', () => {
     const rows = aggregateTrialsByChannel([
-      { attribution: { utm_source: 'google', utm_medium: 'cpc' }, created_at: '2026-01-01' },
-      { attribution: { utm_source: 'google', utm_medium: 'cpc' }, created_at: '2026-01-02' },
-      { attribution: null, created_at: '2026-01-03' },
+      {
+        attribution: { utm_source: 'google', utm_medium: 'cpc' },
+        attribution_source: 'google / cpc',
+        created_at: '2026-01-01',
+      },
+      {
+        attribution: { utm_source: 'google', utm_medium: 'cpc' },
+        attribution_source: 'google / cpc',
+        created_at: '2026-01-02',
+      },
+      { attribution: null, attribution_source: null, created_at: '2026-01-03' },
     ]);
 
     assert.deepEqual(rows, [

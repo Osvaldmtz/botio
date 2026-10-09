@@ -59,7 +59,7 @@ export function AcquisitionByChannelSection() {
     <Section title="Adquisición">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-fg-muted">
-          Trials por canal (utm_source / utm_medium) · psyplatform
+          Trials por canal (attribution_source) · últimos N días · psyplatform
         </p>
         <div className="flex rounded-lg border border-bg-border bg-bg-subtle p-1">
           {DAY_OPTIONS.map((option) => (

@@ -4,10 +4,17 @@ export const DIRECT_UNKNOWN_CHANNEL = 'directo / desconocido';
 
 type PsychologistAttributionRow = {
   attribution: unknown;
+  attribution_source?: string | null;
   created_at: string;
 };
 
-export function formatAcquisitionChannel(attribution: unknown): string {
+export function formatAcquisitionChannel(
+  attribution: unknown,
+  attributionSource?: string | null,
+): string {
+  const label = attributionSource?.trim();
+  if (label) return label.toLowerCase();
+
   if (attribution == null) return DIRECT_UNKNOWN_CHANNEL;
 
   if (typeof attribution !== 'object' || Array.isArray(attribution)) {
@@ -15,6 +22,12 @@ export function formatAcquisitionChannel(attribution: unknown): string {
   }
 
   const record = attribution as Record<string, unknown>;
+  const nested =
+    typeof record.attribution_source === 'string'
+      ? record.attribution_source.trim()
+      : '';
+  if (nested) return nested.toLowerCase();
+
   const rawSource = typeof record.utm_source === 'string' ? record.utm_source.trim() : '';
   const rawMedium = typeof record.utm_medium === 'string' ? record.utm_medium.trim() : '';
 
@@ -31,7 +44,7 @@ export function aggregateTrialsByChannel(
   const counts = new Map<string, number>();
 
   for (const row of rows) {
-    const channel = formatAcquisitionChannel(row.attribution);
+    const channel = formatAcquisitionChannel(row.attribution, row.attribution_source);
     counts.set(channel, (counts.get(channel) ?? 0) + 1);
   }
 

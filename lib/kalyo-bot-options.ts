@@ -1025,11 +1025,27 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           const fullName = typeof obj.full_name === 'string' ? obj.full_name : '';
           const trialPlan = parseTrialPlanFromInput(input);
 
+          let conversationMetadata: Record<string, unknown> | null = null;
+          try {
+            const supabase = createAdminClient();
+            const { data: conv } = await supabase
+              .from('conversations')
+              .select('metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            if (conv?.metadata && typeof conv.metadata === 'object') {
+              conversationMetadata = conv.metadata as Record<string, unknown>;
+            }
+          } catch (metaErr) {
+            console.error('[kalyo] conversation metadata load failed', metaErr);
+          }
+
           const result = await createKalyoTrialAccount({
             email,
             fullName,
             phone: senderFrom,
             trialPlan,
+            conversationMetadata,
           });
 
           if (result.success) {
