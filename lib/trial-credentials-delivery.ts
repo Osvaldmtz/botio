@@ -64,7 +64,7 @@ export async function deliverTempPasswordAndTrackTrial(params: {
   );
 
   let welcome_sent = enroll.success;
-  let enroll_ok = enroll.success;
+  const enroll_ok = enroll.success;
 
   if (!welcome_sent) {
     const reason =
