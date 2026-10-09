@@ -26,6 +26,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { FAREWELL_NO_PROGRESS } from '@/lib/kalyo-messages';
 import { recordOutcome } from '@/lib/ab-testing';
 import { ensureTrialTrackingConsistency } from '@/lib/trial-tracking-consistency';
+import { deliverTempPasswordAndTrackTrial } from '@/lib/trial-credentials-delivery';
 import { detectPsychologistProfile } from '@/lib/profile-detection';
 import { buildProfilePromptBlock } from '@/lib/profile-flows';
 import type { ConversationMessage } from '@/lib/lead-enrichment';
@@ -217,7 +218,7 @@ Input requerido: email + full_name.
 Input opcional: plan ("max" | "pro"). Usa "pro" SOLO si el usuario pidió explícitamente prueba de Pro.
 
 Qué responder según el resultado:
-- success: Entrega link https://app.kalyo.io/login, email y contraseña temporal (campo password del tool). Indica que puede cambiarla después de entrar. Di "prueba gratis", NUNCA digas "trial".
+- success: Copia TEXTUALMENTE el campo bot_message (incluye email y contraseña temporal). NO reescribas ni inventes la contraseña. El sistema también envía las credenciales por WhatsApp automáticamente. Di "prueba gratis", NUNCA digas "trial".
 - success + reactivated (sin password): Cuenta existente con prueba gratis reactivada; puede entrar con su password habitual en https://app.kalyo.io/login
 - error "trial_already_used": "Veo que ya tienes cuenta en Kalyo. ¿Quieres que te ayude a hacer login? https://app.kalyo.io/login"
 - error genérico: Discúlpate; el equipo fue notificado.
@@ -813,7 +814,13 @@ async function onTrialSuccessSideEffects(
   senderFrom: string,
   creds: { accountSid: string; authToken: string; from: string } | null,
   notifyReason: 'activate_trial' | 'trial_activated_via_botio',
-  options?: { trialUserName?: string | null; trialEndsAt?: string },
+  options?: {
+    trialUserName?: string | null;
+    trialEndsAt?: string;
+    /** Required for new accounts — delivered via WhatsApp in this same request. */
+    tempPassword?: string;
+    trialPlan?: TrialPlanChoice;
+  },
 ): Promise<void> {
   if (creds) {
     notifySalesTeam(
@@ -836,15 +843,32 @@ async function onTrialSuccessSideEffects(
     .eq('id', conversationId);
   if (error) console.error('[trial] failed to mark lead_captured', error);
 
-  await ensureTrialTrackingConsistency(supabase, {
-    conversationId,
-    email,
-    phone: senderFrom,
-    source: 'trial_enroll',
-    trialEndsAt: options?.trialEndsAt,
-    trialUserName: options?.trialUserName,
-    recordAbOutcome: true,
-  });
+  const tempPassword = options?.tempPassword?.trim();
+  if (tempPassword) {
+    // Guaranteed credentials delivery — do not rely on Claude copying bot_message.
+    await deliverTempPasswordAndTrackTrial({
+      supabase,
+      conversationId,
+      email,
+      phone: senderFrom,
+      name: options?.trialUserName?.trim() || email.split('@')[0] || 'Doctor/a',
+      trialEndsAt: options?.trialEndsAt,
+      tempPassword,
+      trialPlan: options?.trialPlan ?? 'max',
+    }).catch((err) => {
+      console.error('[kalyo] deliverTempPasswordAndTrackTrial failed', err);
+    });
+  } else {
+    await ensureTrialTrackingConsistency(supabase, {
+      conversationId,
+      email,
+      phone: senderFrom,
+      source: 'trial_enroll',
+      trialEndsAt: options?.trialEndsAt,
+      trialUserName: options?.trialUserName,
+      recordAbOutcome: true,
+    });
+  }
 
   await recordOutcome(supabase, conversationId, 'lead_captured', { source: 'trial' });
 }
@@ -1009,6 +1033,12 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
           });
 
           if (result.success) {
+            if (!result.password?.trim()) {
+              console.error(
+                `[kalyo] create_account succeeded without password | email=${result.email}`,
+              );
+            }
+
             await onTrialSuccessSideEffects(
               conversationId,
               result.email,
@@ -1018,6 +1048,8 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               {
                 trialUserName: fullName,
                 trialEndsAt: result.trial_ends_at,
+                tempPassword: result.password,
+                trialPlan,
               },
             );
 

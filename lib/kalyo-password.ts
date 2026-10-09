@@ -43,3 +43,16 @@ export function formatForgotPasswordWhatsAppHint(): string {
     '(más confiable que el correo de recuperación).\n'
   );
 }
+
+/**
+ * Welcome access copy when there is no temp password to send
+ * (web signup chose their own password, or Google OAuth).
+ * Never say "revisa el mensaje anterior" — that message often does not exist.
+ */
+export function formatWelcomeAccessWithoutTempPassword(): string {
+  return (
+    `Entra en https://app.kalyo.io/login con la contraseña que elegiste al registrarte, ` +
+    `o usa Continuar con Google si creaste tu cuenta así.\n` +
+    formatForgotPasswordWhatsAppHint()
+  );
+}

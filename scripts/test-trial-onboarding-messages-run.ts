@@ -26,21 +26,26 @@ const day1 = formatDay1Welcome({
   ...user,
   trialEndsAt,
   email: 'maria@test.com',
-  tempPassword: 'Kalyo-2026-ABCD',
+  tempPassword: 'Kalyo2026ABCD',
 });
 assert(day1.includes('María Test'), 'day1 name');
 assert(day1.includes('maria@test.com'), 'day1 email');
-assert(day1.includes('Kalyo-2026-ABCD'), 'day1 password');
-assert(day1.includes('\nKalyo-2026-ABCD\n'), 'day1 password is on its own line');
+assert(day1.includes('Kalyo2026ABCD'), 'day1 password');
+assert(day1.includes('\nKalyo2026ABCD\n'), 'day1 password is on its own line');
 assert(day1.includes('7 días'), 'day1 trial length');
 assert(day1.includes('app.kalyo.io/login'), 'day1 login link');
+assert(!day1.includes('revisa el mensaje anterior'), 'day1 with password never uses prior-message fallback');
 
 const day1Fallback = formatDay1Welcome({
   trial_user_email: 'maria@test.com',
   trialEndsAt,
   email: 'maria@test.com',
 });
-assert(day1Fallback.includes('escríbenos aquí mismo') || day1Fallback.includes('resetear'), 'day1 missing password fallback');
+assert(!day1Fallback.includes('revisa el mensaje anterior'), 'day1 fallback must not say review previous message');
+assert(
+  day1Fallback.includes('contraseña que elegiste') || day1Fallback.includes('Continuar con Google'),
+  'day1 missing password explains chosen password or Google',
+);
 
 assert(formatDay2(user).includes('María Test'), 'day2 name');
 assert(formatDay2(user).includes('patients/new'), 'day2 patients link');

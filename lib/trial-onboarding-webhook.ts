@@ -520,6 +520,7 @@ export async function sendTrialCredentialsWelcome(params: {
   phone: string;
   tempPassword: string;
   trialPlan?: TrialPlanChoice;
+  trialEndsAt?: string;
   supabase?: SupabaseClient;
 }): Promise<WelcomeMessageResult> {
   const supabase = await resolveSupabaseClient(params.supabase);
@@ -528,13 +529,19 @@ export async function sendTrialCredentialsWelcome(params: {
     return { success: false, method: 'none', reason: 'no_twilio_creds' };
   }
 
+  const tempPassword = params.tempPassword.trim();
+  if (!tempPassword) {
+    return { success: false, method: 'none', reason: 'temp_password_required' };
+  }
+
   return sendWelcomeMessage({
     to: normalizePhoneForDB(params.phone),
     name: params.name,
     creds,
     email: params.email.trim().toLowerCase(),
-    tempPassword: params.tempPassword,
+    tempPassword,
     trialPlan: params.trialPlan ?? 'max',
+    trialEndsAt: params.trialEndsAt,
   });
 }
 

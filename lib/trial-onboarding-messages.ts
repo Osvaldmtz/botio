@@ -1,9 +1,9 @@
 import {
-  formatForgotPasswordWhatsAppHint,
+  formatWelcomeAccessWithoutTempPassword,
   formatWhatsAppTempPasswordBlock,
 } from '@/lib/kalyo-password';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { es } from 'date-fns/locale/es';
 import { formatDay8Survey } from '@/lib/trial-onboarding-day8-survey';
 import { getPaymentLink } from '@/lib/kalyo-payment-links';
 import { KALYO_PRICING } from '@/lib/kalyo-pricing-data';
@@ -45,7 +45,7 @@ export function formatDay1Welcome(ctx: TrialOnboardingMessageContext): string {
   const email = ctx.email?.trim() || ctx.trial_user_email;
   const passwordLine = ctx.tempPassword
     ? formatWhatsAppTempPasswordBlock(ctx.tempPassword)
-    : `🔑 (revisa el mensaje anterior)\n${formatForgotPasswordWhatsAppHint()}`;
+    : formatWelcomeAccessWithoutTempPassword();
 
   return (
     `¡Hola ${name}! 👋 Soy Sofía.\n` +

@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  formatWelcomeAccessWithoutTempPassword,
   formatWhatsAppTempPasswordBlock,
   generateKalyoPassword,
   isKalyoTempPasswordFormat,
@@ -29,5 +30,14 @@ describe('formatWhatsAppTempPasswordBlock', () => {
     assert.equal(block.includes('Kalyo-'), false);
     assert.ok(block.includes('Guarda esta contraseña'));
     assert.ok(block.includes('escríbenos aquí mismo para resetearla'));
+  });
+});
+
+describe('formatWelcomeAccessWithoutTempPassword', () => {
+  it('points to chosen password or Google — never prior message', () => {
+    const text = formatWelcomeAccessWithoutTempPassword();
+    assert.equal(text.includes('revisa el mensaje anterior'), false);
+    assert.ok(text.includes('Continuar con Google'));
+    assert.ok(text.includes('contraseña que elegiste'));
   });
 });
