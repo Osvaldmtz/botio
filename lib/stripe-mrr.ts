@@ -8,9 +8,17 @@ export type ChurnedSubscriptionDetail = {
   name: string | null;
   plan_label: string | null;
   mrr_usd: number;
+  /** When the sub left Active / MRR (`ended_at`, fallback `canceled_at`). */
   canceled_at: string;
+  /** Cancel request time from Stripe (may be earlier than period end). */
+  cancel_requested_at?: string | null;
   excluded_reason?: 'resubscribed' | 'trial_only' | 'team_member';
 };
+
+/** Attribute churn to the month the customer left Active (period end), not cancel click. */
+function churnAttributionTs(sub: Stripe.Subscription): number {
+  return sub.ended_at ?? sub.canceled_at ?? 0;
+}
 
 export type MRRMetrics = {
   available: boolean;
@@ -67,7 +75,8 @@ async function subscriptionEverPaid(stripe: Stripe, subscriptionId: string): Pro
 
 type ChurnCandidate = {
   sub: Stripe.Subscription;
-  canceledAt: number;
+  churnedAt: number;
+  cancelRequestedAt: number | null;
   subMrr: number;
   planLabel: string | null;
   customerId: string;
@@ -87,7 +96,10 @@ async function classifyChurnCandidate(
     name: candidate.name,
     plan_label: candidate.planLabel,
     mrr_usd: Math.round(candidate.subMrr * 100) / 100,
-    canceled_at: new Date(candidate.canceledAt * 1000).toISOString(),
+    canceled_at: new Date(candidate.churnedAt * 1000).toISOString(),
+    cancel_requested_at: candidate.cancelRequestedAt
+      ? new Date(candidate.cancelRequestedAt * 1000).toISOString()
+      : null,
   };
 
   if (isTeamMember(candidate.email)) {
@@ -156,8 +168,8 @@ async function getMRR(): Promise<MRRMetrics> {
         ...(canceledStartingAfter ? { starting_after: canceledStartingAfter } : {}),
       });
       for (const sub of canceledPage.data) {
-        const canceledAt = sub.canceled_at ?? sub.ended_at ?? 0;
-        if (canceledAt < monthStart) continue;
+        const churnedAt = churnAttributionTs(sub);
+        if (churnedAt < monthStart) continue;
 
         let subMrr = 0;
         let planLabel: string | null = null;
@@ -172,7 +184,8 @@ async function getMRR(): Promise<MRRMetrics> {
         const customer = sub.customer;
         churnCandidates.push({
           sub,
-          canceledAt,
+          churnedAt,
+          cancelRequestedAt: sub.canceled_at ?? null,
           subMrr,
           planLabel,
           customerId: customerIdFrom(sub),

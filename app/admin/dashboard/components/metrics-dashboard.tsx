@@ -236,6 +236,7 @@ export function MetricsDashboard() {
             key: 'churn',
             label: 'Churned',
             value: mrr.churned_this_month > 0 ? `-${mrr.churned_this_month}` : '0',
+            hint: 'Por salida de Active (ended_at)',
             delta: mrr.churned_this_month > 0 ? 'down' : 'neutral',
           },
         ]}
