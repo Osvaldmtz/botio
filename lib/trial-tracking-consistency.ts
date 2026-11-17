@@ -52,7 +52,8 @@ export async function ensureTrialTrackingConsistency(
   }
 
   const stage = normalizeStage(conv.pipeline_stage as string | null);
-  const needsPipeline = stage !== 'trial' && stage !== 'paid' && stage !== 'lost';
+  // lost must reopen into trial when the lead reactivates (setPipelineStageTrial).
+  const needsPipeline = stage !== 'trial' && stage !== 'paid';
   const needsOutcome = !conv.outcome;
 
   const { data: onboardingByConv } = await supabase

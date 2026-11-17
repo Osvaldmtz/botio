@@ -1,7 +1,7 @@
 export const MANUAL_PAYMENT_PLATFORMS = ['mercadopago', 'transferencia', 'otro'] as const;
 export type ManualPaymentPlatform = (typeof MANUAL_PAYMENT_PLATFORMS)[number];
 
-export const MANUAL_PAYMENT_PLANS = ['starter', 'professional', 'clinic'] as const;
+export const MANUAL_PAYMENT_PLANS = ['starter', 'professional', 'ultra', 'clinic'] as const;
 export type ManualPaymentPlan = (typeof MANUAL_PAYMENT_PLANS)[number];
 
 export type ManualPaymentRow = {
