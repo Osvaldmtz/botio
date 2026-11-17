@@ -1,8 +1,13 @@
 import 'server-only';
 import type Stripe from 'stripe';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { processCustomerPaid } from '@/lib/conversation-outcome';
+import {
+  markSubscriptionChurnedByEmail,
+  processCustomerPaid,
+  syncSubscriptionBillingMetadataByEmail,
+} from '@/lib/conversation-outcome';
 import { runWelcomePaidAutomation } from '@/lib/emailing/automations';
+import { sendTelegramAlert } from '@/lib/telegram';
 
 const SUBSCRIPTION_INVOICE_REASONS = new Set([
   'subscription_create',
@@ -80,12 +85,32 @@ export async function handleSubscriptionCancelled(
   supabase: SupabaseClient,
   stripe: Stripe,
   subscription: Stripe.Subscription,
-): Promise<{ recovery_queued: boolean }> {
+): Promise<{ recovery_queued: boolean; churn_marked: number }> {
   const customerId = readCustomerId(subscription.customer);
-  if (!customerId) return { recovery_queued: false };
+  if (!customerId) return { recovery_queued: false, churn_marked: 0 };
 
   const email = await getStripeCustomerEmail(stripe, customerId);
-  if (!email) return { recovery_queued: false };
+  if (!email) return { recovery_queued: false, churn_marked: 0 };
+
+  const canceledAt = subscription.canceled_at
+    ? new Date(subscription.canceled_at * 1000).toISOString()
+    : new Date().toISOString();
+  const planExpiresAt = subscription.ended_at
+    ? new Date(subscription.ended_at * 1000).toISOString()
+    : subscription.cancel_at
+      ? new Date(subscription.cancel_at * 1000).toISOString()
+      : null;
+
+  let churn_marked = 0;
+  try {
+    churn_marked = await markSubscriptionChurnedByEmail(supabase, email, {
+      canceledAt,
+      subscriptionId: subscription.id,
+      planExpiresAt,
+    });
+  } catch (err) {
+    console.error('[stripe-webhook] churn mark failed', err);
+  }
 
   try {
     const { runRecoveryCancelledAutomation } = await import(
@@ -96,13 +121,84 @@ export async function handleSubscriptionCancelled(
       email,
     });
     console.log(
-      `[stripe-webhook] recovery_cancelled | email=${email} | ran=${result.ran} | queued=${result.queued}`,
+      `[stripe-webhook] recovery_cancelled | email=${email} | ran=${result.ran} | queued=${result.queued} | churn_marked=${churn_marked}`,
     );
-    return { recovery_queued: result.ran && result.queued > 0 };
+    return {
+      recovery_queued: result.ran && result.queued > 0,
+      churn_marked,
+    };
   } catch (err) {
     console.error('[stripe-webhook] recovery_cancelled failed', err);
-    return { recovery_queued: false };
+    return { recovery_queued: false, churn_marked };
   }
+}
+
+/** Sync plan_expires_at / status on subscription.updated (non-cancel path). */
+export async function handleSubscriptionUpdatedBillingSync(
+  supabase: SupabaseClient,
+  stripe: Stripe,
+  subscription: Stripe.Subscription,
+): Promise<{ billing_synced: number }> {
+  const customerId = readCustomerId(subscription.customer);
+  if (!customerId) return { billing_synced: 0 };
+
+  const email = await getStripeCustomerEmail(stripe, customerId);
+  if (!email) return { billing_synced: 0 };
+
+  const planExpiresAt = subscription.current_period_end
+    ? new Date(subscription.current_period_end * 1000).toISOString()
+    : null;
+
+  if (subscription.status === 'canceled') {
+    const churn_marked = await markSubscriptionChurnedByEmail(supabase, email, {
+      subscriptionId: subscription.id,
+      planExpiresAt,
+    });
+    return { billing_synced: churn_marked };
+  }
+
+  const billing_synced = await syncSubscriptionBillingMetadataByEmail(supabase, email, {
+    subscriptionId: subscription.id,
+    subscriptionStatus: subscription.status,
+    planExpiresAt,
+  });
+  return { billing_synced };
+}
+
+export async function handleInvoicePaymentFailed(
+  supabase: SupabaseClient,
+  stripe: Stripe,
+  invoice: Stripe.Invoice,
+): Promise<{ alerted: boolean }> {
+  const customerId = readCustomerId(invoice.customer);
+  const email = customerId
+    ? await getStripeCustomerEmail(stripe, customerId)
+    : invoice.customer_email?.trim().toLowerCase() ?? null;
+
+  const amount = ((invoice.amount_due ?? 0) / 100).toFixed(2);
+  const attempt = invoice.attempt_count ?? 0;
+  const text =
+    `⚠️ <b>Stripe payment_failed</b>\n` +
+    `Email: ${email ?? '?'}\n` +
+    `Monto: $${amount}\n` +
+    `Intentos: ${attempt}\n` +
+    `Invoice: ${invoice.id}`;
+
+  if (email) {
+    await syncSubscriptionBillingMetadataByEmail(supabase, email, {
+      subscriptionStatus: 'past_due',
+      subscriptionId:
+        typeof invoice.subscription === 'string'
+          ? invoice.subscription
+          : invoice.subscription?.id ?? null,
+    });
+  }
+
+  const result = await sendTelegramAlert(text);
+  console.log(
+    `[stripe-webhook] invoice.payment_failed | email=${email ?? '?'} | alerted=${result.sent}`,
+  );
+  return { alerted: result.sent };
 }
 
 export async function handleInvoicePaymentSucceeded(

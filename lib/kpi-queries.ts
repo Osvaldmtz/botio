@@ -165,6 +165,7 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummaryData> {
     landingSessions30d: landing.data ? landingSessions30d : null,
     landingDaily,
     stripeActiveSubscribers: stripeSubs.count,
+    stripeCompedSubscribers: stripeSubs.comped,
     stripeMrr: stripeMrrUsd,
     manualMrr: manualMrrUsd,
     totalMrr,

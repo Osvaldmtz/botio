@@ -27,6 +27,8 @@ export type ExecutiveSummaryData = {
   landingSessions30d: number | null;
   landingDaily: GA4DailyMetric[];
   stripeActiveSubscribers: number | null;
+  /** Stripe courtesy/comps counted inside active. */
+  stripeCompedSubscribers: number | null;
   stripeMrr: number | null;
   manualMrr: number | null;
   totalMrr: number | null;

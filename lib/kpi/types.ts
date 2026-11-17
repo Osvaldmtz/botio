@@ -41,6 +41,12 @@ export type KalyoMetricRow = {
   google_spend_alltime_usd: number | null;
   fx_mxn_per_usd: number | null;
   fx_cop_per_usd: number | null;
+  stripe_mrr: number | null;
+  stripe_active: number | null;
+  stripe_churned_30d: number | null;
+  stripe_churn_rate: number | null;
+  stripe_mrr_lost_30d: number | null;
+  past_due_actionable: number | null;
   synced_at: string;
 };
 

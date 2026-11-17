@@ -4,8 +4,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   handleActiveSubscriptionPaid,
   handleCheckoutSessionCompleted,
+  handleInvoicePaymentFailed,
   handleInvoicePaymentSucceeded,
   handleSubscriptionCancelled,
+  handleSubscriptionUpdatedBillingSync,
 } from '@/lib/stripe-paid-webhook';
 
 export const runtime = 'nodejs';
@@ -51,27 +53,28 @@ export async function POST(request: Request) {
 
     if (event.type === 'customer.subscription.updated') {
       const subscription = event.data.object as Stripe.Subscription;
-      if (
-        subscription.status === 'canceled' ||
-        subscription.cancel_at_period_end
-      ) {
-        // Only fire recovery when status becomes canceled (not merely scheduled)
-        if (subscription.status === 'canceled') {
-          const cancelled = await handleSubscriptionCancelled(
-            supabase,
-            stripe,
-            subscription,
-          );
-          return Response.json({ received: true, ...cancelled });
-        }
+      if (subscription.status === 'canceled') {
+        const cancelled = await handleSubscriptionCancelled(
+          supabase,
+          stripe,
+          subscription,
+        );
+        return Response.json({ received: true, ...cancelled });
       }
+
+      const billing = await handleSubscriptionUpdatedBillingSync(
+        supabase,
+        stripe,
+        subscription,
+      );
+
       const result = await handleActiveSubscriptionPaid(
         supabase,
         stripe,
         subscription,
         event.type,
       );
-      return Response.json({ received: true, ...result });
+      return Response.json({ received: true, ...billing, ...result });
     }
 
     if (event.type === 'customer.subscription.deleted') {
@@ -94,6 +97,15 @@ export async function POST(request: Request) {
 
     if (event.type === 'invoice.payment_succeeded') {
       const result = await handleInvoicePaymentSucceeded(
+        supabase,
+        stripe,
+        event.data.object as Stripe.Invoice,
+      );
+      return Response.json({ received: true, ...result });
+    }
+
+    if (event.type === 'invoice.payment_failed') {
+      const result = await handleInvoicePaymentFailed(
         supabase,
         stripe,
         event.data.object as Stripe.Invoice,

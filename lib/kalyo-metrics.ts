@@ -7,6 +7,8 @@ import { fetchGoogleAds } from '@/lib/google-ads-api';
 import { copToUsd, getUsdFxRates, mxnToUsd } from '@/lib/fx-rates';
 import { computeLtvCacRatio, computeLtvDerived } from '@/lib/kpi/ltv-utils';
 import type { ManualPaymentPlan } from '@/lib/manual-payments-types';
+import { getCanceledLast30d, getStripeMetricsSnapshot } from '@/lib/stripe-metrics';
+import { markSubscriptionChurnedByEmail } from '@/lib/conversation-outcome';
 
 const PRO_PRICE_USD = 29;
 const MAX_PRICE_USD = 39;
@@ -208,6 +210,12 @@ export async function syncKalyoMetrics(): Promise<{
   google_spend_alltime_usd: number;
   fx_mxn_per_usd: number;
   fx_cop_per_usd: number;
+  stripe_mrr: number | null;
+  stripe_active: number | null;
+  stripe_churned_30d: number | null;
+  stripe_churn_rate: number | null;
+  stripe_mrr_lost_30d: number | null;
+  past_due_actionable: number | null;
 }> {
   const kalyo = getKalyoClient();
   const since30d = subDays(new Date(), 30);
@@ -317,6 +325,33 @@ export async function syncKalyoMetrics(): Promise<{
 
   const ltv_cac_ratio_alltime = computeLtvCacRatio(ltv.ltv_avg, cac.cac_usd_alltime);
 
+  let stripeSnap: Awaited<ReturnType<typeof getStripeMetricsSnapshot>> | null = null;
+  try {
+    stripeSnap = await getStripeMetricsSnapshot();
+  } catch (err) {
+    console.warn('[kalyo-metrics] stripe snapshot failed', err);
+  }
+
+  // Backfill conversation.metadata.canceled_at from Stripe (covers missing webhook secret)
+  try {
+    const canceled = await getCanceledLast30d();
+    if (canceled.available) {
+      let marked = 0;
+      for (const detail of canceled.details) {
+        if (detail.excluded_reason || !detail.email) continue;
+        marked += await markSubscriptionChurnedByEmail(botio, detail.email, {
+          canceledAt: detail.canceled_at,
+          subscriptionId: detail.subscription_id,
+        });
+      }
+      if (marked > 0) {
+        console.log(`[kalyo-metrics] churn backfill | conversations_updated=${marked}`);
+      }
+    }
+  } catch (err) {
+    console.warn('[kalyo-metrics] churn backfill failed', err);
+  }
+
   const payload = {
     date: today,
     mrr: Number(mrr.toFixed(2)),
@@ -348,6 +383,12 @@ export async function syncKalyoMetrics(): Promise<{
     google_spend_alltime_usd: Number(cac.google_spend_alltime_usd.toFixed(2)),
     fx_mxn_per_usd: Number(cac.fx_mxn_per_usd.toFixed(4)),
     fx_cop_per_usd: Number(cac.fx_cop_per_usd.toFixed(4)),
+    stripe_mrr: stripeSnap?.available ? stripeSnap.stripe_mrr : null,
+    stripe_active: stripeSnap?.available ? stripeSnap.stripe_active : null,
+    stripe_churned_30d: stripeSnap?.available ? stripeSnap.stripe_churned_30d : null,
+    stripe_churn_rate: stripeSnap?.available ? stripeSnap.stripe_churn_rate : null,
+    stripe_mrr_lost_30d: stripeSnap?.available ? stripeSnap.stripe_mrr_lost_30d : null,
+    past_due_actionable: stripeSnap?.available ? stripeSnap.past_due_actionable : null,
     synced_at: new Date().toISOString(),
   };
 

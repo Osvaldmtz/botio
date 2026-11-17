@@ -1,5 +1,9 @@
 import 'server-only';
 import Stripe from 'stripe';
+import { filterActionablePastDue } from '@/lib/stripe-comp';
+import { compSubscriptionByEmail } from '@/lib/stripe-comp-actions';
+import { PENDING_STRIPE_COMPS } from '@/lib/stripe-comp-pending';
+import { getKalyoClient } from '@/lib/kalyo-supabase';
 
 export const runtime = 'nodejs';
 
@@ -31,6 +35,36 @@ export async function GET(req: Request) {
     apiVersion: '2025-02-24.acacia',
   });
 
+  const appliedComps = [];
+  for (const pending of PENDING_STRIPE_COMPS) {
+    try {
+      const result = await compSubscriptionByEmail(stripe, pending);
+      appliedComps.push(result);
+      console.log(`[stripe-past-due] pending-comp ${pending.email}: ${result.message}`);
+      if (result.ok && !result.already_comped) {
+        try {
+          const kalyo = getKalyoClient();
+          await kalyo
+            .from('psychologists')
+            .update({
+              subscription_status: 'active',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('email', pending.email.toLowerCase());
+        } catch (err) {
+          console.warn('[stripe-past-due] kalyo sync after comp failed', err);
+        }
+      }
+    } catch (err) {
+      console.error('[stripe-past-due] pending-comp failed', pending.email, err);
+      appliedComps.push({
+        ok: false,
+        email: pending.email,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   const subs = await stripe.subscriptions.list({
     status: 'past_due',
     limit: 100,
@@ -45,7 +79,10 @@ export async function GET(req: Request) {
     past_due_since: Date;
   };
 
-  const pastDueLeads: PastDueLead[] = subs.data.map((sub) => {
+  const actionable = filterActionablePastDue(subs.data);
+  const skippedComps = subs.data.length - actionable.length;
+
+  const pastDueLeads: PastDueLead[] = actionable.map((sub) => {
     const customer = sub.customer as Stripe.Customer;
     return {
       email: customer.email ?? null,
@@ -56,7 +93,10 @@ export async function GET(req: Request) {
     };
   });
 
-  console.log(`[stripe-past-due] found ${pastDueLeads.length} past_due subscriptions`);
+  console.log(
+    `[stripe-past-due] found ${pastDueLeads.length} past_due subscriptions` +
+      (skippedComps > 0 ? ` (skipped ${skippedComps} comped)` : ''),
+  );
 
   if (pastDueLeads.length > 0) {
     const rows = pastDueLeads
@@ -77,6 +117,8 @@ export async function GET(req: Request) {
 
   return Response.json({
     past_due_count: pastDueLeads.length,
+    skipped_comped: skippedComps,
+    applied_comps: appliedComps,
     leads: pastDueLeads,
   });
 }

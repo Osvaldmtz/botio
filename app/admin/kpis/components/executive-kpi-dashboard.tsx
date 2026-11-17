@@ -256,7 +256,15 @@ export function ExecutiveKpiDashboard({ data }: Props) {
                   accent="sky"
                   hint={
                     data.manualActiveOnly != null && data.stripeActiveSubscribers != null
-                      ? `Stripe: ${fmtNum(data.stripeActiveSubscribers)} | Manual: ${fmtNum(data.manualActiveOnly)}`
+                      ? [
+                          `Stripe: ${fmtNum(data.stripeActiveSubscribers)}`,
+                          data.stripeCompedSubscribers != null && data.stripeCompedSubscribers > 0
+                            ? `activa (comped): ${fmtNum(data.stripeCompedSubscribers)}`
+                            : null,
+                          `Manual: ${fmtNum(data.manualActiveOnly)}`,
+                        ]
+                          .filter(Boolean)
+                          .join(' | ')
                       : undefined
                   }
                   progress={

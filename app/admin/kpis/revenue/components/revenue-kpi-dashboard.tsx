@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import {
+  AlertTriangle,
   Clock,
   DollarSign,
   FlaskConical,
@@ -31,24 +32,38 @@ type Props = {
   latest: KalyoMetricRow | null;
   history: KalyoMetricRow[];
   stripeActiveSubscribers: number | null;
+  stripeCompedSubscribers: number | null;
   stripeMrr: number | null;
   manualMrr: number | null;
   totalMrr: number | null;
   totalActiveSubscribers: number | null;
   manualActiveOnly: number | null;
   totalNewSubsThisMonth: number | null;
+  stripeChurnRate: number | null;
+  stripeChurned30d: number | null;
+  stripeChurnedThisMonth: number | null;
+  stripeLtvAvg: number | null;
+  pastDueActionable: number | null;
+  stripeMrrError: string | null;
 };
 
 export function RevenueKpiDashboard({
   latest,
   history,
   stripeActiveSubscribers,
+  stripeCompedSubscribers,
   stripeMrr,
   manualMrr,
   totalMrr,
   totalActiveSubscribers,
   manualActiveOnly,
   totalNewSubsThisMonth,
+  stripeChurnRate,
+  stripeChurned30d,
+  stripeChurnedThisMonth,
+  stripeLtvAvg,
+  pastDueActionable,
+  stripeMrrError,
 }: Props) {
   return (
     <KpiVividPage
@@ -56,7 +71,11 @@ export function RevenueKpiDashboard({
       subtitle="MRR, churn, LTV y mix de planes"
       sources={[
         { id: 'kalyo', label: 'Kalyo', ok: latest != null || history.length > 0 },
-        { id: 'stripe', label: 'Stripe', ok: stripeActiveSubscribers != null || stripeMrr != null },
+        {
+          id: 'stripe',
+          label: 'Stripe',
+          ok: stripeActiveSubscribers != null || stripeMrr != null,
+        },
         { id: 'manual', label: 'Manual', ok: manualMrr != null },
       ]}
     >
@@ -66,12 +85,19 @@ export function RevenueKpiDashboard({
           history={history}
           range={range}
           stripeActiveSubscribers={stripeActiveSubscribers}
+          stripeCompedSubscribers={stripeCompedSubscribers}
           stripeMrr={stripeMrr}
           manualMrr={manualMrr}
           totalMrr={totalMrr}
           totalActiveSubscribers={totalActiveSubscribers}
           manualActiveOnly={manualActiveOnly}
           totalNewSubsThisMonth={totalNewSubsThisMonth}
+          stripeChurnRate={stripeChurnRate}
+          stripeChurned30d={stripeChurned30d}
+          stripeChurnedThisMonth={stripeChurnedThisMonth}
+          stripeLtvAvg={stripeLtvAvg}
+          pastDueActionable={pastDueActionable}
+          stripeMrrError={stripeMrrError}
         />
       )}
     </KpiVividPage>
@@ -83,23 +109,37 @@ function RevenueContent({
   history,
   range,
   stripeActiveSubscribers,
+  stripeCompedSubscribers,
   stripeMrr,
   manualMrr,
   totalMrr,
   totalActiveSubscribers,
   manualActiveOnly,
   totalNewSubsThisMonth,
+  stripeChurnRate,
+  stripeChurned30d,
+  stripeChurnedThisMonth,
+  stripeLtvAvg,
+  pastDueActionable,
+  stripeMrrError,
 }: {
   latest: KalyoMetricRow | null;
   history: KalyoMetricRow[];
   range: ChartRange;
   stripeActiveSubscribers: number | null;
+  stripeCompedSubscribers: number | null;
   stripeMrr: number | null;
   manualMrr: number | null;
   totalMrr: number | null;
   totalActiveSubscribers: number | null;
   manualActiveOnly: number | null;
   totalNewSubsThisMonth: number | null;
+  stripeChurnRate: number | null;
+  stripeChurned30d: number | null;
+  stripeChurnedThisMonth: number | null;
+  stripeLtvAvg: number | null;
+  pastDueActionable: number | null;
+  stripeMrrError: string | null;
 }) {
   const pro = latest?.plan_pro ?? 0;
   const max = latest?.plan_max ?? 0;
@@ -186,7 +226,15 @@ function RevenueContent({
           accent="sky"
           hint={
             stripeActiveSubscribers != null && manualActiveOnly != null
-              ? `Stripe: ${stripeActiveSubscribers} | Manual: ${manualActiveOnly}`
+              ? [
+                  `Stripe: ${stripeActiveSubscribers}`,
+                  stripeCompedSubscribers != null && stripeCompedSubscribers > 0
+                    ? `activa (comped): ${stripeCompedSubscribers}`
+                    : null,
+                  `Manual: ${manualActiveOnly}`,
+                ]
+                  .filter(Boolean)
+                  .join(' | ')
               : totalNewSubsThisMonth != null
                 ? `Nuevos este mes: +${totalNewSubsThisMonth}`
                 : undefined
@@ -211,20 +259,90 @@ function RevenueContent({
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
         <KpiVividMetric
-          label="Churn 30d"
+          label="MRR Stripe (live)"
+          value={
+            stripeMrr != null
+              ? `$${stripeMrr.toLocaleString()}`
+              : stripeMrrError
+                ? '—'
+                : '—'
+          }
+          hint={
+            stripeMrrError
+              ? `Stripe: ${stripeMrrError}`
+              : stripeChurnedThisMonth != null
+                ? `Churn mes: ${stripeChurnedThisMonth}`
+                : 'Fuente: Stripe API'
+          }
+          icon={DollarSign}
+          accent="emerald"
+        />
+        <KpiVividMetric
+          label="Churn rate Stripe"
+          value={stripeChurnRate != null ? `${stripeChurnRate.toFixed(1)}%` : '—'}
+          hint={
+            stripeChurned30d != null
+              ? `${stripeChurned30d} cancelaciones 30d`
+              : 'canceled_30d / (active+canceled)'
+          }
+          icon={TrendingDown}
+          accent={
+            stripeChurnRate == null
+              ? 'amber'
+              : stripeChurnRate < 5
+                ? 'emerald'
+                : stripeChurnRate < 10
+                  ? 'orange'
+                  : 'rose'
+          }
+        />
+        <KpiVividMetric
+          label="LTV Stripe"
+          value={
+            stripeLtvAvg != null
+              ? `$${stripeLtvAvg.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+              : '—'
+          }
+          hint={
+            stripeChurnRate != null
+              ? formatLtvMonthsLabel(stripeChurnRate)
+              : 'Requiere churn Stripe'
+          }
+          icon={DollarSign}
+          accent="violet"
+        />
+        <KpiVividMetric
+          label="Past due"
+          value={pastDueActionable != null ? String(pastDueActionable) : '—'}
+          hint="Actionable (excl. comps) · cron 14:00"
+          icon={AlertTriangle}
+          accent={
+            pastDueActionable == null
+              ? 'amber'
+              : pastDueActionable === 0
+                ? 'emerald'
+                : 'rose'
+          }
+        />
+        <KpiVividMetric
+          label="Churn 30d (Kalyo DB)"
           value={churn30dLabel}
           icon={TrendingDown}
           accent={churned30d === 0 ? 'emerald' : 'rose'}
+          hint="psychologists.subscription_status"
         />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
         <KpiVividMetric
-          label="Churn rate"
+          label="Churn rate (Kalyo)"
           value={`${churnRate.toFixed(1)}%`}
-          hint="mensual"
+          hint="mensual · DB Kalyo"
           icon={TrendingDown}
           accent="orange"
         />
         <KpiVividMetric
-          label="LTV promedio"
+          label="LTV promedio (Kalyo)"
           value={`$${storedLtvAvg.toLocaleString('en-US', { maximumFractionDigits: 0 })} USD`}
           hint={formatLtvMonthsLabel(churnRate)}
           icon={DollarSign}

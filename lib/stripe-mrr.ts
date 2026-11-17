@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { isTeamMember } from '@/lib/team-members';
+import { isCompedSubscription, summarizeSubscriberCounts } from '@/lib/stripe-comp';
 
 export type ChurnedSubscriptionDetail = {
   subscription_id: string;
@@ -16,6 +17,8 @@ export type MRRMetrics = {
   available: boolean;
   current_mrr_usd: number;
   active_subscriptions: number;
+  /** Active with metadata.comp=true (incl. past_due comps counted as active). */
+  comped_subscriptions: number;
   new_subs_this_month: number;
   churned_this_month: number;
   churned_details?: ChurnedSubscriptionDetail[];
@@ -38,12 +41,15 @@ function monthlyUsdFromPrice(price: Stripe.Price, quantity: number): number {
   return unit * qty;
 }
 
-async function listAllActiveSubscriptions(stripe: Stripe): Promise<Stripe.Subscription[]> {
+async function listSubscriptionsByStatus(
+  stripe: Stripe,
+  status: Stripe.SubscriptionListParams.Status,
+): Promise<Stripe.Subscription[]> {
   const all: Stripe.Subscription[] = [];
   let startingAfter: string | undefined;
   for (;;) {
     const page = await stripe.subscriptions.list({
-      status: 'active',
+      status,
       limit: 100,
       expand: ['data.items.data.price'],
       ...(startingAfter ? { starting_after: startingAfter } : {}),
@@ -53,6 +59,10 @@ async function listAllActiveSubscriptions(stripe: Stripe): Promise<Stripe.Subscr
     startingAfter = page.data[page.data.length - 1]?.id;
   }
   return all;
+}
+
+async function listAllActiveSubscriptions(stripe: Stripe): Promise<Stripe.Subscription[]> {
+  return listSubscriptionsByStatus(stripe, 'active');
 }
 
 function customerIdFrom(sub: Stripe.Subscription): string {
@@ -113,6 +123,7 @@ async function getMRR(): Promise<MRRMetrics> {
       available: false,
       current_mrr_usd: 0,
       active_subscriptions: 0,
+      comped_subscriptions: 0,
       new_subs_this_month: 0,
       churned_this_month: 0,
       net_growth_mrr_usd: 0,
@@ -123,10 +134,18 @@ async function getMRR(): Promise<MRRMetrics> {
 
   try {
     const stripe = new Stripe(secret, { apiVersion: '2025-02-24.acacia' });
-    const subs = await listAllActiveSubscriptions(stripe);
+    const [activeSubs, pastDueSubs] = await Promise.all([
+      listAllActiveSubscriptions(stripe),
+      listSubscriptionsByStatus(stripe, 'past_due'),
+    ]);
+    const pastDueComps = pastDueSubs.filter((s) => isCompedSubscription(s));
+    const subsForCount = [...activeSubs, ...pastDueComps];
+    const counts = summarizeSubscriberCounts([...activeSubs, ...pastDueSubs]);
 
+    // Comped accounts do not contribute to MRR (100% courtesy).
     let mrr = 0;
-    for (const sub of subs) {
+    for (const sub of activeSubs) {
+      if (isCompedSubscription(sub)) continue;
       for (const item of sub.items.data) {
         const price = item.price;
         if (price && typeof price !== 'string') {
@@ -140,8 +159,10 @@ async function getMRR(): Promise<MRRMetrics> {
     firstDayOfMonth.setHours(0, 0, 0, 0);
     const monthStart = Math.floor(firstDayOfMonth.getTime() / 1000);
 
-    const newSubs = subs.filter((s) => s.created >= monthStart);
-    const activeCustomerIds = new Set(subs.map(customerIdFrom));
+    const newSubs = activeSubs.filter(
+      (s) => s.created >= monthStart && !isCompedSubscription(s),
+    );
+    const activeCustomerIds = new Set(subsForCount.map(customerIdFrom));
 
     let churnedThisMonth = 0;
     let churnedMrr = 0;
@@ -220,7 +241,8 @@ async function getMRR(): Promise<MRRMetrics> {
     return {
       available: true,
       current_mrr_usd: Math.round(mrr * 100) / 100,
-      active_subscriptions: subs.length,
+      active_subscriptions: counts.active_total,
+      comped_subscriptions: counts.active_comped,
       new_subs_this_month: newSubs.length,
       churned_this_month: churnedThisMonth,
       churned_details: churnedDetails,
@@ -234,6 +256,7 @@ async function getMRR(): Promise<MRRMetrics> {
       available: false,
       current_mrr_usd: 0,
       active_subscriptions: 0,
+      comped_subscriptions: 0,
       new_subs_this_month: 0,
       churned_this_month: 0,
       net_growth_mrr_usd: 0,
@@ -250,23 +273,34 @@ export async function getMRRCached(): Promise<MRRMetrics> {
   return cachedMRR;
 }
 
-/** Active Stripe subscriptions (`status: active`) — no cache, for live dashboard reads. */
+/** Active Stripe subs + past_due comps — no cache, for live dashboard reads. */
 export async function fetchStripeActiveSubscriberCount(): Promise<{
   count: number | null;
+  paying: number | null;
+  comped: number | null;
   error: string | null;
 }> {
   const secret = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secret) {
-    return { count: null, error: 'STRIPE_SECRET_KEY not configured' };
+    return { count: null, paying: null, comped: null, error: 'STRIPE_SECRET_KEY not configured' };
   }
 
   try {
     const stripe = new Stripe(secret, { apiVersion: '2025-02-24.acacia' });
-    const subs = await listAllActiveSubscriptions(stripe);
-    return { count: subs.length, error: null };
+    const [active, pastDue] = await Promise.all([
+      listAllActiveSubscriptions(stripe),
+      listSubscriptionsByStatus(stripe, 'past_due'),
+    ]);
+    const counts = summarizeSubscriberCounts([...active, ...pastDue]);
+    return {
+      count: counts.active_total,
+      paying: counts.active_paying,
+      comped: counts.active_comped,
+      error: null,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[stripe-mrr] active subscriber count failed', error);
-    return { count: null, error: message };
+    return { count: null, paying: null, comped: null, error: message };
   }
 }

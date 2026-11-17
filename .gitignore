@@ -42,3 +42,5 @@ scripts/rescue-ambassador-marlon.ts
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.bin/
+.env.vercel.prod

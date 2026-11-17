@@ -359,6 +359,124 @@ export async function markTrialActivatedByContact(
   }
 }
 
+/**
+ * Persist Stripe churn on conversation metadata without clearing outcome=paid.
+ * Enables Botio queries on canceled_at / subscription_status.
+ */
+export async function markSubscriptionChurnedByEmail(
+  supabase: SupabaseClient,
+  email: string,
+  options?: {
+    canceledAt?: string;
+    subscriptionId?: string | null;
+    planExpiresAt?: string | null;
+  },
+): Promise<number> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !normalized.includes('@')) return 0;
+
+  const ids = await findConversationIdsForContact(supabase, { email: normalized });
+  if (ids.length === 0) return 0;
+
+  const canceledAt = options?.canceledAt ?? new Date().toISOString();
+  let updated = 0;
+
+  for (const id of ids) {
+    const { data: row, error: fetchErr } = await supabase
+      .from('conversations')
+      .select('id, metadata')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr || !row) continue;
+
+    const prev = (row.metadata as Record<string, unknown> | null) ?? {};
+    const metadata: Record<string, unknown> = {
+      ...prev,
+      subscription_status: 'canceled',
+      canceled_at: canceledAt,
+    };
+    if (options?.subscriptionId) {
+      metadata.subscription_id = options.subscriptionId;
+    }
+    if (options?.planExpiresAt) {
+      metadata.plan_expires_at = options.planExpiresAt;
+    }
+
+    const { error: updateErr } = await supabase
+      .from('conversations')
+      .update({ metadata })
+      .eq('id', id);
+
+    if (updateErr) {
+      console.error('[conversation-outcome] churn metadata update failed', { id, updateErr });
+      continue;
+    }
+    updated += 1;
+  }
+
+  console.log(
+    `[conversation-outcome] churn marked | email=${normalized} | updated=${updated}`,
+  );
+  return updated;
+}
+
+/** Sync plan_expires_at / subscription_status from Stripe subscription.updated. */
+export async function syncSubscriptionBillingMetadataByEmail(
+  supabase: SupabaseClient,
+  email: string,
+  options: {
+    subscriptionId?: string | null;
+    subscriptionStatus?: string | null;
+    planExpiresAt?: string | null;
+  },
+): Promise<number> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !normalized.includes('@')) return 0;
+
+  const ids = await findConversationIdsForContact(supabase, { email: normalized });
+  if (ids.length === 0) return 0;
+
+  let updated = 0;
+  for (const id of ids) {
+    const { data: row, error: fetchErr } = await supabase
+      .from('conversations')
+      .select('id, metadata')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr || !row) continue;
+
+    const prev = (row.metadata as Record<string, unknown> | null) ?? {};
+    const metadata: Record<string, unknown> = { ...prev };
+    if (options.subscriptionId) metadata.subscription_id = options.subscriptionId;
+    if (options.subscriptionStatus) {
+      metadata.subscription_status = options.subscriptionStatus;
+    }
+    if (options.planExpiresAt) metadata.plan_expires_at = options.planExpiresAt;
+    // Clear canceled_at if re-activated
+    if (options.subscriptionStatus === 'active' && prev.canceled_at) {
+      delete metadata.canceled_at;
+    }
+
+    const { error: updateErr } = await supabase
+      .from('conversations')
+      .update({ metadata })
+      .eq('id', id);
+
+    if (updateErr) {
+      console.error('[conversation-outcome] billing metadata update failed', {
+        id,
+        updateErr,
+      });
+      continue;
+    }
+    updated += 1;
+  }
+
+  return updated;
+}
+
 export async function markLostNoResponseConversations(
   supabase: SupabaseClient,
 ): Promise<number> {
