@@ -29,6 +29,7 @@ type FormState = {
 const PLAN_LABELS: Record<ManualPaymentPlan, string> = {
   starter: 'Pro (starter)',
   professional: 'Max (professional)',
+  ultra: 'Ultra',
   clinic: 'Clinic',
 };
 

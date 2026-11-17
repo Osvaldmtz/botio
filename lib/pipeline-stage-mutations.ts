@@ -49,8 +49,10 @@ export async function setPipelineStageTrial(
   currentStage: string | null,
 ): Promise<void> {
   const current = normalizeStage(currentStage);
-  if (current === 'paid' || current === 'lost') return;
-  if (STAGE_RANK.trial <= STAGE_RANK[current]) return;
+  // paid is terminal; lost may reopen into trial when a lead re-activates.
+  if (current === 'paid') return;
+  if (current === 'trial') return;
+  if (current !== 'lost' && STAGE_RANK.trial <= STAGE_RANK[current]) return;
 
   await movePipelineStage(supabase, conversationId, current, 'trial', null, 'auto');
 }
