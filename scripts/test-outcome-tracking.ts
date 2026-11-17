@@ -1,18 +1,20 @@
-import { dirname, join } from 'node:path';
+/**
+ * Integration tests for conversation paid/outcome tracking.
+ * Run: npx tsx scripts/test-outcome-tracking.ts
+ */
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import {
-  CONVERSATION_OUTCOMES,
-  setConversationOutcome,
-  markPaidByEmail,
-  processCustomerPaid,
-} from '../lib/conversation-outcome';
-import { emailToWebOnlyPhone, isWebOnlyPhone } from '../lib/web-only-phone';
-import { enrollTrialFromKalyoWebhook } from '../lib/trial-onboarding-webhook';
-import {
-  fetchLearningMetrics,
-  fetchOutcomeDistribution,
-} from '../lib/learning-queries';
+
+const require = createRequire(import.meta.url);
+const serverOnlyPath = require.resolve('server-only');
+require.cache[serverOnlyPath] = {
+  id: serverOnlyPath,
+  filename: serverOnlyPath,
+  loaded: true,
+  exports: {},
+} as NodeModule;
 
 function loadEnvLocal(): void {
   const envPath = join(process.cwd(), '.env.local');
@@ -39,6 +41,19 @@ function assert(condition: boolean, message: string): void {
 }
 
 loadEnvLocal();
+
+const {
+  CONVERSATION_OUTCOMES,
+  setConversationOutcome,
+  markPaidByEmail,
+  processCustomerPaid,
+} = require('../lib/conversation-outcome') as typeof import('../lib/conversation-outcome');
+const { emailToWebOnlyPhone, isWebOnlyPhone } = require('../lib/web-only-phone') as typeof import('../lib/web-only-phone');
+const { enrollTrialFromKalyoWebhook } = require('../lib/trial-onboarding-webhook') as typeof import('../lib/trial-onboarding-webhook');
+const {
+  fetchLearningMetrics,
+  fetchOutcomeDistribution,
+} = require('../lib/learning-queries') as typeof import('../lib/learning-queries');
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -86,6 +101,7 @@ async function cleanup(): Promise<void> {
     await supabase.from('messages').delete().eq('conversation_id', id);
   }
   if (createdConvIds.length) {
+    await supabase.from('pipeline_stage_history').delete().in('conversation_id', createdConvIds);
     await supabase.from('conversations').delete().in('id', createdConvIds);
   }
   await supabase.from('trial_onboarding_messages').delete().eq('customer_phone', testPhone);
@@ -99,13 +115,58 @@ async function testStripePaidMark(): Promise<void> {
 
   const { data } = await supabase
     .from('conversations')
-    .select('outcome, outcome_source')
+    .select('outcome, outcome_source, pipeline_stage')
     .eq('id', convId)
     .single();
 
   assert(data?.outcome === 'paid', 'outcome should be paid');
   assert(data?.outcome_source === 'stripe_webhook', 'source should be stripe_webhook');
+  assert(data?.pipeline_stage === 'paid', 'pipeline should move to paid');
   console.log('✓ Stripe paid marks conversation');
+}
+
+async function testPaidMovesPipelineFromLost(): Promise<void> {
+  const phone = `+5299909${runId}`;
+  const email = `outcome-lost-paid-${runId}@kalyo-test.local`;
+  const convId = await createTestConversation(supabase, phone, email, new Date().toISOString());
+
+  await supabase
+    .from('conversations')
+    .update({
+      pipeline_stage: 'lost',
+      outcome: 'lost_no_response',
+      outcome_source: 'cron_30days',
+    })
+    .eq('id', convId);
+
+  const updated = await markPaidByEmail(supabase, email, 'manual_payment');
+  assert(updated === 1, 'paid should update lost conversation outcome');
+
+  const { data } = await supabase
+    .from('conversations')
+    .select('outcome, outcome_source, pipeline_stage, pipeline_stage_updated_by')
+    .eq('id', convId)
+    .single();
+
+  assert(data?.outcome === 'paid', 'outcome should become paid from lost_no_response');
+  assert(data?.outcome_source === 'manual_payment', 'source should be manual_payment');
+  assert(data?.pipeline_stage === 'paid', 'pipeline should leave lost for paid');
+  assert(data?.pipeline_stage_updated_by === 'manual_payment', 'moved_by should be payment source');
+
+  const { data: hist } = await supabase
+    .from('pipeline_stage_history')
+    .select('from_stage, to_stage, moved_by, reason')
+    .eq('conversation_id', convId)
+    .eq('to_stage', 'paid')
+    .order('moved_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  assert(hist?.from_stage === 'lost', 'history from_stage should be lost');
+  assert(hist?.to_stage === 'paid', 'history to_stage should be paid');
+  assert(hist?.moved_by === 'manual_payment', 'history moved_by should be source');
+  assert(hist?.reason === 'auto', 'history reason should be auto');
+  console.log('✓ Paid moves pipeline from lost and writes history');
 }
 
 async function testPaidViaTrialOnboardingFallback(): Promise<void> {
@@ -274,6 +335,7 @@ async function runTests(): Promise<void> {
   await cleanup();
 
   await testStripePaidMark();
+  await testPaidMovesPipelineFromLost();
   await testPaidViaTrialOnboardingFallback();
   await testProcessCustomerPaidCreatesWebOnlyConversation();
   await testTrialEnrollMark();

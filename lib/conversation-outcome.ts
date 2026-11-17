@@ -4,6 +4,8 @@ import { SALES_CONVERSATIONS_OR, TEAM_MEMBERS_FILTER } from '@/lib/ambassador-fi
 import { incrementTrialTrackingFailureCount } from '@/lib/trial-tracking-metrics';
 import { alertTrialTrackingFailure } from '@/lib/trial-outcome-alert';
 import { emailToWebOnlyPhone } from '@/lib/web-only-phone';
+import { movePipelineStage } from '@/lib/pipeline-stage-mutations';
+import { normalizeStage } from '@/lib/pipeline';
 import {
   CONVERSATION_OUTCOMES,
   type ConversationOutcome,
@@ -199,6 +201,41 @@ export async function setConversationOutcome(
   return { updated, conversation_ids: ids.slice(0, updated > 0 ? updated : ids.length) };
 }
 
+/**
+ * Moves matching conversations to pipeline_stage=paid (including from lost).
+ * History reason=auto; moved_by echoes the payment source (stripe_webhook, etc.).
+ */
+export async function moveConversationsToPaidPipeline(
+  supabase: SupabaseClient,
+  conversationIds: string[],
+  movedBy: string | null,
+): Promise<number> {
+  let moved = 0;
+  for (const id of conversationIds) {
+    const { data: row, error } = await supabase
+      .from('conversations')
+      .select('id, pipeline_stage')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !row) continue;
+
+    const current = normalizeStage(row.pipeline_stage as string | null);
+    if (current === 'paid') continue;
+
+    await movePipelineStage(
+      supabase,
+      id,
+      row.pipeline_stage as string | null,
+      'paid',
+      movedBy,
+      'auto',
+    );
+    moved += 1;
+  }
+  return moved;
+}
+
 export async function markPaidByEmail(
   supabase: SupabaseClient,
   email: string,
@@ -217,6 +254,14 @@ export async function markPaidByEmail(
     source,
     metadataPatch,
   });
+
+  const ids =
+    result.conversation_ids.length > 0
+      ? result.conversation_ids
+      : await findConversationIdsForContact(supabase, { email });
+
+  await moveConversationsToPaidPipeline(supabase, ids, source);
+
   return result.updated;
 }
 
