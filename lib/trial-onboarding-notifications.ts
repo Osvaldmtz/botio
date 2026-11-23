@@ -11,6 +11,8 @@ export type WelcomeMessageResult = {
   success: boolean;
   method: 'template' | 'plain_text' | 'none';
   sid?: string;
+  /** Last Twilio MessageStatus polled after send (queued/sent/delivered/failed/…). */
+  twilioStatus?: string;
   reason?: string;
   error?: string;
   /** Plain-text body actually sent (for DB insert parity). */

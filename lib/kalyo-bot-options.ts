@@ -218,8 +218,8 @@ Input requerido: email + full_name.
 Input opcional: plan ("max" | "pro"). Usa "pro" SOLO si el usuario pidió explícitamente prueba de Pro.
 
 Qué responder según el resultado:
-- success: Copia TEXTUALMENTE el campo bot_message (incluye email y contraseña temporal). NO reescribas ni inventes la contraseña. El sistema también envía las credenciales por WhatsApp automáticamente. Di "prueba gratis", NUNCA digas "trial".
-- success + reactivated (sin password): Cuenta existente con prueba gratis reactivada; puede entrar con su password habitual en https://app.kalyo.io/login
+- success: Copia TEXTUALMENTE el campo bot_message. El sistema YA envió email + contraseña temporal por WhatsApp (mensaje de bienvenida). NUNCA inventes, repitas ni escribas una contraseña. Solo confirma que la prueba gratis quedó activa y que revise el mensaje de Sofía con sus credenciales. Di "prueba gratis", NUNCA digas "trial".
+- success + reactivated: Cuenta existente con prueba gratis reactivada; puede entrar con su password habitual en https://app.kalyo.io/login. No inventes contraseña.
 - error "trial_already_used": "Veo que ya tienes cuenta en Kalyo. ¿Quieres que te ayude a hacer login? https://app.kalyo.io/login"
 - error genérico: Discúlpate; el equipo fue notificado.
 
@@ -1073,10 +1073,13 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
               email: result.email,
             });
 
+            // Do not return the temp password to Claude — WhatsApp already
+            // delivered credentials via deliverTempPasswordAndTrackTrial.
+            // Narrating it again duplicates the secret in a second chat message.
             return {
               status: 'success',
               email: result.email,
-              password: result.password,
+              credentials_sent_via_whatsapp: Boolean(result.password?.trim()),
               trial_ends_at: result.trial_ends_at,
               reactivated: result.reactivated ?? false,
               bot_message: buildAccountCreationSuccessMessage(
@@ -1084,7 +1087,7 @@ export function buildKalyoClaudeOptions(args: BuildKalyoOptionsArgs): BuildKalyo
                 fullName,
                 result.trial_ends_at,
                 result.reactivated,
-                result.password,
+                undefined,
                 trialPlan,
               ),
             };

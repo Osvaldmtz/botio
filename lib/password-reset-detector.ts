@@ -13,6 +13,10 @@ const ACCESS_BLOCKED_RE =
 const RESET_EMAIL_MISSING_RE =
   /no\s+me\s+(?:lleg(?:a|o|ó)|recib[oíó]|ha\s+llegado)\s+.{0,40}?(?:correo|email|mail|e-?mail)/i;
 
+/** Affirmative reply after we asked "¿Quieres que te envíe una contraseña nueva?" */
+const PASSWORD_RESET_CONFIRM_RE =
+  /^(?:s[ií]|ok|okay|dale|claro|por\s+favor|please|manda(?:me)?(?:\s+una)?(?:\s+contrase[nñ]a)?(?:\s+nueva)?|env[ií]a(?:me)?(?:\s+una)?(?:\s+contrase[nñ]a)?(?:\s+nueva)?|env[ií]ame(?:\s+una)?(?:\s+nueva)?|quiero(?:\s+una)?(?:\s+contrase[nñ]a)?(?:\s+nueva)?|nueva(?:\s+contrase[nñ]a)?)[.!]?$/i;
+
 export function detectPasswordResetRequest(message: string): boolean {
   const text = message.trim();
   if (!text) return false;
@@ -22,4 +26,10 @@ export function detectPasswordResetRequest(message: string): boolean {
   if (RESET_EMAIL_MISSING_RE.test(text)) return true;
 
   return false;
+}
+
+export function detectPasswordResetConfirm(message: string): boolean {
+  const text = message.trim();
+  if (!text || text.length > 80) return false;
+  return PASSWORD_RESET_CONFIRM_RE.test(text);
 }
