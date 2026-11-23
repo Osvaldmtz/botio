@@ -1,6 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectPasswordResetRequest } from './password-reset-detector';
+import {
+  detectPasswordResetConfirm,
+  detectPasswordResetRequest,
+} from './password-reset-detector';
 
 describe('detectPasswordResetRequest', () => {
   it('matches explicit password reset phrases', () => {
@@ -24,5 +27,12 @@ describe('detectPasswordResetRequest', () => {
     assert.equal(detectPasswordResetRequest('Quiero el plan Max'), false);
     assert.equal(detectPasswordResetRequest('¿Cuánto cuesta?'), false);
     assert.equal(detectPasswordResetRequest('Buen día'), false);
+  });
+});
+
+describe('detectPasswordResetConfirm', () => {
+  it('matches confirmation to send a new password', () => {
+    assert.equal(detectPasswordResetConfirm('sí'), true);
+    assert.equal(detectPasswordResetConfirm('manda nueva'), true);
   });
 });

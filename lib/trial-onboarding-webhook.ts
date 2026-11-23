@@ -255,6 +255,7 @@ export async function sendWelcomeMessage(params: {
           success: true,
           method: 'template',
           sid: result.sid,
+          twilioStatus: status.status,
           ...demoFollowUp,
         };
       }
@@ -296,6 +297,7 @@ export async function sendWelcomeMessage(params: {
         success: false,
         method: 'plain_text',
         sid: result.sid,
+        twilioStatus: status.status,
         reason: 'undelivered_outside_window',
         textBody,
       };
@@ -307,6 +309,7 @@ export async function sendWelcomeMessage(params: {
         success: false,
         method: 'plain_text',
         sid: result.sid,
+        twilioStatus: status.status,
         reason: 'failed',
         textBody,
       };
@@ -322,6 +325,7 @@ export async function sendWelcomeMessage(params: {
       success: true,
       method: 'plain_text',
       sid: result.sid,
+      twilioStatus: status.status,
       textBody,
       ...demoFollowUp,
     };
@@ -713,6 +717,7 @@ export async function enrollTrialFromKalyoWebhook(
           source: 'trial_onboarding_welcome',
           delivery_method: welcomeResult.method,
           twilio_sid: welcomeResult.sid ?? null,
+          twilio_status: welcomeResult.twilioStatus ?? null,
         },
       });
 
